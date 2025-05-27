@@ -1347,7 +1347,6 @@ class SolarSystemVisualizer:
                     text_rect = text_surface.get_rect(midleft=(custom_input_rect.left + 5, 
                                                              custom_input_rect.centery))
                     self.screen.blit(text_surface, text_rect)
-            # test
             # Draw spectral type dropdown for stars (moved up and aligned with other elements)
             if self.selected_body and self.selected_body.get('type') == 'star':
                 spectral_label = self.subtitle_font.render("Spectral Type", True, self.BLACK)
