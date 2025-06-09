@@ -117,11 +117,8 @@ class SolarSystemVisualizer:
                                                   self.customization_panel_width - 100, 30)
         self.planet_age_dropdown_active = False
         self.planet_age_dropdown_options = [
-            ("0.1 Gyr", 0.1),
-            ("0.5 Gyr", 0.5),
             ("1.0 Gyr", 1.0),
             ("4.5 Gyr (Earth)", 4.5),
-            ("7.0 Gyr", 7.0),
             ("10.0 Gyr", 10.0),
             ("Custom Age", None)
         ]
@@ -134,12 +131,8 @@ class SolarSystemVisualizer:
                                             self.customization_panel_width - 100, 30)
         self.moon_dropdown_active = False
         self.moon_dropdown_options = [
-            ("Europa", 0.97),
-            ("Luna (Earth's Moon)", 1.00),
-            ("Io", 1.22),
-            ("Callisto", 1.32),
-            ("Ganymede", 1.48),
-            ("Titan", 1.83),
+            ("Earth's Moon", 1.00),
+            ("2.00", 2.0),
             ("Custom Moon", None)
         ]
         self.moon_dropdown_selected = None
@@ -214,14 +207,9 @@ class SolarSystemVisualizer:
                                                  self.customization_panel_width - 100, 30)
         self.star_mass_dropdown_active = False
         self.star_mass_dropdown_options = [
-            ("Very Low Mass", 0.1),
-            ("Low Mass", 0.3),
-            ("Medium-Low Mass", 0.7),
+            (".5", 0.5),
             ("Solar Mass (The Sun)", 1.0),
-            ("Medium-High Mass", 1.5),
-            ("High Mass", 5.0),
-            ("Very High Mass", 10.0),
-            ("Extreme Mass", 20.0),
+            ("2", 2),
             ("Custom Mass", None)
         ]
         self.star_mass_dropdown_selected = None
@@ -233,12 +221,9 @@ class SolarSystemVisualizer:
                                                 self.customization_panel_width - 100, 30)
         self.star_age_dropdown_active = False
         self.star_age_dropdown_options = [
-            ("0.1 Gyr", 0.1),
-            ("0.5 Gyr", 0.5),
             ("1.0 Gyr", 1.0),
             ("4.6 Gyr (Sun)", 4.6),
             ("7.0 Gyr", 7.0),
-            ("10.0 Gyr", 10.0),
             ("Custom Age", None)
         ]
         self.star_age_dropdown_selected = None
@@ -643,7 +628,7 @@ class SolarSystemVisualizer:
                                 self.planet_dropdown_selected = "Earth"
                                 self.planet_age_dropdown_selected = "4.5 Gyr (Earth)"
                             else:  # moon
-                                self.moon_dropdown_selected = "Luna (Earth's Moon)"
+                                self.moon_dropdown_selected = "Earth's Moon"
                             
                             # Automatically start simulation when at least one star and one planet are placed
                             stars = [b for b in self.placed_bodies if b["type"] == "star"]
@@ -930,16 +915,6 @@ class SolarSystemVisualizer:
         title_text = self.title_font.render("AIET", True, self.ambient_colors[self.current_color_index])
         title_rect = title_text.get_rect(center=(self.width//2, self.height//3))
         self.screen.blit(title_text, title_rect)
-        
-        # Draw subtitle
-        subtitle_text = self.subtitle_font.render("Somewhere out there, life may exist.", True, (200, 200, 200))
-        subtitle_rect = subtitle_text.get_rect(center=(self.width//2, self.height//2))
-        self.screen.blit(subtitle_text, subtitle_rect)
-        
-        # Draw second subtitle
-        subtitle2_text = self.subtitle_font.render("Can you find the right conditions to make it possible?", True, (200, 200, 200))
-        subtitle2_rect = subtitle2_text.get_rect(center=(self.width//2, self.height//2 + 40))
-        self.screen.blit(subtitle2_text, subtitle2_rect)
         
         # Draw instruction with current ambient color
         instruction_text = self.font.render("Create", True, self.ambient_colors[self.current_color_index])
