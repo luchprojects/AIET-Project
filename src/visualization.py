@@ -106,7 +106,7 @@ class SolarSystemVisualizer:
             ("Saturn", 95.2),
             ("Uranus", 14.5),
             ("Neptune", 17.1),
-            ("Custom Mass", None)  # Added custom mass option
+            ("Custom", None)  # Added custom mass option
         ]
         self.planet_dropdown_selected = None
         self.planet_dropdown_visible = False
@@ -120,7 +120,7 @@ class SolarSystemVisualizer:
             ("1.0 Gyr", 1.0),
             ("4.5 Gyr (Earth)", 4.5),
             ("10.0 Gyr", 10.0),
-            ("Custom Age", None)
+            ("Custom", None)
         ]
         self.planet_age_dropdown_selected = None
         self.planet_age_dropdown_visible = False
@@ -133,7 +133,7 @@ class SolarSystemVisualizer:
         self.moon_dropdown_options = [
             ("Earth's Moon", 1.00),
             ("2.00", 2.0),
-            ("Custom Moon", None)
+            ("Custom", None)
         ]
         self.moon_dropdown_selected = None
         self.moon_dropdown_visible = False
@@ -153,7 +153,7 @@ class SolarSystemVisualizer:
         self.age_max = 10.0  # 10 Gyr
         
         # Luminosity input properties
-        self.luminosity_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 300,
+        self.luminosity_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 360,
                                                   self.customization_panel_width - 100, 30)
         self.luminosity_dropdown_active = False
         self.luminosity_dropdown_options = [
@@ -202,15 +202,37 @@ class SolarSystemVisualizer:
         self.spectral_dropdown_selected = "G-type (Yellow, 5,778 K)"
         self.spectral_dropdown_visible = False
 
+        # Temperature dropdown properties
+        self.temperature_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 300,
+                                                   self.customization_panel_width - 100, 30)
+        self.temperature_dropdown_active = False
+        self.temperature_dropdown_options = [
+            ("O-type (40,000 K)", 40000),
+            ("B-type (20,000 K)", 20000),
+            ("A-type (10,000 K)", 10000),
+            ("F-type (7,500 K)", 7500),
+            ("G-type (5,800 K)", 5800),
+            ("K-type (4,500 K)", 4500),
+            ("M-type (3,000 K)", 3000),
+            ("Custom", None)
+        ]
+        self.temperature_dropdown_selected = None
+        self.temperature_dropdown_visible = False
+        self.show_custom_temperature_input = False
+        self.temperature_input_active = False
+        self.temperature_input_text = ""
+        self.temperature_min = 2000  # Minimum temperature (K)
+        self.temperature_max = 50000  # Maximum temperature (K)
+
         # Star mass dropdown properties
         self.star_mass_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 120,
                                                  self.customization_panel_width - 100, 30)
         self.star_mass_dropdown_active = False
         self.star_mass_dropdown_options = [
             (".5", 0.5),
-            ("Solar Mass (The Sun)", 1.0),
+            ("1 (Sun)", 1.0),
             ("2", 2),
-            ("Custom Mass", None)
+            ("Custom", None)
         ]
         self.star_mass_dropdown_selected = None
         self.star_mass_dropdown_visible = False
@@ -224,11 +246,70 @@ class SolarSystemVisualizer:
             ("1.0 Gyr", 1.0),
             ("4.6 Gyr (Sun)", 4.6),
             ("7.0 Gyr", 7.0),
-            ("Custom Age", None)
+            ("Custom", None)
         ]
         self.star_age_dropdown_selected = None
         self.star_age_dropdown_visible = False
         self.show_custom_star_age_input = False
+    
+        # Star radius dropdown properties
+        self.radius_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 420,
+                                              self.customization_panel_width - 100, 30)
+        self.radius_dropdown_active = False
+        self.radius_dropdown_options = [
+            ("10.0 R☉ (O-type)", 10.0),
+            ("5.0 R☉ (B-type)", 5.0),
+            ("2.0 R☉ (A-type)", 2.0),
+            ("1.3 R☉ (F-type)", 1.3),
+            ("1.0 R☉ (G-type, Sun)", 1.0),
+            ("0.8 R☉ (K-type)", 0.8),
+            ("0.3 R☉ (M-type)", 0.3),
+            ("Custom", None)
+        ]
+        self.radius_dropdown_selected = None
+        self.radius_dropdown_visible = False
+        self.show_custom_radius_input = False
+        self.radius_input_active = False
+        self.radius_input_text = ""
+        self.radius_min = 0.1  # Minimum radius (R☉)
+        self.radius_max = 100.0  # Maximum radius (R☉)
+    
+        # Star activity level dropdown properties
+        self.activity_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 480,
+                                                self.customization_panel_width - 100, 30)
+        self.activity_dropdown_active = False
+        self.activity_dropdown_options = [
+            ("Low", 0.25),
+            ("Moderate", 0.5),
+            ("High", 0.75),
+            ("Very High", 1.0),
+            ("Custom", None)
+        ]
+        self.activity_dropdown_selected = None
+        self.activity_dropdown_visible = False
+        self.show_custom_activity_input = False
+        self.activity_input_active = False
+        self.activity_input_text = ""
+        self.activity_min = 0.0  # Minimum activity level
+        self.activity_max = 1.0  # Maximum activity level
+
+        # Star metallicity dropdown properties
+        self.metallicity_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 540,
+                                                   self.customization_panel_width - 100, 30)
+        self.metallicity_dropdown_active = False
+        self.metallicity_dropdown_options = [
+            ("-0.5 (Metal-poor)", -0.5),
+            ("0.0 (Sun-like)", 0.0),
+            ("+0.3 (Metal-rich)", 0.3),
+            ("Custom", None)
+        ]
+        self.metallicity_dropdown_selected = None
+        self.metallicity_dropdown_visible = False
+        self.show_custom_metallicity_input = False
+        self.metallicity_input_active = False
+        self.metallicity_input_text = ""
+        self.metallicity_min = -1.0  # Minimum metallicity [Fe/H]
+        self.metallicity_max = 1.0  # Maximum metallicity [Fe/H]
     
     def handle_events(self) -> bool:
         """Handle pygame events. Returns False if the window should close."""
@@ -281,7 +362,7 @@ class SolarSystemVisualizer:
                                     30
                                 )
                                 if option_rect.collidepoint(event.pos):
-                                    if planet_name == "Custom Mass":
+                                    if planet_name == "Custom":
                                         self.show_custom_mass_input = True
                                         self.mass_input_active = True
                                         self.mass_input_text = f"{self.selected_body.get('mass', 1.0):.3f}"
@@ -326,7 +407,7 @@ class SolarSystemVisualizer:
                                     30
                                 )
                                 if option_rect.collidepoint(event.pos):
-                                    if age_name == "Custom Age":
+                                    if age_name == "Custom":
                                         self.show_custom_age_input = True
                                         self.age_input_active = True
                                         self.age_input_text = f"{self.selected_body.get('age', 0.0):.1f}"
@@ -368,7 +449,7 @@ class SolarSystemVisualizer:
                                     30
                                 )
                                 if option_rect.collidepoint(event.pos):
-                                    if moon_name == "Custom Moon":
+                                    if moon_name == "Custom":
                                         self.show_custom_moon_mass_input = True
                                         self.mass_input_active = True
                                         self.mass_input_text = f"{self.selected_body.get('mass', 1.0):.3f}"
@@ -440,6 +521,13 @@ class SolarSystemVisualizer:
                             self.spectral_dropdown_active = True
                             self.spectral_dropdown_visible = True
                             self.create_spectral_dropdown_surface()
+                        # Handle temperature dropdown (only for stars)
+                        elif (self.selected_body and self.selected_body.get('type') == 'star' and 
+                              self.temperature_dropdown_rect.collidepoint(event.pos)):
+                            self.temperature_dropdown_active = True
+                            self.temperature_input_active = False
+                            self.temperature_dropdown_visible = True
+                            self.create_dropdown_surface()
                         # Handle star mass dropdown (only for stars)
                         elif (self.selected_body and self.selected_body.get('type') == 'star' and 
                               self.star_mass_dropdown_rect.collidepoint(event.pos)):
@@ -466,7 +554,7 @@ class SolarSystemVisualizer:
                                     30
                                 )
                                 if option_rect.collidepoint(event.pos):
-                                    if age_name == "Custom Age":
+                                    if age_name == "Custom":
                                         self.show_custom_star_age_input = True
                                         self.age_input_active = True
                                         self.age_input_text = f"{self.selected_body.get('age', 0.0):.1f}"
@@ -501,7 +589,7 @@ class SolarSystemVisualizer:
                                     30
                                 )
                                 if option_rect.collidepoint(event.pos):
-                                    if mass_name == "Custom Mass":
+                                    if mass_name == "Custom":
                                         self.show_custom_star_mass_input = True
                                         self.mass_input_active = True
                                         self.mass_input_text = f"{self.selected_body.get('mass', 1.0):.3f}"
@@ -525,6 +613,202 @@ class SolarSystemVisualizer:
                                 self.star_mass_dropdown_visible = False
                                 self.mass_input_active = False
                                 self.star_mass_dropdown_active = False
+                        # Handle temperature dropdown selection
+                        elif self.temperature_dropdown_visible:
+                            # First check if click is within the temperature dropdown area
+                            dropdown_area = pygame.Rect(
+                                self.temperature_dropdown_rect.left,
+                                self.temperature_dropdown_rect.top,
+                                self.temperature_dropdown_rect.width,
+                                self.temperature_dropdown_rect.height + len(self.temperature_dropdown_options) * self.dropdown_option_height
+                            )
+                            
+                            if dropdown_area.collidepoint(event.pos):
+                                # Convert click position to be relative to the dropdown surface
+                                relative_y = event.pos[1] - self.temperature_dropdown_rect.bottom
+                                option_index = relative_y // self.dropdown_option_height
+                                
+                                if 0 <= option_index < len(self.temperature_dropdown_options):
+                                    name, value = self.temperature_dropdown_options[option_index]
+                                    if value is not None:
+                                        if self.selected_body:
+                                            self.selected_body["temperature"] = value
+                                        self.temperature_dropdown_selected = name
+                                    else:  # Custom option
+                                        self.show_custom_temperature_input = True
+                                        self.temperature_input_active = True
+                                    self.temperature_dropdown_visible = False
+                                    self.temperature_dropdown_active = False
+                            else:
+                                # Click outside the temperature dropdown area
+                                self.temperature_dropdown_visible = False
+                                self.temperature_dropdown_active = False
+                        # Handle spectral dropdown selection
+                        elif self.spectral_dropdown_visible:
+                            # First check if click is within the spectral dropdown area
+                            dropdown_area = pygame.Rect(
+                                self.spectral_dropdown_rect.left,
+                                self.spectral_dropdown_rect.top,
+                                self.spectral_dropdown_rect.width,
+                                self.spectral_dropdown_rect.height + len(self.spectral_dropdown_options) * self.dropdown_option_height
+                            )
+                            
+                            if dropdown_area.collidepoint(event.pos):
+                                # Convert click position to be relative to the dropdown surface
+                                relative_y = event.pos[1] - self.spectral_dropdown_rect.bottom
+                                option_index = relative_y // self.dropdown_option_height
+                                
+                                if 0 <= option_index < len(self.spectral_dropdown_options):
+                                    spectral_type, temp, color = self.spectral_dropdown_options[option_index]
+                                    if self.selected_body:
+                                        self.selected_body["temperature"] = temp
+                                        self.selected_body["color"] = color
+                                    self.spectral_dropdown_selected = spectral_type
+                                    self.spectral_dropdown_visible = False
+                                    self.spectral_dropdown_active = False
+                            else:
+                                # Click outside the spectral dropdown area
+                                self.spectral_dropdown_visible = False
+                                self.spectral_dropdown_active = False
+                        # Handle radius dropdown (only for stars)
+                        elif (self.selected_body and self.selected_body.get('type') == 'star' and 
+                              self.radius_dropdown_rect.collidepoint(event.pos)):
+                            self.radius_dropdown_active = True
+                            self.radius_input_active = False
+                            self.radius_dropdown_visible = True
+                            self.create_dropdown_surface()
+                        # Handle activity level dropdown (only for stars)
+                        elif (self.selected_body and self.selected_body.get('type') == 'star' and 
+                              self.activity_dropdown_rect.collidepoint(event.pos)):
+                            self.activity_dropdown_active = True
+                            self.activity_input_active = False
+                            self.activity_dropdown_visible = True
+                            self.create_dropdown_surface()
+                        elif (self.selected_body and self.selected_body.get('type') == 'star' and 
+                              self.metallicity_dropdown_rect.collidepoint(event.pos)):
+                            self.metallicity_dropdown_active = True
+                            self.metallicity_input_active = False
+                            self.metallicity_dropdown_visible = True
+                            self.create_dropdown_surface()
+                        # Handle dropdown option selection
+                        if (self.planet_dropdown_visible or self.moon_dropdown_visible or 
+                            self.star_mass_dropdown_visible or self.luminosity_dropdown_visible or
+                            self.planet_age_dropdown_visible or self.star_age_dropdown_visible or
+                            self.temperature_dropdown_visible or self.radius_dropdown_visible or
+                            self.activity_dropdown_visible or self.metallicity_dropdown_visible):
+                            
+                            # Check if click is within any dropdown option
+                            for i, option_rect in enumerate(self.dropdown_options_rects):
+                                # Convert option_rect to screen coordinates
+                                screen_option_rect = pygame.Rect(
+                                    self.dropdown_rect.left,
+                                    self.dropdown_rect.top + i * self.dropdown_option_height,
+                                    option_rect.width,
+                                    option_rect.height
+                                )
+                                
+                                if screen_option_rect.collidepoint(event.pos):
+                                    if self.planet_dropdown_visible:
+                                        name, value = self.planet_dropdown_options[i]
+                                        if value is not None:
+                                            self.selected_body["mass"] = value
+                                        else:
+                                            self.show_custom_planet_mass_input = True
+                                            self.planet_mass_input_active = True
+                                        self.planet_dropdown_selected = name
+                                        self.planet_dropdown_visible = False
+                                        self.planet_dropdown_active = False
+                                    elif self.moon_dropdown_visible:
+                                        name, value = self.moon_dropdown_options[i]
+                                        if value is not None:
+                                            self.selected_body["mass"] = value
+                                        else:
+                                            self.show_custom_moon_mass_input = True
+                                            self.moon_mass_input_active = True
+                                        self.moon_dropdown_selected = name
+                                        self.moon_dropdown_visible = False
+                                        self.moon_dropdown_active = False
+                                    elif self.star_mass_dropdown_visible:
+                                        name, value = self.star_mass_dropdown_options[i]
+                                        if value is not None:
+                                            self.selected_body["mass"] = value
+                                        else:
+                                            self.show_custom_star_mass_input = True
+                                            self.star_mass_input_active = True
+                                        self.star_mass_dropdown_selected = name
+                                        self.star_mass_dropdown_visible = False
+                                        self.star_mass_dropdown_active = False
+                                    elif self.luminosity_dropdown_visible:
+                                        name, value = self.luminosity_dropdown_options[i]
+                                        if value is not None:
+                                            self.selected_body["luminosity"] = value
+                                        else:
+                                            self.show_custom_luminosity_input = True
+                                            self.luminosity_input_active = True
+                                        self.luminosity_dropdown_selected = name
+                                        self.luminosity_dropdown_visible = False
+                                        self.luminosity_dropdown_active = False
+                                    elif self.planet_age_dropdown_visible:
+                                        name, value = self.planet_age_dropdown_options[i]
+                                        if value is not None:
+                                            self.selected_body["age"] = value
+                                        else:
+                                            self.show_custom_planet_age_input = True
+                                            self.planet_age_input_active = True
+                                        self.planet_age_dropdown_selected = name
+                                        self.planet_age_dropdown_visible = False
+                                        self.planet_age_dropdown_active = False
+                                    elif self.star_age_dropdown_visible:
+                                        name, value = self.star_age_dropdown_options[i]
+                                        if value is not None:
+                                            self.selected_body["age"] = value
+                                        else:
+                                            self.show_custom_star_age_input = True
+                                            self.star_age_input_active = True
+                                        self.star_age_dropdown_selected = name
+                                        self.star_age_dropdown_visible = False
+                                        self.star_age_dropdown_active = False
+                                    elif self.temperature_dropdown_visible:
+                                        name, value = self.temperature_dropdown_options[i]
+                                        if value is not None:
+                                            self.selected_body["temperature"] = value
+                                        else:
+                                            self.show_custom_temperature_input = True
+                                            self.temperature_input_active = True
+                                        self.temperature_dropdown_selected = name
+                                        self.temperature_dropdown_visible = False
+                                        self.temperature_dropdown_active = False
+                                    elif self.radius_dropdown_visible:
+                                        name, value = self.radius_dropdown_options[i]
+                                        if value is not None:
+                                            self.selected_body["radius"] = value
+                                        else:
+                                            self.show_custom_radius_input = True
+                                            self.radius_input_active = True
+                                        self.radius_dropdown_selected = name
+                                        self.radius_dropdown_visible = False
+                                        self.radius_dropdown_active = False
+                                    elif self.activity_dropdown_visible:
+                                        name, value = self.activity_dropdown_options[i]
+                                        if value is not None:
+                                            self.selected_body["activity"] = value
+                                        else:
+                                            self.show_custom_activity_input = True
+                                            self.activity_input_active = True
+                                        self.activity_dropdown_selected = name
+                                        self.activity_dropdown_visible = False
+                                        self.activity_dropdown_active = False
+                                    elif self.metallicity_dropdown_visible:
+                                        name, value = self.metallicity_dropdown_options[i]
+                                        if value is not None:
+                                            self.selected_body["metallicity"] = value
+                                        else:
+                                            self.show_custom_metallicity_input = True
+                                            self.metallicity_input_active = True
+                                        self.metallicity_dropdown_selected = name
+                                        self.metallicity_dropdown_visible = False
+                                        self.metallicity_dropdown_active = False
+                                    break
                     else:
                         # Handle tab clicks
                         for tab_name, tab_rect in self.tabs.items():
@@ -620,7 +904,7 @@ class SolarSystemVisualizer:
                             
                             # Set dropdown selections to match defaults
                             if self.active_tab == "star":
-                                self.star_mass_dropdown_selected = "Solar Mass (The Sun)"
+                                self.star_mass_dropdown_selected = "1( The Sun)"
                                 self.star_age_dropdown_selected = "4.6 Gyr (Sun)"
                                 self.spectral_dropdown_selected = default_spectral
                                 self.luminosity_dropdown_selected = "Sun-like Star"
@@ -718,7 +1002,7 @@ class SolarSystemVisualizer:
                             new_luminosity = float(self.luminosity_input_text)
                             if self.luminosity_min <= new_luminosity <= self.luminosity_max:
                                 self.selected_body["luminosity"] = new_luminosity
-                            self.luminosity_input_active = False
+                            selfFluminosity_input_active = False
                         except ValueError:
                             # Invalid input, keep current value
                             self.luminosity_input_text = f"{self.selected_body.get('luminosity', 1.0):.3f}"
@@ -740,6 +1024,38 @@ class SolarSystemVisualizer:
                                 pass
                             else:
                                 self.luminosity_input_text += event.unicode
+                if self.temperature_input_active and self.selected_body and self.selected_body.get('type') == 'star':
+                    if event.key == pygame.K_RETURN:
+                        try:
+                            temp = float(self.temperature_input_text)
+                            if self.temperature_min <= temp <= self.temperature_max:
+                                if self.selected_body:
+                                    self.selected_body["temperature"] = temp
+                                self.temperature_dropdown_selected = f"Custom ({temp:.0f} K)"
+                            self.temperature_input_text = ""
+                            self.temperature_input_active = False
+                            self.show_custom_temperature_input = False
+                        except ValueError:
+                            pass
+                    elif event.key == pygame.K_BACKSPACE:
+                        self.temperature_input_text = self.temperature_input_text[:-1]
+                    elif event.unicode.isnumeric() or event.unicode == '.':
+                        self.temperature_input_text += event.unicode
+                if self.metallicity_input_active and self.selected_body and self.selected_body.get('type') == 'star':
+                    if event.key == pygame.K_RETURN:
+                        try:
+                            metallicity = float(self.metallicity_input_text)
+                            if self.metallicity_min <= metallicity <= self.metallicity_max:
+                                self.selected_body["metallicity"] = metallicity
+                            self.metallicity_input_text = ""
+                            self.metallicity_input_active = False
+                            self.show_custom_metallicity_input = False
+                        except ValueError:
+                            pass
+                    elif event.key == pygame.K_BACKSPACE:
+                        self.metallicity_input_text = self.metallicity_input_text[:-1]
+                    elif event.unicode.isnumeric() or event.unicode == '.':
+                        self.metallicity_input_text += event.unicode
         return True
     
     def update_ambient_colors(self):
@@ -950,7 +1266,9 @@ class SolarSystemVisualizer:
         """Create a new surface for the dropdown menu that will float above everything"""
         if not (self.planet_dropdown_visible or self.moon_dropdown_visible or 
                 self.star_mass_dropdown_visible or self.luminosity_dropdown_visible or
-                self.planet_age_dropdown_visible or self.star_age_dropdown_visible):
+                self.planet_age_dropdown_visible or self.star_age_dropdown_visible or
+                self.temperature_dropdown_visible or self.radius_dropdown_visible or
+                self.activity_dropdown_visible or self.metallicity_dropdown_visible):
             return
         # Calculate dropdown dimensions
         option_height = self.dropdown_option_height
@@ -972,6 +1290,18 @@ class SolarSystemVisualizer:
         elif self.star_age_dropdown_visible:
             options = self.star_age_dropdown_options
             width = self.star_age_dropdown_rect.width
+        elif self.temperature_dropdown_visible:
+            options = self.temperature_dropdown_options
+            width = self.temperature_dropdown_rect.width
+        elif self.radius_dropdown_visible:
+            options = self.radius_dropdown_options
+            width = self.radius_dropdown_rect.width
+        elif self.activity_dropdown_visible:
+            options = self.activity_dropdown_options
+            width = self.activity_dropdown_rect.width
+        elif self.metallicity_dropdown_visible:
+            options = self.metallicity_dropdown_options
+            width = self.metallicity_dropdown_rect.width
         else:
             return
         total_height = len(options) * option_height
@@ -1005,6 +1335,14 @@ class SolarSystemVisualizer:
                     text = f"{name} ({value:.1f} M☉)"
                 elif self.planet_age_dropdown_visible or self.star_age_dropdown_visible:
                     text = name  # Age options already include the unit
+                elif self.temperature_dropdown_visible:
+                    text = name  # Temperature options already include the unit
+                elif self.radius_dropdown_visible:
+                    text = name  # Radius options already include the unit
+                elif self.activity_dropdown_visible:
+                    text = name  # Activity options already include the unit
+                elif self.metallicity_dropdown_visible:
+                    text = name  # Metallicity options already include the unit
                 else:  # luminosity dropdown
                     text = f"{name} ({value:.2f} L☉)"
             else:
@@ -1049,6 +1387,34 @@ class SolarSystemVisualizer:
                 width,
                 total_height
             )
+        elif self.temperature_dropdown_visible:
+            self.dropdown_rect = pygame.Rect(
+                self.temperature_dropdown_rect.left,
+                self.temperature_dropdown_rect.bottom,
+                width,
+                total_height
+            )
+        elif self.radius_dropdown_visible:
+            self.dropdown_rect = pygame.Rect(
+                self.radius_dropdown_rect.left,
+                self.radius_dropdown_rect.bottom,
+                width,
+                total_height
+            )
+        elif self.activity_dropdown_visible:
+            self.dropdown_rect = pygame.Rect(
+                self.activity_dropdown_rect.left,
+                self.activity_dropdown_rect.bottom,
+                width,
+                total_height
+            )
+        elif self.metallicity_dropdown_visible:
+            self.dropdown_rect = pygame.Rect(
+                self.metallicity_dropdown_rect.left,
+                self.metallicity_dropdown_rect.bottom,
+                width,
+                total_height
+            )
         else:  # luminosity dropdown
             self.dropdown_rect = pygame.Rect(
                 self.luminosity_dropdown_rect.left,
@@ -1059,13 +1425,19 @@ class SolarSystemVisualizer:
 
     def render_dropdown(self):
         """Render the dropdown menu on top of everything else"""
-        if (self.planet_dropdown_visible or self.moon_dropdown_visible or self.star_mass_dropdown_visible or self.luminosity_dropdown_visible or self.planet_age_dropdown_visible or self.star_age_dropdown_visible) and self.dropdown_surface:
+        if (self.planet_dropdown_visible or self.moon_dropdown_visible or self.star_mass_dropdown_visible or 
+            self.luminosity_dropdown_visible or self.planet_age_dropdown_visible or self.star_age_dropdown_visible or 
+            self.temperature_dropdown_visible or self.spectral_dropdown_visible or self.radius_dropdown_visible or
+            self.activity_dropdown_visible or self.metallicity_dropdown_visible) and (self.dropdown_surface or hasattr(self, 'spectral_dropdown_surface')):
             # Create a new surface that covers the entire screen
             overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
             overlay.fill((0, 0, 0, 128))  # Semi-transparent dark background
             
             # Draw the dropdown surface on the overlay
-            overlay.blit(self.dropdown_surface, self.dropdown_rect)
+            if self.spectral_dropdown_visible and hasattr(self, 'spectral_dropdown_surface'):
+                overlay.blit(self.spectral_dropdown_surface, self.spectral_dropdown_rect_floating)
+            elif self.dropdown_surface:
+                overlay.blit(self.dropdown_surface, self.dropdown_rect)
             
             # Draw the overlay on the screen
             self.screen.blit(overlay, (0, 0))
@@ -1077,8 +1449,12 @@ class SolarSystemVisualizer:
         option_height = self.dropdown_option_height
         total_height = len(self.spectral_dropdown_options) * option_height
         width = self.spectral_dropdown_rect.width
+        
+        # Create a new surface for the dropdown
         self.spectral_dropdown_surface = pygame.Surface((width, total_height), pygame.SRCALPHA)
         self.spectral_dropdown_surface.fill(self.dropdown_background_color)
+        
+        # Create rects for each option
         self.spectral_dropdown_options_rects = []
         for i, (spectral_type, temp, color) in enumerate(self.spectral_dropdown_options):
             option_rect = pygame.Rect(
@@ -1088,25 +1464,23 @@ class SolarSystemVisualizer:
                 option_height
             )
             self.spectral_dropdown_options_rects.append(option_rect)
+            
+            # Draw option background
             pygame.draw.rect(self.spectral_dropdown_surface, self.dropdown_background_color, option_rect)
             pygame.draw.rect(self.spectral_dropdown_surface, self.dropdown_border_color, option_rect, self.dropdown_border_width)
+            
+            # Draw option text
             text_surface = self.subtitle_font.render(spectral_type, True, self.dropdown_text_color)
             text_rect = text_surface.get_rect(midleft=(self.dropdown_padding, option_rect.centery))
             self.spectral_dropdown_surface.blit(text_surface, text_rect)
+        
+        # Position the dropdown below the button
         self.spectral_dropdown_rect_floating = pygame.Rect(
             self.spectral_dropdown_rect.left,
             self.spectral_dropdown_rect.bottom,
             width,
             total_height
         )
-
-    def render_spectral_dropdown(self):
-        """Render the spectral dropdown menu on top of everything else"""
-        if self.spectral_dropdown_visible and hasattr(self, 'spectral_dropdown_surface'):
-            overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
-            overlay.fill((0, 0, 0, 0))
-            overlay.blit(self.spectral_dropdown_surface, self.spectral_dropdown_rect_floating)
-            self.screen.blit(overlay, (0, 0))
 
     def render_simulation(self, engine: SimulationEngine):
         """Render the solar system simulation"""
@@ -1289,7 +1663,7 @@ class SolarSystemVisualizer:
             # Draw luminosity input for stars
             if self.selected_body and self.selected_body.get('type') == 'star':
                 luminosity_label = self.subtitle_font.render("Luminosity (L☉)", True, self.BLACK)
-                luminosity_label_rect = luminosity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 285))
+                luminosity_label_rect = luminosity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 345))
                 self.screen.blit(luminosity_label, luminosity_label_rect)
                 
                 # Draw the dropdown
@@ -1307,7 +1681,7 @@ class SolarSystemVisualizer:
                 # Show custom luminosity input if "Custom" is selected
                 if self.show_custom_luminosity_input:
                     custom_luminosity_label = self.subtitle_font.render("Enter Custom Luminosity (L☉):", True, self.BLACK)
-                    custom_luminosity_label_rect = custom_luminosity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 345))
+                    custom_luminosity_label_rect = custom_luminosity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 360))
                     self.screen.blit(custom_luminosity_label, custom_luminosity_label_rect)
                     
                     custom_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 360,
@@ -1328,42 +1702,105 @@ class SolarSystemVisualizer:
                 spectral_label_rect = spectral_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 225))
                 self.screen.blit(spectral_label, spectral_label_rect)
                 pygame.draw.rect(self.screen, self.WHITE, self.spectral_dropdown_rect, 2)
-                pygame.draw.rect(self.screen, self.BLUE if self.spectral_dropdown_active else self.GRAY, self.spectral_dropdown_rect, 1)
-                spectral_text = self.subtitle_font.render(self.spectral_dropdown_selected, True, self.BLACK)
-                spectral_text_rect = spectral_text.get_rect(midleft=(self.spectral_dropdown_rect.left + 5, self.spectral_dropdown_rect.centery))
-                self.screen.blit(spectral_text, spectral_text_rect)
-
-                # Draw star age dropdown
-                age_label = self.subtitle_font.render("Age (Gyr)", True, self.BLACK)
-                age_label_rect = age_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 165))
-                self.screen.blit(age_label, age_label_rect)
-                pygame.draw.rect(self.screen, self.WHITE, self.star_age_dropdown_rect, 2)
-                pygame.draw.rect(self.screen, self.BLUE if self.star_age_dropdown_active else self.GRAY, 
-                               self.star_age_dropdown_rect, 1)
-                dropdown_text = "Select Age"
-                if self.star_age_dropdown_selected:
-                    dropdown_text = self.star_age_dropdown_selected
+                pygame.draw.rect(self.screen, self.BLUE if self.spectral_dropdown_active else self.GRAY, 
+                               self.spectral_dropdown_rect, 1)
+                dropdown_text = "Select Spectral Type"
+                if self.spectral_dropdown_selected:
+                    dropdown_text = self.spectral_dropdown_selected
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
-                text_rect = text_surface.get_rect(midleft=(self.star_age_dropdown_rect.left + 5, 
-                                                         self.star_age_dropdown_rect.centery))
+                text_rect = text_surface.get_rect(midleft=(self.spectral_dropdown_rect.left + 5, 
+                                                         self.spectral_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
 
-                # Show custom age input if "Custom Age" is selected
-                if self.show_custom_star_age_input:
-                    custom_age_label = self.subtitle_font.render("Enter Custom Age (Gyr):", True, self.BLACK)
-                    custom_age_label_rect = custom_age_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 225))
-                    self.screen.blit(custom_age_label, custom_age_label_rect)
-                    
-                    pygame.draw.rect(self.screen, self.WHITE, self.age_input_rect, 2)
-                    pygame.draw.rect(self.screen, self.BLUE if self.age_input_active else self.GRAY, 
-                                   self.age_input_rect, 1)
-                    if self.age_input_active:
-                        text_surface = self.subtitle_font.render(self.age_input_text, True, self.BLACK)
-                    else:
-                        text_surface = self.subtitle_font.render(f"{self.selected_body.get('age', 0.0):.1f}", True, self.BLACK)
-                    text_rect = text_surface.get_rect(midleft=(self.age_input_rect.left + 5, 
-                                                             self.age_input_rect.centery))
-                    self.screen.blit(text_surface, text_rect)
+                # Draw temperature dropdown
+                temperature_label = self.subtitle_font.render("Temperature (K)", True, self.BLACK)
+                temperature_label_rect = temperature_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 285))
+                self.screen.blit(temperature_label, temperature_label_rect)
+                pygame.draw.rect(self.screen, self.WHITE, self.temperature_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.temperature_dropdown_active else self.GRAY, 
+                               self.temperature_dropdown_rect, 1)
+                dropdown_text = "Select Temperature"
+                if self.temperature_dropdown_selected:
+                    dropdown_text = self.temperature_dropdown_selected
+                elif self.selected_body and self.selected_body.get('type') == 'star':
+                    temp = self.selected_body.get('temperature', 5778)
+                    dropdown_text = f"{temp:.0f} K"
+                text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
+                text_rect = text_surface.get_rect(midleft=(self.temperature_dropdown_rect.left + 5, 
+                                                         self.temperature_dropdown_rect.centery))
+                self.screen.blit(text_surface, text_rect)
+
+                # Draw luminosity input for stars
+                luminosity_label = self.subtitle_font.render("Luminosity (L☉)", True, self.BLACK)
+                luminosity_label_rect = luminosity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 345))
+                self.screen.blit(luminosity_label, luminosity_label_rect)
+                pygame.draw.rect(self.screen, self.WHITE, self.luminosity_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.luminosity_dropdown_active else self.GRAY, 
+                               self.luminosity_dropdown_rect, 1)
+                dropdown_text = "Select Star Luminosity"
+                if self.luminosity_dropdown_selected:
+                    dropdown_text = self.luminosity_dropdown_selected
+                text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
+                text_rect = text_surface.get_rect(midleft=(self.luminosity_dropdown_rect.left + 5, 
+                                                         self.luminosity_dropdown_rect.centery))
+                self.screen.blit(text_surface, text_rect)
+
+                # Draw radius dropdown
+                radius_label = self.subtitle_font.render("Radius (R☉)", True, self.BLACK)
+                radius_label_rect = radius_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 405))
+                self.screen.blit(radius_label, radius_label_rect)
+                pygame.draw.rect(self.screen, self.WHITE, self.radius_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.radius_dropdown_active else self.GRAY, 
+                               self.radius_dropdown_rect, 1)
+                dropdown_text = "Select Radius"
+                if self.radius_dropdown_selected:
+                    dropdown_text = self.radius_dropdown_selected
+                elif self.selected_body and self.selected_body.get('type') == 'star':
+                    radius = self.selected_body.get('radius', 1.0)
+                    dropdown_text = f"{radius:.1f} R☉"
+                text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
+                text_rect = text_surface.get_rect(midleft=(self.radius_dropdown_rect.left + 5, 
+                                                         self.radius_dropdown_rect.centery))
+                self.screen.blit(text_surface, text_rect)
+
+                # Draw activity level dropdown
+                activity_label = self.subtitle_font.render("Activity Level", True, self.BLACK)
+                activity_label_rect = activity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 465))
+                self.screen.blit(activity_label, activity_label_rect)
+                pygame.draw.rect(self.screen, self.WHITE, self.activity_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.activity_dropdown_active else self.GRAY, 
+                               self.activity_dropdown_rect, 1)
+                dropdown_text = "Select Activity Level"
+                if self.activity_dropdown_selected:
+                    dropdown_text = self.activity_dropdown_selected
+                elif self.selected_body and self.selected_body.get('type') == 'star':
+                    activity = self.selected_body.get('activity_level', 0.5)
+                    dropdown_text = f"{activity:.2f}"
+                text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
+                text_rect = text_surface.get_rect(midleft=(self.activity_dropdown_rect.left + 5, 
+                                                         self.activity_dropdown_rect.centery))
+                self.screen.blit(text_surface, text_rect)
+
+                # Draw metallicity dropdown
+                metallicity_label = self.subtitle_font.render("Metallicity [Fe/H]", True, self.BLACK)
+                metallicity_label_rect = metallicity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 525))
+                self.screen.blit(metallicity_label, metallicity_label_rect)
+                pygame.draw.rect(self.screen, self.WHITE, self.metallicity_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.metallicity_dropdown_active else self.GRAY, 
+                               self.metallicity_dropdown_rect, 1)
+                dropdown_text = "Select Metallicity"
+                if self.metallicity_dropdown_selected:
+                    dropdown_text = self.metallicity_dropdown_selected
+                elif self.selected_body and self.selected_body.get('type') == 'star':
+                    metallicity = self.selected_body.get('metallicity', 0.0)
+                    dropdown_text = f"{metallicity:+.1f} [Fe/H]"
+                text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
+                text_rect = text_surface.get_rect(midleft=(self.metallicity_dropdown_rect.left + 5, 
+                                                         self.metallicity_dropdown_rect.centery))
+                self.screen.blit(text_surface, text_rect)
+
+                # Draw spacetime grid
+                self.draw_spacetime_grid()
         
         # Draw spacetime grid
         self.draw_spacetime_grid()
