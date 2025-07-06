@@ -368,6 +368,69 @@ class SolarSystemVisualizer:
         self.metallicity_input_text = ""
         self.metallicity_min = -1.0  # Minimum metallicity [Fe/H]
         self.metallicity_max = 1.0  # Maximum metallicity [Fe/H]
+        
+        # Planet orbital distance (semi-major axis) dropdown properties
+        self.planet_orbital_distance_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 420, self.customization_panel_width - 100, 30)
+        self.planet_orbital_distance_dropdown_active = False
+        self.planet_orbital_distance_dropdown_options = [
+            ("Mercury", 0.39),
+            ("Venus", 0.72),
+            ("Earth", 1.0),
+            ("Mars", 1.52),
+            ("Jupiter", 5.2),
+            ("Saturn", 9.58),
+            ("Uranus", 19.2),
+            ("Neptune", 30.1),
+            ("Custom", None)
+        ]
+        self.planet_orbital_distance_dropdown_selected = "Earth"
+        self.planet_orbital_distance_dropdown_visible = False
+        self.show_custom_orbital_distance_input = False
+        self.orbital_distance_input_active = False
+        self.orbital_distance_input_text = ""
+        self.orbital_distance_min = 0.01
+        self.orbital_distance_max = 1000.0
+        
+        # Planet orbital eccentricity dropdown properties
+        self.planet_orbital_eccentricity_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 480, self.customization_panel_width - 100, 30)
+        self.planet_orbital_eccentricity_dropdown_active = False
+        self.planet_orbital_eccentricity_dropdown_options = [
+            ("Circular Orbit", 0.0),
+            ("Earth", 0.017),
+            ("Mars", 0.093),
+            ("Mercury", 0.205),
+            ("Pluto", 0.248),
+            ("Custom", None)
+        ]
+        self.planet_orbital_eccentricity_dropdown_selected = "Earth"
+        self.planet_orbital_eccentricity_dropdown_visible = False
+        self.show_custom_orbital_eccentricity_input = False
+        self.orbital_eccentricity_input_active = False
+        self.orbital_eccentricity_input_text = ""
+        self.orbital_eccentricity_min = 0.0
+        self.orbital_eccentricity_max = 1.0
+        
+        # Planet orbital period dropdown properties
+        self.planet_orbital_period_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 540, self.customization_panel_width - 100, 30)
+        self.planet_orbital_period_dropdown_active = False
+        self.planet_orbital_period_dropdown_options = [
+            ("Mercury", 88),
+            ("Venus", 225),
+            ("Earth", 365),
+            ("Mars", 687),
+            ("Jupiter", 4333),
+            ("Saturn", 10759),
+            ("Uranus", 30687),
+            ("Neptune", 60190),
+            ("Custom", None)
+        ]
+        self.planet_orbital_period_dropdown_selected = "Earth"
+        self.planet_orbital_period_dropdown_visible = False
+        self.show_custom_orbital_period_input = False
+        self.orbital_period_input_active = False
+        self.orbital_period_input_text = ""
+        self.orbital_period_min = 1.0
+        self.orbital_period_max = 100000.0
     
     def handle_events(self) -> bool:
         """Handle pygame events. Returns False if the window should close."""
@@ -393,6 +456,8 @@ class SolarSystemVisualizer:
                 elif self.show_simulation_builder or self.show_simulation:
                     # Check if click is in the customization panel
                     if self.show_customization_panel and self.customization_panel.collidepoint(event.pos):
+                        print(f'DEBUG: Mouse click at {event.pos}')
+                        print(f'DEBUG: Orbital distance rect: {self.planet_orbital_distance_dropdown_rect}')
                         # Check if close button was clicked
                         if self.close_button.collidepoint(event.pos):
                             self.show_customization_panel = False
@@ -574,6 +639,68 @@ class SolarSystemVisualizer:
                             self.planet_gravity_dropdown_active = True
                             self.planet_gravity_dropdown_visible = True
                             self.create_dropdown_surface()
+                        # Handle planet orbital distance dropdown (only for planets)
+                        elif (self.selected_body and self.selected_body.get('type') == 'planet' and 
+                              self.planet_orbital_distance_dropdown_rect.collidepoint(event.pos)):
+                            print('DEBUG: Orbital distance dropdown clicked')
+                            self.planet_orbital_distance_dropdown_active = True
+                            self.planet_orbital_distance_dropdown_visible = True
+                            # Deactivate other dropdowns
+                            self.planet_dropdown_active = False
+                            self.planet_dropdown_visible = False
+                            self.planet_age_dropdown_active = False
+                            self.planet_age_dropdown_visible = False
+                            self.planet_radius_dropdown_active = False
+                            self.planet_radius_dropdown_visible = False
+                            self.planet_temperature_dropdown_active = False
+                            self.planet_temperature_dropdown_visible = False
+                            self.planet_gravity_dropdown_active = False
+                            self.planet_gravity_dropdown_visible = False
+                            self.planet_orbital_eccentricity_dropdown_active = False
+                            self.planet_orbital_eccentricity_dropdown_visible = False
+                            self.create_dropdown_surface()
+                        # Handle planet orbital eccentricity dropdown (only for planets)
+                        elif (self.selected_body and self.selected_body.get('type') == 'planet' and 
+                              self.planet_orbital_eccentricity_dropdown_rect.collidepoint(event.pos)):
+                            print('DEBUG: Orbital eccentricity dropdown clicked')
+                            self.planet_orbital_eccentricity_dropdown_active = True
+                            self.planet_orbital_eccentricity_dropdown_visible = True
+                            # Deactivate other dropdowns
+                            self.planet_dropdown_active = False
+                            self.planet_dropdown_visible = False
+                            self.planet_age_dropdown_active = False
+                            self.planet_age_dropdown_visible = False
+                            self.planet_radius_dropdown_active = False
+                            self.planet_radius_dropdown_visible = False
+                            self.planet_temperature_dropdown_active = False
+                            self.planet_temperature_dropdown_visible = False
+                            self.planet_gravity_dropdown_active = False
+                            self.planet_gravity_dropdown_visible = False
+                            self.planet_orbital_distance_dropdown_active = False
+                            self.planet_orbital_distance_dropdown_visible = False
+                            self.create_dropdown_surface()
+                        # Handle planet orbital period dropdown (only for planets)
+                        elif (self.selected_body and self.selected_body.get('type') == 'planet' and 
+                              self.planet_orbital_period_dropdown_rect.collidepoint(event.pos)):
+                            print('DEBUG: Orbital period dropdown clicked')
+                            self.planet_orbital_period_dropdown_active = True
+                            self.planet_orbital_period_dropdown_visible = True
+                            # Deactivate other dropdowns
+                            self.planet_dropdown_active = False
+                            self.planet_dropdown_visible = False
+                            self.planet_age_dropdown_active = False
+                            self.planet_age_dropdown_visible = False
+                            self.planet_radius_dropdown_active = False
+                            self.planet_radius_dropdown_visible = False
+                            self.planet_temperature_dropdown_active = False
+                            self.planet_temperature_dropdown_visible = False
+                            self.planet_gravity_dropdown_active = False
+                            self.planet_gravity_dropdown_visible = False
+                            self.planet_orbital_distance_dropdown_active = False
+                            self.planet_orbital_distance_dropdown_visible = False
+                            self.planet_orbital_eccentricity_dropdown_active = False
+                            self.planet_orbital_eccentricity_dropdown_visible = False
+                            self.create_dropdown_surface()
                         # Check if clicked on a planet gravity option (only for planets)
                         elif (self.selected_body and self.selected_body.get('type') == 'planet' and 
                               self.planet_gravity_dropdown_visible):
@@ -607,6 +734,111 @@ class SolarSystemVisualizer:
                                  for i in range(len(self.planet_gravity_dropdown_options))))):
                                 self.planet_gravity_dropdown_visible = False
                                 self.planet_gravity_dropdown_active = False
+                        # Check if clicked on a planet orbital distance option (only for planets)
+                        elif (self.selected_body and self.selected_body.get('type') == 'planet' and 
+                              self.planet_orbital_distance_dropdown_visible):
+                            dropdown_y = self.planet_orbital_distance_dropdown_rect.bottom
+                            for i, (dist_name, dist) in enumerate(self.planet_orbital_distance_dropdown_options):
+                                option_rect = pygame.Rect(
+                                    self.planet_orbital_distance_dropdown_rect.left,
+                                    dropdown_y + i * 30,
+                                    self.planet_orbital_distance_dropdown_rect.width,
+                                    30
+                                )
+                                if option_rect.collidepoint(event.pos):
+                                    if dist_name == "Custom":
+                                        self.show_custom_orbital_distance_input = True
+                                        self.orbital_distance_input_active = True
+                                        self.orbital_distance_input_text = f"{self.selected_body.get('semiMajorAxis', 1.0):.2f}"
+                                    else:
+                                        self.selected_body["semiMajorAxis"] = dist
+                                        self.show_custom_orbital_distance_input = False
+                                    self.planet_orbital_distance_dropdown_selected = dist_name
+                                    self.planet_orbital_distance_dropdown_visible = False
+                                    self.planet_orbital_distance_dropdown_active = False
+                                    break
+                            # Only close dropdown if clicking outside both the dropdown and its options
+                            if (self.planet_orbital_distance_dropdown_visible and not 
+                                (self.planet_orbital_distance_dropdown_rect.collidepoint(event.pos) or 
+                                 any(pygame.Rect(
+                                     self.planet_orbital_distance_dropdown_rect.left,
+                                     self.planet_orbital_distance_dropdown_rect.bottom + i * 30,
+                                     self.planet_orbital_distance_dropdown_rect.width,
+                                     30
+                                 ).collidepoint(event.pos)
+                                 for i in range(len(self.planet_orbital_distance_dropdown_options))))):
+                                self.planet_orbital_distance_dropdown_visible = False
+                                self.planet_orbital_distance_dropdown_active = False
+                        # Check if clicked on a planet orbital eccentricity option (only for planets)
+                        elif (self.selected_body and self.selected_body.get('type') == 'planet' and 
+                              self.planet_orbital_eccentricity_dropdown_visible):
+                            dropdown_y = self.planet_orbital_eccentricity_dropdown_rect.bottom
+                            for i, (ecc_name, ecc) in enumerate(self.planet_orbital_eccentricity_dropdown_options):
+                                option_rect = pygame.Rect(
+                                    self.planet_orbital_eccentricity_dropdown_rect.left,
+                                    dropdown_y + i * 30,
+                                    self.planet_orbital_eccentricity_dropdown_rect.width,
+                                    30
+                                )
+                                if option_rect.collidepoint(event.pos):
+                                    if ecc_name == "Custom":
+                                        self.show_custom_orbital_eccentricity_input = True
+                                        self.orbital_eccentricity_input_active = True
+                                        self.orbital_eccentricity_input_text = f"{self.selected_body.get('eccentricity', 0.017):.3f}"
+                                    else:
+                                        self.selected_body["eccentricity"] = ecc
+                                        self.show_custom_orbital_eccentricity_input = False
+                                    self.planet_orbital_eccentricity_dropdown_selected = ecc_name
+                                    self.planet_orbital_eccentricity_dropdown_visible = False
+                                    self.planet_orbital_eccentricity_dropdown_active = False
+                                    break
+                            # Only close dropdown if clicking outside both the dropdown and its options
+                            if (self.planet_orbital_eccentricity_dropdown_visible and not 
+                                (self.planet_orbital_eccentricity_dropdown_rect.collidepoint(event.pos) or 
+                                 any(pygame.Rect(
+                                     self.planet_orbital_eccentricity_dropdown_rect.left,
+                                     self.planet_orbital_eccentricity_dropdown_rect.bottom + i * 30,
+                                     self.planet_orbital_eccentricity_dropdown_rect.width,
+                                     30
+                                 ).collidepoint(event.pos)
+                                 for i in range(len(self.planet_orbital_eccentricity_dropdown_options))))):
+                                self.planet_orbital_eccentricity_dropdown_visible = False
+                                self.planet_orbital_eccentricity_dropdown_active = False
+                        # Check if clicked on a planet orbital period option (only for planets)
+                        elif (self.selected_body and self.selected_body.get('type') == 'planet' and 
+                              self.planet_orbital_period_dropdown_visible):
+                            dropdown_y = self.planet_orbital_period_dropdown_rect.bottom
+                            for i, (period_name, period) in enumerate(self.planet_orbital_period_dropdown_options):
+                                option_rect = pygame.Rect(
+                                    self.planet_orbital_period_dropdown_rect.left,
+                                    dropdown_y + i * 30,
+                                    self.planet_orbital_period_dropdown_rect.width,
+                                    30
+                                )
+                                if option_rect.collidepoint(event.pos):
+                                    if period_name == "Custom":
+                                        self.show_custom_orbital_period_input = True
+                                        self.orbital_period_input_active = True
+                                        self.orbital_period_input_text = f"{self.selected_body.get('orbital_period', 365):.0f}"
+                                    else:
+                                        self.selected_body["orbital_period"] = period
+                                        self.show_custom_orbital_period_input = False
+                                    self.planet_orbital_period_dropdown_selected = period_name
+                                    self.planet_orbital_period_dropdown_visible = False
+                                    self.planet_orbital_period_dropdown_active = False
+                                    break
+                            # Only close dropdown if clicking outside both the dropdown and its options
+                            if (self.planet_orbital_period_dropdown_visible and not 
+                                (self.planet_orbital_period_dropdown_rect.collidepoint(event.pos) or 
+                                 any(pygame.Rect(
+                                     self.planet_orbital_period_dropdown_rect.left,
+                                     self.planet_orbital_period_dropdown_rect.bottom + i * 30,
+                                     self.planet_orbital_period_dropdown_rect.width,
+                                     30
+                                 ).collidepoint(event.pos)
+                                 for i in range(len(self.planet_orbital_period_dropdown_options))))):
+                                self.planet_orbital_period_dropdown_visible = False
+                                self.planet_orbital_period_dropdown_active = False
                         # Handle moon dropdown (only for moons)
                         elif (self.selected_body and self.selected_body.get('type') == 'moon' and 
                               self.moon_dropdown_rect.collidepoint(event.pos)):
@@ -872,7 +1104,9 @@ class SolarSystemVisualizer:
                             self.star_mass_dropdown_visible or self.luminosity_dropdown_visible or
                             self.planet_age_dropdown_visible or self.star_age_dropdown_visible or
                             self.temperature_dropdown_visible or self.radius_dropdown_visible or
-                            self.activity_dropdown_visible or self.metallicity_dropdown_visible):
+                            self.activity_dropdown_visible or self.metallicity_dropdown_visible or
+                            self.planet_orbital_distance_dropdown_visible or self.planet_orbital_eccentricity_dropdown_visible or
+                            self.planet_orbital_period_dropdown_visible):
                             
                             # Check if click is within any dropdown option
                             for i, option_rect in enumerate(self.dropdown_options_rects):
@@ -987,7 +1221,45 @@ class SolarSystemVisualizer:
                                         self.metallicity_dropdown_selected = name
                                         self.metallicity_dropdown_visible = False
                                         self.metallicity_dropdown_active = False
-                                    break
+                                    elif self.planet_orbital_distance_dropdown_visible:
+                                        name, value = self.planet_orbital_distance_dropdown_options[i]
+                                        if value is not None:
+                                            self.selected_body["semiMajorAxis"] = value
+                                            self.show_custom_orbital_distance_input = False
+                                        else:
+                                            self.show_custom_orbital_distance_input = True
+                                            self.orbital_distance_input_active = True
+                                            self.orbital_distance_input_text = f"{self.selected_body.get('semiMajorAxis', 1.0):.2f}"
+                                        self.planet_orbital_distance_dropdown_selected = name
+                                        self.planet_orbital_distance_dropdown_visible = False
+                                        self.planet_orbital_distance_dropdown_active = False
+                                        break
+                                    elif self.planet_orbital_eccentricity_dropdown_visible:
+                                        name, value = self.planet_orbital_eccentricity_dropdown_options[i]
+                                        if value is not None:
+                                            self.selected_body["eccentricity"] = value
+                                            self.show_custom_orbital_eccentricity_input = False
+                                        else:
+                                            self.show_custom_orbital_eccentricity_input = True
+                                            self.orbital_eccentricity_input_active = True
+                                            self.orbital_eccentricity_input_text = f"{self.selected_body.get('eccentricity', 0.017):.3f}"
+                                        self.planet_orbital_eccentricity_dropdown_selected = name
+                                        self.planet_orbital_eccentricity_dropdown_visible = False
+                                        self.planet_orbital_eccentricity_dropdown_active = False
+                                        break
+                                    elif self.planet_orbital_period_dropdown_visible:
+                                        name, value = self.planet_orbital_period_dropdown_options[i]
+                                        if value is not None:
+                                            self.selected_body["orbital_period"] = value
+                                            self.show_custom_orbital_period_input = False
+                                        else:
+                                            self.show_custom_orbital_period_input = True
+                                            self.orbital_period_input_active = True
+                                            self.orbital_period_input_text = f"{self.selected_body.get('orbital_period', 365):.0f}"
+                                        self.planet_orbital_period_dropdown_selected = name
+                                        self.planet_orbital_period_dropdown_visible = False
+                                        self.planet_orbital_period_dropdown_active = False
+                                        break
                     else:
                         # Handle tab clicks
                         for tab_name, tab_rect in self.tabs.items():
@@ -1073,6 +1345,9 @@ class SolarSystemVisualizer:
                             if self.active_tab == "planet":
                                 body.update({
                                     "gravity": 9.81,  # Earth's gravity in m/s²
+                                    "semiMajorAxis": 1.0,  # Default orbital distance (AU)
+                                    "eccentricity": 0.017,  # Default orbital eccentricity (Earth-like)
+                                    "orbital_period": 365,  # Default orbital period (days)
                                 })
                             
                             # Add star-specific attributes
@@ -1097,6 +1372,13 @@ class SolarSystemVisualizer:
                                 self.planet_dropdown_selected = "Earth"
                                 self.planet_age_dropdown_selected = "4.5 Gyr (Earth)"
                                 self.planet_gravity_dropdown_selected = "Earth"
+                                self.planet_orbital_distance_dropdown_selected = "Earth"
+                                self.planet_orbital_eccentricity_dropdown_selected = "Earth"
+                                self.planet_orbital_period_dropdown_selected = "Earth"
+                                if self.selected_body:
+                                    self.selected_body["semiMajorAxis"] = 1.0
+                                    self.selected_body["eccentricity"] = 0.017
+                                    self.selected_body["orbital_period"] = 365
                             else:  # moon
                                 self.moon_dropdown_selected = "Earth's Moon"
                             
@@ -1262,6 +1544,60 @@ class SolarSystemVisualizer:
                         self.planet_gravity_input_text = ""
                     elif event.unicode.isnumeric() or event.unicode == '.':
                         self.planet_gravity_input_text += event.unicode
+                if self.show_custom_orbital_distance_input and self.selected_body and self.selected_body.get('type') == 'planet':
+                    if event.key == pygame.K_RETURN:
+                        try:
+                            dist = float(self.orbital_distance_input_text)
+                            if self.orbital_distance_min <= dist <= self.orbital_distance_max:
+                                self.selected_body["semiMajorAxis"] = dist
+                                self.planet_orbital_distance_dropdown_selected = f"Custom ({dist:.2f} AU)"
+                            self.orbital_distance_input_text = ""
+                            self.orbital_distance_input_active = False
+                            self.show_custom_orbital_distance_input = False
+                        except ValueError:
+                            pass
+                    elif event.key == pygame.K_BACKSPACE:
+                        self.orbital_distance_input_text = self.orbital_distance_input_text[:-1]
+                    elif event.key == pygame.K_ESCAPE:
+                        self.show_custom_orbital_distance_input = False
+                        self.orbital_distance_input_text = ""
+                    elif event.unicode.isnumeric() or event.unicode == '.':
+                        self.orbital_distance_input_text += event.unicode
+                if self.show_custom_orbital_eccentricity_input and self.selected_body and self.selected_body.get('type') == 'planet':
+                    if event.key == pygame.K_RETURN:
+                        try:
+                            ecc = float(self.orbital_eccentricity_input_text)
+                            if self.orbital_eccentricity_min <= ecc <= self.orbital_eccentricity_max:
+                                self.selected_body["eccentricity"] = ecc
+                                self.planet_orbital_eccentricity_dropdown_selected = f"Custom ({ecc:.3f})"
+                            self.orbital_eccentricity_input_text = ""
+                            self.orbital_eccentricity_input_active = False
+                            self.show_custom_orbital_eccentricity_input = False
+                        except ValueError:
+                            pass
+                    elif event.key == pygame.K_BACKSPACE:
+                        self.orbital_eccentricity_input_text = self.orbital_eccentricity_input_text[:-1]
+                    elif event.key == pygame.K_ESCAPE:
+                        self.show_custom_orbital_eccentricity_input = False
+                        self.orbital_eccentricity_input_text = ""
+                    elif event.unicode.isnumeric() or event.unicode == '.':
+                        self.orbital_eccentricity_input_text += event.unicode
+                if self.show_custom_orbital_period_input and self.selected_body and self.selected_body.get('type') == 'planet':
+                    if event.key == pygame.K_RETURN:
+                        try:
+                            period = float(self.orbital_period_input_text)
+                            if self.orbital_period_min <= period <= self.orbital_period_max:
+                                self.selected_body["orbital_period"] = period
+                                self.planet_orbital_period_dropdown_selected = f"Custom ({period:.0f} days)"
+                            self.orbital_period_input_text = ""
+                            self.orbital_period_input_active = False
+                            self.show_custom_orbital_period_input = False
+                        except ValueError:
+                            pass
+                    elif event.key == pygame.K_BACKSPACE:
+                        self.orbital_period_input_text = self.orbital_period_input_text[:-1]
+                    elif event.unicode.isnumeric() or event.unicode == '.':
+                        self.orbital_period_input_text += event.unicode
         return True
     
     def update_ambient_colors(self):
@@ -1470,13 +1806,16 @@ class SolarSystemVisualizer:
 
     def create_dropdown_surface(self):
         """Create a new surface for the dropdown menu that will float above everything"""
+        if self.planet_orbital_distance_dropdown_visible:
+            print('DEBUG: create_dropdown_surface called for orbital distance dropdown')
         if not (self.planet_dropdown_visible or self.moon_dropdown_visible or 
                 self.star_mass_dropdown_visible or self.luminosity_dropdown_visible or
                 self.planet_age_dropdown_visible or self.star_age_dropdown_visible or
                 self.temperature_dropdown_visible or self.radius_dropdown_visible or
                 self.activity_dropdown_visible or self.metallicity_dropdown_visible or
                 self.planet_radius_dropdown_visible or self.planet_temperature_dropdown_visible or
-                self.planet_gravity_dropdown_visible):
+                self.planet_gravity_dropdown_visible or self.planet_orbital_distance_dropdown_visible or
+                self.planet_orbital_eccentricity_dropdown_visible or self.planet_orbital_period_dropdown_visible):
             return
         # Calculate dropdown dimensions
         option_height = self.dropdown_option_height
@@ -1519,6 +1858,15 @@ class SolarSystemVisualizer:
         elif self.planet_gravity_dropdown_visible:
             options = self.planet_gravity_dropdown_options
             width = self.planet_gravity_dropdown_rect.width
+        elif self.planet_orbital_distance_dropdown_visible:
+            options = self.planet_orbital_distance_dropdown_options
+            width = self.planet_orbital_distance_dropdown_rect.width
+        elif self.planet_orbital_eccentricity_dropdown_visible:
+            options = self.planet_orbital_eccentricity_dropdown_options
+            width = self.planet_orbital_eccentricity_dropdown_rect.width
+        elif self.planet_orbital_period_dropdown_visible:
+            options = self.planet_orbital_period_dropdown_options
+            width = self.planet_orbital_period_dropdown_rect.width
         else:  # luminosity dropdown
             options = self.luminosity_dropdown_options
             width = self.luminosity_dropdown_rect.width
@@ -1567,6 +1915,12 @@ class SolarSystemVisualizer:
                     text = f"{name} ({value:.2f} K)"
                 elif self.planet_gravity_dropdown_visible:
                     text = f"{name} ({value:.2f} m/s²)"
+                elif self.planet_orbital_distance_dropdown_visible:
+                    text = f"{name} ({value:.2f} AU)"
+                elif self.planet_orbital_eccentricity_dropdown_visible:
+                    text = f"{name} ({value:.3f})"
+                elif self.planet_orbital_period_dropdown_visible:
+                    text = f"{name} ({value:.0f} days)"
                 else:  # luminosity dropdown
                     text = f"{name} ({value:.2f} L☉)"
             else:
@@ -1660,6 +2014,27 @@ class SolarSystemVisualizer:
                 width,
                 total_height
             )
+        elif self.planet_orbital_distance_dropdown_visible:
+            self.dropdown_rect = pygame.Rect(
+                self.planet_orbital_distance_dropdown_rect.left,
+                self.planet_orbital_distance_dropdown_rect.bottom,
+                width,
+                total_height
+            )
+        elif self.planet_orbital_eccentricity_dropdown_visible:
+            self.dropdown_rect = pygame.Rect(
+                self.planet_orbital_eccentricity_dropdown_rect.left,
+                self.planet_orbital_eccentricity_dropdown_rect.bottom,
+                width,
+                total_height
+            )
+        elif self.planet_orbital_period_dropdown_visible:
+            self.dropdown_rect = pygame.Rect(
+                self.planet_orbital_period_dropdown_rect.left,
+                self.planet_orbital_period_dropdown_rect.bottom,
+                width,
+                total_height
+            )
         else:  # luminosity dropdown
             self.dropdown_rect = pygame.Rect(
                 self.luminosity_dropdown_rect.left,
@@ -1670,11 +2045,14 @@ class SolarSystemVisualizer:
 
     def render_dropdown(self):
         """Render the dropdown menu on top of everything else"""
+        if self.planet_orbital_distance_dropdown_visible:
+            print('DEBUG: render_dropdown called for orbital distance dropdown')
         if (self.planet_dropdown_visible or self.moon_dropdown_visible or self.star_mass_dropdown_visible or 
             self.luminosity_dropdown_visible or self.planet_age_dropdown_visible or self.star_age_dropdown_visible or 
             self.temperature_dropdown_visible or self.spectral_dropdown_visible or self.radius_dropdown_visible or
             self.activity_dropdown_visible or self.metallicity_dropdown_visible or self.planet_radius_dropdown_visible or
-            self.planet_temperature_dropdown_visible or self.planet_gravity_dropdown_visible) and (self.dropdown_surface or hasattr(self, 'spectral_dropdown_surface')):
+            self.planet_temperature_dropdown_visible or self.planet_gravity_dropdown_visible or self.planet_orbital_distance_dropdown_visible or
+            self.planet_orbital_eccentricity_dropdown_visible or self.planet_orbital_period_dropdown_visible) and (self.dropdown_surface or hasattr(self, 'spectral_dropdown_surface')):
             # Create a new surface that covers the entire screen
             overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
             overlay.fill((0, 0, 0, 128))  # Semi-transparent dark background
@@ -1969,6 +2347,75 @@ class SolarSystemVisualizer:
                     pygame.draw.rect(self.screen, self.BLUE, custom_gravity_input_rect, 1)
                     text_surface = self.subtitle_font.render(self.planet_gravity_input_text, True, self.BLACK)
                     text_rect = text_surface.get_rect(midleft=(custom_gravity_input_rect.left + 5, custom_gravity_input_rect.centery))
+                    self.screen.blit(text_surface, text_rect)
+                # Orbital Distance (AU) dropdown
+                orbital_distance_label = self.subtitle_font.render("Orbital Distance (AU)", True, self.BLACK)
+                orbital_distance_label_rect = orbital_distance_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 405))
+                self.screen.blit(orbital_distance_label, orbital_distance_label_rect)
+                pygame.draw.rect(self.screen, self.WHITE, self.planet_orbital_distance_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.planet_orbital_distance_dropdown_active else self.GRAY, self.planet_orbital_distance_dropdown_rect, 1)
+                dropdown_text = "Select Orbital Distance"
+                if self.planet_orbital_distance_dropdown_selected:
+                    dropdown_text = self.planet_orbital_distance_dropdown_selected
+                text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
+                text_rect = text_surface.get_rect(midleft=(self.planet_orbital_distance_dropdown_rect.left + 5, self.planet_orbital_distance_dropdown_rect.centery))
+                self.screen.blit(text_surface, text_rect)
+                # Show custom orbital distance input if "Custom" is selected, just below dropdown
+                if self.show_custom_orbital_distance_input:
+                    custom_orbital_label = self.subtitle_font.render("Enter Custom Distance (AU):", True, self.BLACK)
+                    custom_orbital_label_rect = custom_orbital_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 455))
+                    self.screen.blit(custom_orbital_label, custom_orbital_label_rect)
+                    custom_orbital_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 485, self.customization_panel_width - 100, 30)
+                    pygame.draw.rect(self.screen, self.WHITE, custom_orbital_input_rect, 2)
+                    pygame.draw.rect(self.screen, self.BLUE, custom_orbital_input_rect, 1)
+                    text_surface = self.subtitle_font.render(self.orbital_distance_input_text, True, self.BLACK)
+                    text_rect = text_surface.get_rect(midleft=(custom_orbital_input_rect.left + 5, custom_orbital_input_rect.centery))
+                    self.screen.blit(text_surface, text_rect)
+                # Orbital Eccentricity dropdown
+                orbital_eccentricity_label = self.subtitle_font.render("Orbital Eccentricity", True, self.BLACK)
+                orbital_eccentricity_label_rect = orbital_eccentricity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 465))
+                self.screen.blit(orbital_eccentricity_label, orbital_eccentricity_label_rect)
+                pygame.draw.rect(self.screen, self.WHITE, self.planet_orbital_eccentricity_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.planet_orbital_eccentricity_dropdown_active else self.GRAY, self.planet_orbital_eccentricity_dropdown_rect, 1)
+                dropdown_text = "Select Orbital Eccentricity"
+                if self.planet_orbital_eccentricity_dropdown_selected:
+                    dropdown_text = self.planet_orbital_eccentricity_dropdown_selected
+                text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
+                text_rect = text_surface.get_rect(midleft=(self.planet_orbital_eccentricity_dropdown_rect.left + 5, self.planet_orbital_eccentricity_dropdown_rect.centery))
+                self.screen.blit(text_surface, text_rect)
+                # Show custom orbital eccentricity input if "Custom" is selected, just below dropdown
+                if self.show_custom_orbital_eccentricity_input:
+                    custom_eccentricity_label = self.subtitle_font.render("Enter Custom Eccentricity:", True, self.BLACK)
+                    custom_eccentricity_label_rect = custom_eccentricity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 515))
+                    self.screen.blit(custom_eccentricity_label, custom_eccentricity_label_rect)
+                    custom_eccentricity_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 545, self.customization_panel_width - 100, 30)
+                    pygame.draw.rect(self.screen, self.WHITE, custom_eccentricity_input_rect, 2)
+                    pygame.draw.rect(self.screen, self.BLUE, custom_eccentricity_input_rect, 1)
+                    text_surface = self.subtitle_font.render(self.orbital_eccentricity_input_text, True, self.BLACK)
+                    text_rect = text_surface.get_rect(midleft=(custom_eccentricity_input_rect.left + 5, custom_eccentricity_input_rect.centery))
+                    self.screen.blit(text_surface, text_rect)
+                # Orbital Period dropdown
+                orbital_period_label = self.subtitle_font.render("Orbital Period (days)", True, self.BLACK)
+                orbital_period_label_rect = orbital_period_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 525))
+                self.screen.blit(orbital_period_label, orbital_period_label_rect)
+                pygame.draw.rect(self.screen, self.WHITE, self.planet_orbital_period_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.planet_orbital_period_dropdown_active else self.GRAY, self.planet_orbital_period_dropdown_rect, 1)
+                dropdown_text = "Select Orbital Period"
+                if self.planet_orbital_period_dropdown_selected:
+                    dropdown_text = self.planet_orbital_period_dropdown_selected
+                text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
+                text_rect = text_surface.get_rect(midleft=(self.planet_orbital_period_dropdown_rect.left + 5, self.planet_orbital_period_dropdown_rect.centery))
+                self.screen.blit(text_surface, text_rect)
+                # Show custom orbital period input if "Custom" is selected, just below dropdown
+                if self.show_custom_orbital_period_input:
+                    custom_period_label = self.subtitle_font.render("Enter Custom Period (days):", True, self.BLACK)
+                    custom_period_label_rect = custom_period_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 565))
+                    self.screen.blit(custom_period_label, custom_period_label_rect)
+                    custom_period_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 595, self.customization_panel_width - 100, 30)
+                    pygame.draw.rect(self.screen, self.WHITE, custom_period_input_rect, 2)
+                    pygame.draw.rect(self.screen, self.BLUE, custom_period_input_rect, 1)
+                    text_surface = self.subtitle_font.render(self.orbital_period_input_text, True, self.BLACK)
+                    text_rect = text_surface.get_rect(midleft=(custom_period_input_rect.left + 5, custom_period_input_rect.centery))
                     self.screen.blit(text_surface, text_rect)
             # Draw spectral type dropdown for stars (moved up and aligned with other elements)
             if self.selected_body and self.selected_body.get('type') == 'star':
@@ -2374,6 +2821,75 @@ class SolarSystemVisualizer:
                     pygame.draw.rect(self.screen, self.BLUE, custom_gravity_input_rect, 1)
                     text_surface = self.subtitle_font.render(self.planet_gravity_input_text, True, self.BLACK)
                     text_rect = text_surface.get_rect(midleft=(custom_gravity_input_rect.left + 5, custom_gravity_input_rect.centery))
+                    self.screen.blit(text_surface, text_rect)
+                # Orbital Distance (AU) dropdown
+                orbital_distance_label = self.subtitle_font.render("Orbital Distance (AU)", True, self.BLACK)
+                orbital_distance_label_rect = orbital_distance_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 405))
+                self.screen.blit(orbital_distance_label, orbital_distance_label_rect)
+                pygame.draw.rect(self.screen, self.WHITE, self.planet_orbital_distance_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.planet_orbital_distance_dropdown_active else self.GRAY, self.planet_orbital_distance_dropdown_rect, 1)
+                dropdown_text = "Select Orbital Distance"
+                if self.planet_orbital_distance_dropdown_selected:
+                    dropdown_text = self.planet_orbital_distance_dropdown_selected
+                text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
+                text_rect = text_surface.get_rect(midleft=(self.planet_orbital_distance_dropdown_rect.left + 5, self.planet_orbital_distance_dropdown_rect.centery))
+                self.screen.blit(text_surface, text_rect)
+                # Show custom orbital distance input if "Custom" is selected, just below dropdown
+                if self.show_custom_orbital_distance_input:
+                    custom_orbital_label = self.subtitle_font.render("Enter Custom Distance (AU):", True, self.BLACK)
+                    custom_orbital_label_rect = custom_orbital_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 455))
+                    self.screen.blit(custom_orbital_label, custom_orbital_label_rect)
+                    custom_orbital_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 485, self.customization_panel_width - 100, 30)
+                    pygame.draw.rect(self.screen, self.WHITE, custom_orbital_input_rect, 2)
+                    pygame.draw.rect(self.screen, self.BLUE, custom_orbital_input_rect, 1)
+                    text_surface = self.subtitle_font.render(self.orbital_distance_input_text, True, self.BLACK)
+                    text_rect = text_surface.get_rect(midleft=(custom_orbital_input_rect.left + 5, custom_orbital_input_rect.centery))
+                    self.screen.blit(text_surface, text_rect)
+                # Orbital Eccentricity dropdown
+                orbital_eccentricity_label = self.subtitle_font.render("Orbital Eccentricity", True, self.BLACK)
+                orbital_eccentricity_label_rect = orbital_eccentricity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 465))
+                self.screen.blit(orbital_eccentricity_label, orbital_eccentricity_label_rect)
+                pygame.draw.rect(self.screen, self.WHITE, self.planet_orbital_eccentricity_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.planet_orbital_eccentricity_dropdown_active else self.GRAY, self.planet_orbital_eccentricity_dropdown_rect, 1)
+                dropdown_text = "Select Orbital Eccentricity"
+                if self.planet_orbital_eccentricity_dropdown_selected:
+                    dropdown_text = self.planet_orbital_eccentricity_dropdown_selected
+                text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
+                text_rect = text_surface.get_rect(midleft=(self.planet_orbital_eccentricity_dropdown_rect.left + 5, self.planet_orbital_eccentricity_dropdown_rect.centery))
+                self.screen.blit(text_surface, text_rect)
+                # Show custom orbital eccentricity input if "Custom" is selected, just below dropdown
+                if self.show_custom_orbital_eccentricity_input:
+                    custom_eccentricity_label = self.subtitle_font.render("Enter Custom Eccentricity:", True, self.BLACK)
+                    custom_eccentricity_label_rect = custom_eccentricity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 515))
+                    self.screen.blit(custom_eccentricity_label, custom_eccentricity_label_rect)
+                    custom_eccentricity_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 545, self.customization_panel_width - 100, 30)
+                    pygame.draw.rect(self.screen, self.WHITE, custom_eccentricity_input_rect, 2)
+                    pygame.draw.rect(self.screen, self.BLUE, custom_eccentricity_input_rect, 1)
+                    text_surface = self.subtitle_font.render(self.orbital_eccentricity_input_text, True, self.BLACK)
+                    text_rect = text_surface.get_rect(midleft=(custom_eccentricity_input_rect.left + 5, custom_eccentricity_input_rect.centery))
+                    self.screen.blit(text_surface, text_rect)
+                # Orbital Period dropdown
+                orbital_period_label = self.subtitle_font.render("Orbital Period (days)", True, self.BLACK)
+                orbital_period_label_rect = orbital_period_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 525))
+                self.screen.blit(orbital_period_label, orbital_period_label_rect)
+                pygame.draw.rect(self.screen, self.WHITE, self.planet_orbital_period_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.planet_orbital_period_dropdown_active else self.GRAY, self.planet_orbital_period_dropdown_rect, 1)
+                dropdown_text = "Select Orbital Period"
+                if self.planet_orbital_period_dropdown_selected:
+                    dropdown_text = self.planet_orbital_period_dropdown_selected
+                text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
+                text_rect = text_surface.get_rect(midleft=(self.planet_orbital_period_dropdown_rect.left + 5, self.planet_orbital_period_dropdown_rect.centery))
+                self.screen.blit(text_surface, text_rect)
+                # Show custom orbital period input if "Custom" is selected, just below dropdown
+                if self.show_custom_orbital_period_input:
+                    custom_period_label = self.subtitle_font.render("Enter Custom Period (days):", True, self.BLACK)
+                    custom_period_label_rect = custom_period_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 565))
+                    self.screen.blit(custom_period_label, custom_period_label_rect)
+                    custom_period_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 595, self.customization_panel_width - 100, 30)
+                    pygame.draw.rect(self.screen, self.WHITE, custom_period_input_rect, 2)
+                    pygame.draw.rect(self.screen, self.BLUE, custom_period_input_rect, 1)
+                    text_surface = self.subtitle_font.render(self.orbital_period_input_text, True, self.BLACK)
+                    text_rect = text_surface.get_rect(midleft=(custom_period_input_rect.left + 5, custom_period_input_rect.centery))
                     self.screen.blit(text_surface, text_rect)
             # Draw spectral type dropdown for stars (moved up and aligned with other elements)
             if self.selected_body and self.selected_body.get('type') == 'star':
