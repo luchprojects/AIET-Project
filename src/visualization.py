@@ -126,6 +126,64 @@ class SolarSystemVisualizer:
         self.planet_age_dropdown_visible = False
         self.show_custom_age_input = False
         
+        # Planet radius dropdown properties
+        self.planet_radius_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 240,
+                                                     self.customization_panel_width - 100, 30)
+        self.planet_radius_dropdown_active = False
+        self.planet_radius_dropdown_options = [
+            ("Mercury", 0.38),
+            ("Venus", 0.95),
+            ("Earth", 1.0),
+            ("Mars", 0.53),
+            ("Jupiter", 11.2),
+            ("Saturn", 9.5),
+            ("Uranus", 4.0),
+            ("Neptune", 3.9),
+            ("Custom", None)
+        ]
+        self.planet_radius_dropdown_selected = None
+        self.planet_radius_dropdown_visible = False
+        self.show_custom_radius_input = False
+        
+        # Planet temperature dropdown properties
+        self.planet_temperature_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 300,
+                                                          self.customization_panel_width - 100, 30)
+        self.planet_temperature_dropdown_active = False
+        self.planet_temperature_dropdown_options = [
+            ("Mercury", 440),
+            ("Venus", 737),
+            ("Earth", 288),
+            ("Mars", 210),
+            ("Jupiter", 165),
+            ("Saturn", 134),
+            ("Uranus", 76),
+            ("Neptune", 72),
+            ("Custom", None)
+        ]
+        self.planet_temperature_dropdown_selected = None
+        self.planet_temperature_dropdown_visible = False
+        self.show_custom_planet_temperature_input = False
+        
+        # Planet gravity dropdown properties
+        self.planet_gravity_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 540,
+                                                      self.customization_panel_width - 100, 30)
+        self.planet_gravity_dropdown_active = False
+        self.planet_gravity_dropdown_options = [
+            ("Mercury", 3.7),
+            ("Mars", 3.7),
+            ("Venus", 8.87),
+            ("Earth", 9.81),
+            ("Uranus", 8.69),
+            ("Neptune", 11.15),
+            ("Saturn", 10.44),
+            ("Jupiter", 24.79),
+            ("Custom", None)
+        ]
+        self.planet_gravity_dropdown_selected = "Earth"  # Default to Earth
+        self.planet_gravity_dropdown_visible = False
+        self.show_custom_planet_gravity_input = False
+        self.planet_gravity_input_text = ""
+        
         # Moon reference dropdown properties
         self.moon_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 120,
                                             self.customization_panel_width - 100, 30)
@@ -372,6 +430,8 @@ class SolarSystemVisualizer:
                                         if self.selected_body["type"] != "star":
                                             self.generate_orbit_grid(self.selected_body)
                                     self.planet_dropdown_selected = planet_name
+                                    self.planet_age_dropdown_selected = "4.5 Gyr (Earth)"
+                                    self.planet_gravity_dropdown_selected = "Earth"
                                     self.planet_dropdown_visible = False
                                     self.planet_dropdown_active = False
                                     break
@@ -430,6 +490,123 @@ class SolarSystemVisualizer:
                                 self.planet_age_dropdown_visible = False
                                 self.age_input_active = False
                                 self.planet_age_dropdown_active = False
+                        # Handle planet radius dropdown (only for planets)
+                        elif (self.selected_body and self.selected_body.get('type') == 'planet' and 
+                              self.planet_radius_dropdown_rect.collidepoint(event.pos)):
+                            self.planet_radius_dropdown_active = True
+                            self.planet_radius_dropdown_visible = True
+                            self.create_dropdown_surface()
+                        # Check if clicked on a planet radius option (only for planets)
+                        elif (self.selected_body and self.selected_body.get('type') == 'planet' and 
+                              self.planet_radius_dropdown_visible):
+                            dropdown_y = self.planet_radius_dropdown_rect.bottom
+                            for i, (radius_name, radius) in enumerate(self.planet_radius_dropdown_options):
+                                option_rect = pygame.Rect(
+                                    self.planet_radius_dropdown_rect.left,
+                                    dropdown_y + i * 30,
+                                    self.planet_radius_dropdown_rect.width,
+                                    30
+                                )
+                                if option_rect.collidepoint(event.pos):
+                                    if radius_name == "Custom":
+                                        self.show_custom_radius_input = True
+                                    else:
+                                        self.selected_body["radius"] = radius
+                                        self.show_custom_radius_input = False
+                                    self.planet_radius_dropdown_selected = radius_name
+                                    self.planet_radius_dropdown_visible = False
+                                    self.planet_radius_dropdown_active = False
+                                    break
+                            # Only close dropdown if clicking outside both the dropdown and its options
+                            if (self.planet_radius_dropdown_visible and not 
+                                (self.planet_radius_dropdown_rect.collidepoint(event.pos) or 
+                                 any(pygame.Rect(
+                                     self.planet_radius_dropdown_rect.left,
+                                     self.planet_radius_dropdown_rect.bottom + i * 30,
+                                     self.planet_radius_dropdown_rect.width,
+                                     30
+                                 ).collidepoint(event.pos)
+                                 for i in range(len(self.planet_radius_dropdown_options))))):
+                                self.planet_radius_dropdown_visible = False
+                                self.planet_radius_dropdown_active = False
+                        # Handle planet temperature dropdown (only for planets)
+                        elif (self.selected_body and self.selected_body.get('type') == 'planet' and 
+                              self.planet_temperature_dropdown_rect.collidepoint(event.pos)):
+                            self.planet_temperature_dropdown_active = True
+                            self.planet_temperature_dropdown_visible = True
+                            self.create_dropdown_surface()
+                        # Check if clicked on a planet temperature option (only for planets)
+                        elif (self.selected_body and self.selected_body.get('type') == 'planet' and 
+                              self.planet_temperature_dropdown_visible):
+                            dropdown_y = self.planet_temperature_dropdown_rect.bottom
+                            for i, (temp_name, temp) in enumerate(self.planet_temperature_dropdown_options):
+                                option_rect = pygame.Rect(
+                                    self.planet_temperature_dropdown_rect.left,
+                                    dropdown_y + i * 30,
+                                    self.planet_temperature_dropdown_rect.width,
+                                    30
+                                )
+                                if option_rect.collidepoint(event.pos):
+                                    if temp_name == "Custom":
+                                        self.show_custom_planet_temperature_input = True
+                                    else:
+                                        self.selected_body["temperature"] = temp
+                                        self.show_custom_planet_temperature_input = False
+                                    self.planet_temperature_dropdown_selected = temp_name
+                                    self.planet_temperature_dropdown_visible = False
+                                    self.planet_temperature_dropdown_active = False
+                                    break
+                            # Only close dropdown if clicking outside both the dropdown and its options
+                            if (self.planet_temperature_dropdown_visible and not 
+                                (self.planet_temperature_dropdown_rect.collidepoint(event.pos) or 
+                                 any(pygame.Rect(
+                                     self.planet_temperature_dropdown_rect.left,
+                                     self.planet_temperature_dropdown_rect.bottom + i * 30,
+                                     self.planet_temperature_dropdown_rect.width,
+                                     30
+                                 ).collidepoint(event.pos)
+                                 for i in range(len(self.planet_temperature_dropdown_options))))):
+                                self.planet_temperature_dropdown_visible = False
+                                self.planet_temperature_dropdown_active = False
+                        # Handle planet gravity dropdown (only for planets)
+                        elif (self.selected_body and self.selected_body.get('type') == 'planet' and 
+                              self.planet_gravity_dropdown_rect.collidepoint(event.pos)):
+                            self.planet_gravity_dropdown_active = True
+                            self.planet_gravity_dropdown_visible = True
+                            self.create_dropdown_surface()
+                        # Check if clicked on a planet gravity option (only for planets)
+                        elif (self.selected_body and self.selected_body.get('type') == 'planet' and 
+                              self.planet_gravity_dropdown_visible):
+                            dropdown_y = self.planet_gravity_dropdown_rect.bottom
+                            for i, (gravity_name, gravity) in enumerate(self.planet_gravity_dropdown_options):
+                                option_rect = pygame.Rect(
+                                    self.planet_gravity_dropdown_rect.left,
+                                    dropdown_y + i * 30,
+                                    self.planet_gravity_dropdown_rect.width,
+                                    30
+                                )
+                                if option_rect.collidepoint(event.pos):
+                                    if gravity_name == "Custom":
+                                        self.show_custom_planet_gravity_input = True
+                                    else:
+                                        self.selected_body["gravity"] = gravity
+                                        self.show_custom_planet_gravity_input = False
+                                    self.planet_gravity_dropdown_selected = gravity_name
+                                    self.planet_gravity_dropdown_visible = False
+                                    self.planet_gravity_dropdown_active = False
+                                    break
+                            # Only close dropdown if clicking outside both the dropdown and its options
+                            if (self.planet_gravity_dropdown_visible and not 
+                                (self.planet_gravity_dropdown_rect.collidepoint(event.pos) or 
+                                 any(pygame.Rect(
+                                     self.planet_gravity_dropdown_rect.left,
+                                     self.planet_gravity_dropdown_rect.bottom + i * 30,
+                                     self.planet_gravity_dropdown_rect.width,
+                                     30
+                                 ).collidepoint(event.pos)
+                                 for i in range(len(self.planet_gravity_dropdown_options))))):
+                                self.planet_gravity_dropdown_visible = False
+                                self.planet_gravity_dropdown_active = False
                         # Handle moon dropdown (only for moons)
                         elif (self.selected_body and self.selected_body.get('type') == 'moon' and 
                               self.moon_dropdown_rect.collidepoint(event.pos)):
@@ -716,6 +893,8 @@ class SolarSystemVisualizer:
                                             self.show_custom_planet_mass_input = True
                                             self.planet_mass_input_active = True
                                         self.planet_dropdown_selected = name
+                                        self.planet_age_dropdown_selected = "4.5 Gyr (Earth)"
+                                        self.planet_gravity_dropdown_selected = "Earth"
                                         self.planet_dropdown_visible = False
                                         self.planet_dropdown_active = False
                                     elif self.moon_dropdown_visible:
@@ -890,6 +1069,12 @@ class SolarSystemVisualizer:
                                 "habit_score": 0.0,  # Added habitability score attribute
                             }
                             
+                            # Add planet-specific attributes
+                            if self.active_tab == "planet":
+                                body.update({
+                                    "gravity": 9.81,  # Earth's gravity in m/s²
+                                })
+                            
                             # Add star-specific attributes
                             if self.active_tab == "star":
                                 body.update({
@@ -911,6 +1096,7 @@ class SolarSystemVisualizer:
                             elif self.active_tab == "planet":
                                 self.planet_dropdown_selected = "Earth"
                                 self.planet_age_dropdown_selected = "4.5 Gyr (Earth)"
+                                self.planet_gravity_dropdown_selected = "Earth"
                             else:  # moon
                                 self.moon_dropdown_selected = "Earth's Moon"
                             
@@ -919,8 +1105,11 @@ class SolarSystemVisualizer:
                             planets = [b for b in self.placed_bodies if b["type"] == "planet"]
                             
                             if len(stars) > 0 and len(planets) > 0:
+                                print(f"DEBUG: Starting simulation. Selected body: {self.selected_body}")
+                                print(f"DEBUG: show_customization_panel before: {self.show_customization_panel}")
                                 self.show_simulation_builder = False
                                 self.show_simulation = True
+                                print(f"DEBUG: show_customization_panel after: {self.show_customization_panel}")
                         else:
                             # Clicked empty space, deselect body
                             self.selected_body = None
@@ -1056,6 +1245,23 @@ class SolarSystemVisualizer:
                         self.metallicity_input_text = self.metallicity_input_text[:-1]
                     elif event.unicode.isnumeric() or event.unicode == '.':
                         self.metallicity_input_text += event.unicode
+                if self.show_custom_planet_gravity_input and self.selected_body and self.selected_body.get('type') == 'planet':
+                    if event.key == pygame.K_RETURN:
+                        try:
+                            gravity = float(self.planet_gravity_input_text)
+                            if 0.1 <= gravity <= 100.0:  # Reasonable gravity range
+                                self.selected_body["gravity"] = gravity
+                            self.planet_gravity_input_text = ""
+                            self.show_custom_planet_gravity_input = False
+                        except ValueError:
+                            pass
+                    elif event.key == pygame.K_BACKSPACE:
+                        self.planet_gravity_input_text = self.planet_gravity_input_text[:-1]
+                    elif event.key == pygame.K_ESCAPE:
+                        self.show_custom_planet_gravity_input = False
+                        self.planet_gravity_input_text = ""
+                    elif event.unicode.isnumeric() or event.unicode == '.':
+                        self.planet_gravity_input_text += event.unicode
         return True
     
     def update_ambient_colors(self):
@@ -1268,7 +1474,9 @@ class SolarSystemVisualizer:
                 self.star_mass_dropdown_visible or self.luminosity_dropdown_visible or
                 self.planet_age_dropdown_visible or self.star_age_dropdown_visible or
                 self.temperature_dropdown_visible or self.radius_dropdown_visible or
-                self.activity_dropdown_visible or self.metallicity_dropdown_visible):
+                self.activity_dropdown_visible or self.metallicity_dropdown_visible or
+                self.planet_radius_dropdown_visible or self.planet_temperature_dropdown_visible or
+                self.planet_gravity_dropdown_visible):
             return
         # Calculate dropdown dimensions
         option_height = self.dropdown_option_height
@@ -1302,8 +1510,18 @@ class SolarSystemVisualizer:
         elif self.metallicity_dropdown_visible:
             options = self.metallicity_dropdown_options
             width = self.metallicity_dropdown_rect.width
-        else:
-            return
+        elif self.planet_radius_dropdown_visible:
+            options = self.planet_radius_dropdown_options
+            width = self.planet_radius_dropdown_rect.width
+        elif self.planet_temperature_dropdown_visible:
+            options = self.planet_temperature_dropdown_options
+            width = self.planet_temperature_dropdown_rect.width
+        elif self.planet_gravity_dropdown_visible:
+            options = self.planet_gravity_dropdown_options
+            width = self.planet_gravity_dropdown_rect.width
+        else:  # luminosity dropdown
+            options = self.luminosity_dropdown_options
+            width = self.luminosity_dropdown_rect.width
         total_height = len(options) * option_height
         
         # Create a new surface for the dropdown
@@ -1343,6 +1561,12 @@ class SolarSystemVisualizer:
                     text = name  # Activity options already include the unit
                 elif self.metallicity_dropdown_visible:
                     text = name  # Metallicity options already include the unit
+                elif self.planet_radius_dropdown_visible:
+                    text = f"{name} ({value:.2f} R🜨)"
+                elif self.planet_temperature_dropdown_visible:
+                    text = f"{name} ({value:.2f} K)"
+                elif self.planet_gravity_dropdown_visible:
+                    text = f"{name} ({value:.2f} m/s²)"
                 else:  # luminosity dropdown
                     text = f"{name} ({value:.2f} L☉)"
             else:
@@ -1415,6 +1639,27 @@ class SolarSystemVisualizer:
                 width,
                 total_height
             )
+        elif self.planet_radius_dropdown_visible:
+            self.dropdown_rect = pygame.Rect(
+                self.planet_radius_dropdown_rect.left,
+                self.planet_radius_dropdown_rect.bottom,
+                width,
+                total_height
+            )
+        elif self.planet_temperature_dropdown_visible:
+            self.dropdown_rect = pygame.Rect(
+                self.planet_temperature_dropdown_rect.left,
+                self.planet_temperature_dropdown_rect.bottom,
+                width,
+                total_height
+            )
+        elif self.planet_gravity_dropdown_visible:
+            self.dropdown_rect = pygame.Rect(
+                self.planet_gravity_dropdown_rect.left,
+                self.planet_gravity_dropdown_rect.bottom,
+                width,
+                total_height
+            )
         else:  # luminosity dropdown
             self.dropdown_rect = pygame.Rect(
                 self.luminosity_dropdown_rect.left,
@@ -1428,7 +1673,8 @@ class SolarSystemVisualizer:
         if (self.planet_dropdown_visible or self.moon_dropdown_visible or self.star_mass_dropdown_visible or 
             self.luminosity_dropdown_visible or self.planet_age_dropdown_visible or self.star_age_dropdown_visible or 
             self.temperature_dropdown_visible or self.spectral_dropdown_visible or self.radius_dropdown_visible or
-            self.activity_dropdown_visible or self.metallicity_dropdown_visible) and (self.dropdown_surface or hasattr(self, 'spectral_dropdown_surface')):
+            self.activity_dropdown_visible or self.metallicity_dropdown_visible or self.planet_radius_dropdown_visible or
+            self.planet_temperature_dropdown_visible or self.planet_gravity_dropdown_visible) and (self.dropdown_surface or hasattr(self, 'spectral_dropdown_surface')):
             # Create a new surface that covers the entire screen
             overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
             overlay.fill((0, 0, 0, 128))  # Semi-transparent dark background
@@ -1660,41 +1906,69 @@ class SolarSystemVisualizer:
                 text_rect = text_surface.get_rect(midleft=(self.age_input_rect.left + 5, self.age_input_rect.centery))
                 self.screen.blit(text_surface, text_rect)
             
-            # Draw luminosity input for stars
-            if self.selected_body and self.selected_body.get('type') == 'star':
-                luminosity_label = self.subtitle_font.render("Luminosity (L☉)", True, self.BLACK)
-                luminosity_label_rect = luminosity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 345))
-                self.screen.blit(luminosity_label, luminosity_label_rect)
+            # RADIUS SECTION (only for planets)
+            if self.selected_body.get('type') == 'planet':
+                radius_label = self.subtitle_font.render("Radius (R🜨)", True, self.BLACK)
+                radius_label_rect = radius_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 225))
+                self.screen.blit(radius_label, radius_label_rect)
                 
-                # Draw the dropdown
-                pygame.draw.rect(self.screen, self.WHITE, self.luminosity_dropdown_rect, 2)
-                pygame.draw.rect(self.screen, self.BLUE if self.luminosity_dropdown_active else self.GRAY, 
-                               self.luminosity_dropdown_rect, 1)
-                dropdown_text = "Select Star Luminosity"
-                if self.luminosity_dropdown_selected:
-                    dropdown_text = self.luminosity_dropdown_selected
+                # Draw the planet radius dropdown
+                pygame.draw.rect(self.screen, self.WHITE, self.planet_radius_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.planet_radius_dropdown_active else self.GRAY, 
+                               self.planet_radius_dropdown_rect, 1)
+                dropdown_text = "Select Reference Planet"
+                if self.planet_radius_dropdown_selected:
+                    dropdown_text = self.planet_radius_dropdown_selected
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
-                text_rect = text_surface.get_rect(midleft=(self.luminosity_dropdown_rect.left + 5, 
-                                                         self.luminosity_dropdown_rect.centery))
+                text_rect = text_surface.get_rect(midleft=(self.planet_radius_dropdown_rect.left + 5, 
+                                                         self.planet_radius_dropdown_rect.centery))
+                self.screen.blit(text_surface, text_rect)
+            
+            # TEMPERATURE SECTION (only for planets)
+            if self.selected_body.get('type') == 'planet':
+                temperature_label = self.subtitle_font.render("Temperature (K)", True, self.BLACK)
+                temperature_label_rect = temperature_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 285))
+                self.screen.blit(temperature_label, temperature_label_rect)
+                
+                # Draw the planet temperature dropdown
+                pygame.draw.rect(self.screen, self.WHITE, self.planet_temperature_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.planet_temperature_dropdown_active else self.GRAY, 
+                               self.planet_temperature_dropdown_rect, 1)
+                dropdown_text = "Select Reference Planet"
+                if self.planet_temperature_dropdown_selected:
+                    dropdown_text = self.planet_temperature_dropdown_selected
+                text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
+                text_rect = text_surface.get_rect(midleft=(self.planet_temperature_dropdown_rect.left + 5, 
+                                                         self.planet_temperature_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
 
-                # Show custom luminosity input if "Custom" is selected
-                if self.show_custom_luminosity_input:
-                    custom_luminosity_label = self.subtitle_font.render("Enter Custom Luminosity (L☉):", True, self.BLACK)
-                    custom_luminosity_label_rect = custom_luminosity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 360))
-                    self.screen.blit(custom_luminosity_label, custom_luminosity_label_rect)
+                # GRAVITY SECTION (only for planets)
+                gravity_label = self.subtitle_font.render("Surface Gravity (m/s²)", True, self.BLACK)
+                gravity_label_rect = gravity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 345))
+                self.screen.blit(gravity_label, gravity_label_rect)
+                
+                # Update the existing dropdown rect position to match the new UI layout
+                self.planet_gravity_dropdown_rect.y = 360
+                pygame.draw.rect(self.screen, self.WHITE, self.planet_gravity_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.planet_gravity_dropdown_active else self.GRAY, self.planet_gravity_dropdown_rect, 1)
+                dropdown_text = "Select Reference Planet"
+                if self.planet_gravity_dropdown_selected:
+                    dropdown_text = self.planet_gravity_dropdown_selected
+                text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
+                text_rect = text_surface.get_rect(midleft=(self.planet_gravity_dropdown_rect.left + 5, self.planet_gravity_dropdown_rect.centery))
+                self.screen.blit(text_surface, text_rect)
+                
+                # Show custom gravity input if "Custom" is selected, just below dropdown
+                if self.show_custom_planet_gravity_input:
+                    custom_gravity_label = self.subtitle_font.render("Enter Custom Gravity (m/s²):", True, self.BLACK)
+                    custom_gravity_label_rect = custom_gravity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 415))
+                    self.screen.blit(custom_gravity_label, custom_gravity_label_rect)
                     
-                    custom_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 360,
-                                                  self.customization_panel_width - 100, 30)
-                    pygame.draw.rect(self.screen, self.WHITE, custom_input_rect, 2)
-                    pygame.draw.rect(self.screen, self.BLUE if self.luminosity_input_active else self.GRAY, 
-                                   custom_input_rect, 1)
-                    if self.luminosity_input_active:
-                        text_surface = self.subtitle_font.render(self.luminosity_input_text, True, self.BLACK)
-                    else:
-                        text_surface = self.subtitle_font.render(f"{self.selected_body.get('luminosity', 1.0):.3f}", True, self.BLACK)
-                    text_rect = text_surface.get_rect(midleft=(custom_input_rect.left + 5, 
-                                                             custom_input_rect.centery))
+                    custom_gravity_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 445, self.customization_panel_width - 100, 30)
+                    pygame.draw.rect(self.screen, self.WHITE, custom_gravity_input_rect, 2)
+                    pygame.draw.rect(self.screen, self.BLUE, custom_gravity_input_rect, 1)
+                    text_surface = self.subtitle_font.render(self.planet_gravity_input_text, True, self.BLACK)
+                    text_rect = text_surface.get_rect(midleft=(custom_gravity_input_rect.left + 5, custom_gravity_input_rect.centery))
                     self.screen.blit(text_surface, text_rect)
             # Draw spectral type dropdown for stars (moved up and aligned with other elements)
             if self.selected_body and self.selected_body.get('type') == 'star':
@@ -2036,6 +2310,176 @@ class SolarSystemVisualizer:
                     )
                 text_rect = text_surface.get_rect(midleft=(self.age_input_rect.left + 5, self.age_input_rect.centery))
                 self.screen.blit(text_surface, text_rect)
+            
+            # RADIUS SECTION (only for planets)
+            if self.selected_body.get('type') == 'planet':
+                radius_label = self.subtitle_font.render("Radius (R🜨)", True, self.BLACK)
+                radius_label_rect = radius_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 225))
+                self.screen.blit(radius_label, radius_label_rect)
+                
+                # Draw the planet radius dropdown
+                pygame.draw.rect(self.screen, self.WHITE, self.planet_radius_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.planet_radius_dropdown_active else self.GRAY, 
+                               self.planet_radius_dropdown_rect, 1)
+                dropdown_text = "Select Reference Planet"
+                if self.planet_radius_dropdown_selected:
+                    dropdown_text = self.planet_radius_dropdown_selected
+                text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
+                text_rect = text_surface.get_rect(midleft=(self.planet_radius_dropdown_rect.left + 5, 
+                                                         self.planet_radius_dropdown_rect.centery))
+                self.screen.blit(text_surface, text_rect)
+            
+            # TEMPERATURE SECTION (only for planets)
+            if self.selected_body.get('type') == 'planet':
+                temperature_label = self.subtitle_font.render("Temperature (K)", True, self.BLACK)
+                temperature_label_rect = temperature_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 285))
+                self.screen.blit(temperature_label, temperature_label_rect)
+                
+                # Draw the planet temperature dropdown
+                pygame.draw.rect(self.screen, self.WHITE, self.planet_temperature_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.planet_temperature_dropdown_active else self.GRAY, 
+                               self.planet_temperature_dropdown_rect, 1)
+                dropdown_text = "Select Reference Planet"
+                if self.planet_temperature_dropdown_selected:
+                    dropdown_text = self.planet_temperature_dropdown_selected
+                text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
+                text_rect = text_surface.get_rect(midleft=(self.planet_temperature_dropdown_rect.left + 5, 
+                                                         self.planet_temperature_dropdown_rect.centery))
+                self.screen.blit(text_surface, text_rect)
+
+                # GRAVITY SECTION (only for planets)
+                gravity_label = self.subtitle_font.render("Surface Gravity (m/s²)", True, self.BLACK)
+                gravity_label_rect = gravity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 345))
+                self.screen.blit(gravity_label, gravity_label_rect)
+                
+                # Update the existing dropdown rect position to match the new UI layout
+                self.planet_gravity_dropdown_rect.y = 360
+                pygame.draw.rect(self.screen, self.WHITE, self.planet_gravity_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.planet_gravity_dropdown_active else self.GRAY, self.planet_gravity_dropdown_rect, 1)
+                dropdown_text = "Select Reference Planet"
+                if self.planet_gravity_dropdown_selected:
+                    dropdown_text = self.planet_gravity_dropdown_selected
+                text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
+                text_rect = text_surface.get_rect(midleft=(self.planet_gravity_dropdown_rect.left + 5, self.planet_gravity_dropdown_rect.centery))
+                self.screen.blit(text_surface, text_rect)
+                
+                # Show custom gravity input if "Custom" is selected, just below dropdown
+                if self.show_custom_planet_gravity_input:
+                    custom_gravity_label = self.subtitle_font.render("Enter Custom Gravity (m/s²):", True, self.BLACK)
+                    custom_gravity_label_rect = custom_gravity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 415))
+                    self.screen.blit(custom_gravity_label, custom_gravity_label_rect)
+                    
+                    custom_gravity_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 445, self.customization_panel_width - 100, 30)
+                    pygame.draw.rect(self.screen, self.WHITE, custom_gravity_input_rect, 2)
+                    pygame.draw.rect(self.screen, self.BLUE, custom_gravity_input_rect, 1)
+                    text_surface = self.subtitle_font.render(self.planet_gravity_input_text, True, self.BLACK)
+                    text_rect = text_surface.get_rect(midleft=(custom_gravity_input_rect.left + 5, custom_gravity_input_rect.centery))
+                    self.screen.blit(text_surface, text_rect)
+            # Draw spectral type dropdown for stars (moved up and aligned with other elements)
+            if self.selected_body and self.selected_body.get('type') == 'star':
+                spectral_label = self.subtitle_font.render("Spectral Type", True, self.BLACK)
+                spectral_label_rect = spectral_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 225))
+                self.screen.blit(spectral_label, spectral_label_rect)
+                pygame.draw.rect(self.screen, self.WHITE, self.spectral_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.spectral_dropdown_active else self.GRAY, 
+                               self.spectral_dropdown_rect, 1)
+                dropdown_text = "Select Spectral Type"
+                if self.spectral_dropdown_selected:
+                    dropdown_text = self.spectral_dropdown_selected
+                text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
+                text_rect = text_surface.get_rect(midleft=(self.spectral_dropdown_rect.left + 5, 
+                                                         self.spectral_dropdown_rect.centery))
+                self.screen.blit(text_surface, text_rect)
+
+                # Draw temperature dropdown
+                temperature_label = self.subtitle_font.render("Temperature (K)", True, self.BLACK)
+                temperature_label_rect = temperature_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 285))
+                self.screen.blit(temperature_label, temperature_label_rect)
+                pygame.draw.rect(self.screen, self.WHITE, self.temperature_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.temperature_dropdown_active else self.GRAY, 
+                               self.temperature_dropdown_rect, 1)
+                dropdown_text = "Select Temperature"
+                if self.temperature_dropdown_selected:
+                    dropdown_text = self.temperature_dropdown_selected
+                elif self.selected_body and self.selected_body.get('type') == 'star':
+                    temp = self.selected_body.get('temperature', 5778)
+                    dropdown_text = f"{temp:.0f} K"
+                text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
+                text_rect = text_surface.get_rect(midleft=(self.temperature_dropdown_rect.left + 5, 
+                                                         self.temperature_dropdown_rect.centery))
+                self.screen.blit(text_surface, text_rect)
+
+                # Draw luminosity input for stars
+                luminosity_label = self.subtitle_font.render("Luminosity (L☉)", True, self.BLACK)
+                luminosity_label_rect = luminosity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 345))
+                self.screen.blit(luminosity_label, luminosity_label_rect)
+                pygame.draw.rect(self.screen, self.WHITE, self.luminosity_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.luminosity_dropdown_active else self.GRAY, 
+                               self.luminosity_dropdown_rect, 1)
+                dropdown_text = "Select Star Luminosity"
+                if self.luminosity_dropdown_selected:
+                    dropdown_text = self.luminosity_dropdown_selected
+                text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
+                text_rect = text_surface.get_rect(midleft=(self.luminosity_dropdown_rect.left + 5, 
+                                                         self.luminosity_dropdown_rect.centery))
+                self.screen.blit(text_surface, text_rect)
+
+                # Draw radius dropdown
+                radius_label = self.subtitle_font.render("Radius (R☉)", True, self.BLACK)
+                radius_label_rect = radius_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 405))
+                self.screen.blit(radius_label, radius_label_rect)
+                pygame.draw.rect(self.screen, self.WHITE, self.radius_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.radius_dropdown_active else self.GRAY, 
+                               self.radius_dropdown_rect, 1)
+                dropdown_text = "Select Radius"
+                if self.radius_dropdown_selected:
+                    dropdown_text = self.radius_dropdown_selected
+                elif self.selected_body and self.selected_body.get('type') == 'star':
+                    radius = self.selected_body.get('radius', 1.0)
+                    dropdown_text = f"{radius:.1f} R☉"
+                text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
+                text_rect = text_surface.get_rect(midleft=(self.radius_dropdown_rect.left + 5, 
+                                                         self.radius_dropdown_rect.centery))
+                self.screen.blit(text_surface, text_rect)
+
+                # Draw activity level dropdown
+                activity_label = self.subtitle_font.render("Activity Level", True, self.BLACK)
+                activity_label_rect = activity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 465))
+                self.screen.blit(activity_label, activity_label_rect)
+                pygame.draw.rect(self.screen, self.WHITE, self.activity_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.activity_dropdown_active else self.GRAY, 
+                               self.activity_dropdown_rect, 1)
+                dropdown_text = "Select Activity Level"
+                if self.activity_dropdown_selected:
+                    dropdown_text = self.activity_dropdown_selected
+                elif self.selected_body and self.selected_body.get('type') == 'star':
+                    activity = self.selected_body.get('activity_level', 0.5)
+                    dropdown_text = f"{activity:.2f}"
+                text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
+                text_rect = text_surface.get_rect(midleft=(self.activity_dropdown_rect.left + 5, 
+                                                         self.activity_dropdown_rect.centery))
+                self.screen.blit(text_surface, text_rect)
+
+                # Draw metallicity dropdown
+                metallicity_label = self.subtitle_font.render("Metallicity [Fe/H]", True, self.BLACK)
+                metallicity_label_rect = metallicity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 525))
+                self.screen.blit(metallicity_label, metallicity_label_rect)
+                pygame.draw.rect(self.screen, self.WHITE, self.metallicity_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.metallicity_dropdown_active else self.GRAY, 
+                               self.metallicity_dropdown_rect, 1)
+                dropdown_text = "Select Metallicity"
+                if self.metallicity_dropdown_selected:
+                    dropdown_text = self.metallicity_dropdown_selected
+                elif self.selected_body and self.selected_body.get('type') == 'star':
+                    metallicity = self.selected_body.get('metallicity', 0.0)
+                    dropdown_text = f"{metallicity:+.1f} [Fe/H]"
+                text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
+                text_rect = text_surface.get_rect(midleft=(self.metallicity_dropdown_rect.left + 5, 
+                                                         self.metallicity_dropdown_rect.centery))
+                self.screen.blit(text_surface, text_rect)
+
+                # Draw spacetime grid
+                self.draw_spacetime_grid()
         
         # Draw spacetime grid in the space area
         self.draw_spacetime_grid()
