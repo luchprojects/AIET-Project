@@ -166,7 +166,7 @@ class SolarSystemVisualizer:
         self.luminosity_dropdown_options = [
             ("Red Dwarf", 0.04),
             ("Orange Dwarf", 0.15),
-            ("Sun-like Star", 1.00),
+            ("Sun", 1.00),
             ("Bright F-type Star", 2.00),
             ("Blue A-type Star", 25.00),
             ("B-type Giant", 10000.00),
@@ -198,15 +198,15 @@ class SolarSystemVisualizer:
                                                 self.customization_panel_width - 100, 30)
         self.spectral_dropdown_active = False
         self.spectral_dropdown_options = [
-            ("O-type (Blue, 40,000+ K)", 40000, (0, 0, 255)),
-            ("B-type (Blue-white, ~20,000 K)", 20000, (173, 216, 230)),
-            ("A-type (White, ~10,000 K)", 10000, (255, 255, 255)),
-            ("F-type (Yellow-white, ~6,500 K)", 6500, (255, 255, 224)),
-            ("G-type (Yellow, 5,778 K)", 5778, (255, 255, 0)),
-            ("K-type (Orange, ~4,400 K)", 4400, (255, 165, 0)),
-            ("M-type (Red, ~3,000 K)", 3000, (255, 0, 0))
+            ("O-type (Blue)", 40000, (0, 0, 255)),
+            ("B-type (Blue-white)", 20000, (173, 216, 230)),
+            ("A-type (White)", 10000, (255, 255, 255)),
+            ("F-type (Yellow-white)", 6500, (255, 255, 224)),
+            ("G-type (Yellow, Sun)", 5778, (255, 255, 0)),
+            ("K-type (Orange)", 4400, (255, 165, 0)),
+            ("M-type (Red)", 3000, (255, 0, 0))
         ]
-        self.spectral_dropdown_selected = "G-type (Yellow, 5,778 K)"
+        self.spectral_dropdown_selected = "G-type (Yellow, Sun)"
         self.spectral_dropdown_visible = False
 
         # Star mass dropdown properties
@@ -217,7 +217,7 @@ class SolarSystemVisualizer:
             ("Very Low Mass", 0.1),
             ("Low Mass", 0.3),
             ("Medium-Low Mass", 0.7),
-            ("Solar Mass (The Sun)", 1.0),
+            ("Sun", 1.0),
             ("Medium-High Mass", 1.5),
             ("High Mass", 5.0),
             ("Very High Mass", 10.0),
@@ -236,7 +236,7 @@ class SolarSystemVisualizer:
             ("0.1 Gyr", 0.1),
             ("0.5 Gyr", 0.5),
             ("1.0 Gyr", 1.0),
-            ("4.6 Gyr (Sun)", 4.6),
+            ("Sun", 4.6),
             ("7.0 Gyr", 7.0),
             ("10.0 Gyr", 10.0),
             ("Custom Age", None)
@@ -587,7 +587,7 @@ class SolarSystemVisualizer:
                                 # Sun-like defaults
                                 default_mass = 1.0  # Solar masses
                                 default_age = 4.6  # Gyr
-                                default_spectral = "G-type (Yellow, 5,778 K)"
+                                default_spectral = "G-type (Yellow, Sun)"
                                 default_luminosity = 1.0  # Solar luminosities
                                 default_name = "Sun"
                                 default_radius = 20
@@ -635,10 +635,10 @@ class SolarSystemVisualizer:
                             
                             # Set dropdown selections to match defaults
                             if self.active_tab == "star":
-                                self.star_mass_dropdown_selected = "Solar Mass (The Sun)"
-                                self.star_age_dropdown_selected = "4.6 Gyr (Sun)"
-                                self.spectral_dropdown_selected = default_spectral
-                                self.luminosity_dropdown_selected = "Sun-like Star"
+                                self.star_mass_dropdown_selected = "Sun"
+                                self.star_age_dropdown_selected = "Sun"
+                                self.spectral_dropdown_selected = "G-type (Yellow, Sun)"
+                                self.luminosity_dropdown_selected = "Sun"
                             elif self.active_tab == "planet":
                                 self.planet_dropdown_selected = "Earth"
                                 self.planet_age_dropdown_selected = "4.5 Gyr (Earth)"

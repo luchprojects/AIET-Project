@@ -108,7 +108,7 @@ class SolarSystemVisualizer:
             ("Neptune", 17.1),
             ("Custom", None)  # Added custom mass option
         ]
-        self.planet_dropdown_selected = None
+        self.planet_dropdown_selected = "Earth"
         self.planet_dropdown_visible = False
         self.show_custom_mass_input = False
         
@@ -118,11 +118,11 @@ class SolarSystemVisualizer:
         self.planet_age_dropdown_active = False
         self.planet_age_dropdown_options = [
             ("1.0 Gyr", 1.0),
-            ("4.5 Gyr (Earth)", 4.5),
+            ("Earth", 4.6),
             ("10.0 Gyr", 10.0),
             ("Custom", None)
         ]
-        self.planet_age_dropdown_selected = None
+        self.planet_age_dropdown_selected = "Earth"
         self.planet_age_dropdown_visible = False
         self.show_custom_age_input = False
         
@@ -141,7 +141,7 @@ class SolarSystemVisualizer:
             ("Neptune", 3.9),
             ("Custom", None)
         ]
-        self.planet_radius_dropdown_selected = None
+        self.planet_radius_dropdown_selected = "Earth"
         self.planet_radius_dropdown_visible = False
         self.show_custom_radius_input = False
         
@@ -160,7 +160,7 @@ class SolarSystemVisualizer:
             ("Neptune", 72),
             ("Custom", None)
         ]
-        self.planet_temperature_dropdown_selected = None
+        self.planet_temperature_dropdown_selected = "Earth"
         self.planet_temperature_dropdown_visible = False
         self.show_custom_planet_temperature_input = False
         
@@ -189,11 +189,17 @@ class SolarSystemVisualizer:
                                             self.customization_panel_width - 100, 30)
         self.moon_dropdown_active = False
         self.moon_dropdown_options = [
-            ("Earth's Moon", 1.00),
-            ("2.00", 2.0),
+            ("Deimos", 0.000003),
+            ("Phobos", 0.0000001),
+            ("Europa", 0.0073),
+            ("Enceladus", 0.0001),
+            ("Titan", 0.0135),
+            ("Ganymede", 0.0148),
+            ("Callisto", 0.0107),
+            ("Moon", 0.0123),
             ("Custom", None)
         ]
-        self.moon_dropdown_selected = None
+        self.moon_dropdown_selected = "Moon"
         self.moon_dropdown_visible = False
         self.show_custom_moon_mass_input = False
         
@@ -202,12 +208,17 @@ class SolarSystemVisualizer:
                                                 self.customization_panel_width - 100, 30)
         self.moon_age_dropdown_active = False
         self.moon_age_dropdown_options = [
-            ("1.0 Gyr", 1.0),
-            ("4.5 Gyr (Earth's Moon)", 4.5),
-            ("10.0 Gyr", 10.0),
+            ("Deimos", 1.0),
+            ("Phobos", 1.0),
+            ("Europa", 4.6),
+            ("Enceladus", 4.6),
+            ("Titan", 10.0),
+            ("Ganymede", 10.0),
+            ("Callisto", 10.0),
+            ("Moon", 4.5),
             ("Custom", None)
         ]
-        self.moon_age_dropdown_selected = None
+        self.moon_age_dropdown_selected = "Moon"
         self.moon_age_dropdown_visible = False
         self.show_custom_moon_age_input = False
         
@@ -223,10 +234,10 @@ class SolarSystemVisualizer:
             ("Titan", 2574.7),
             ("Ganymede", 2634.1),
             ("Callisto", 2410.3),
-            ("The Moon", 1737.4),
+            ("Moon", 1737.4),
             ("Custom", None)
         ]
-        self.moon_radius_dropdown_selected = "The Moon"
+        self.moon_radius_dropdown_selected = "Moon"
         self.moon_radius_dropdown_visible = False
         self.show_custom_moon_radius_input = False
         
@@ -242,10 +253,10 @@ class SolarSystemVisualizer:
             ("Titan", 1221870),
             ("Ganymede", 1070400),
             ("Callisto", 1882700),
-            ("Earth's Moon", 384400),
+            ("Moon", 384400),
             ("Custom", None)
         ]
-        self.moon_orbital_distance_dropdown_selected = "Earth's Moon"
+        self.moon_orbital_distance_dropdown_selected = "Moon"
         self.moon_orbital_distance_dropdown_visible = False
         self.show_custom_moon_orbital_distance_input = False
         
@@ -261,10 +272,10 @@ class SolarSystemVisualizer:
             ("Titan", 15.95),
             ("Ganymede", 7.15),
             ("Callisto", 16.69),
-            ("Earth's Moon", 27.3),
+            ("Moon", 27.3),
             ("Custom", None)
         ]
-        self.moon_orbital_period_dropdown_selected = "Earth's Moon"
+        self.moon_orbital_period_dropdown_selected = "Moon"
         self.moon_orbital_period_dropdown_visible = False
         self.show_custom_moon_orbital_period_input = False
         
@@ -278,10 +289,10 @@ class SolarSystemVisualizer:
             ("Ganymede", 110),
             ("Callisto", 134),
             ("Titan", 94),
-            ("Earth's Moon", 220),
+            ("Moon", 220),
             ("Custom", None)
         ]
-        self.moon_temperature_dropdown_selected = "Earth's Moon"
+        self.moon_temperature_dropdown_selected = "Moon"
         self.moon_temperature_dropdown_visible = False
         self.show_custom_moon_temperature_input = False
         
@@ -297,10 +308,10 @@ class SolarSystemVisualizer:
             ("Titan", 1.352),
             ("Ganymede", 1.428),
             ("Callisto", 1.235),
-            ("Earth's Moon", 1.62),
+            ("Moon", 1.62),
             ("Custom", None)
         ]
-        self.moon_gravity_dropdown_selected = "Earth's Moon"
+        self.moon_gravity_dropdown_selected = "Moon"
         self.moon_gravity_dropdown_visible = False
         self.show_custom_moon_gravity_input = False
         
@@ -324,14 +335,14 @@ class SolarSystemVisualizer:
         self.luminosity_dropdown_options = [
             ("Red Dwarf", 0.04),
             ("Orange Dwarf", 0.15),
-            ("Sun-like Star", 1.00),
+            ("Sun", 1.00),
             ("Bright F-type Star", 2.00),
             ("Blue A-type Star", 25.00),
             ("B-type Giant", 10000.00),
             ("O-type Supergiant", 100000.00),
             ("Custom", None)
         ]
-        self.luminosity_dropdown_selected = None
+        self.luminosity_dropdown_selected = "Sun"  # Default to Sun
         self.luminosity_dropdown_visible = False
         self.show_custom_luminosity_input = False
         self.luminosity_input_active = False
@@ -356,15 +367,15 @@ class SolarSystemVisualizer:
                                                 self.customization_panel_width - 100, 30)
         self.spectral_dropdown_active = False
         self.spectral_dropdown_options = [
-            ("O-type (Blue, 40,000+ K)", 40000, (0, 0, 255)),
-            ("B-type (Blue-white, ~20,000 K)", 20000, (173, 216, 230)),
-            ("A-type (White, ~10,000 K)", 10000, (255, 255, 255)),
-            ("F-type (Yellow-white, ~6,500 K)", 6500, (255, 255, 224)),
-            ("G-type (Yellow, 5,778 K)", 5778, (255, 255, 0)),
-            ("K-type (Orange, ~4,400 K)", 4400, (255, 165, 0)),
-            ("M-type (Red, ~3,000 K)", 3000, (255, 0, 0))
+            ("O-type (Blue)", 40000, (0, 0, 255)),
+            ("B-type (Blue-white)", 20000, (173, 216, 230)),
+            ("A-type (White)", 10000, (255, 255, 255)),
+            ("F-type (Yellow-white)", 6500, (255, 255, 224)),
+            ("G-type (Yellow, Sun)", 5778, (255, 255, 0)),
+            ("K-type (Orange)", 4400, (255, 165, 0)),
+            ("M-type (Red)", 3000, (255, 0, 0))
         ]
-        self.spectral_dropdown_selected = "G-type (Yellow, 5,778 K)"
+        self.spectral_dropdown_selected = "G-type (Yellow, Sun)"  # Default to Sun (G2V)
         self.spectral_dropdown_visible = False
 
         # Temperature dropdown properties
@@ -372,16 +383,16 @@ class SolarSystemVisualizer:
                                                    self.customization_panel_width - 100, 30)
         self.temperature_dropdown_active = False
         self.temperature_dropdown_options = [
-            ("O-type (40,000 K)", 40000),
-            ("B-type (20,000 K)", 20000),
-            ("A-type (10,000 K)", 10000),
-            ("F-type (7,500 K)", 7500),
-            ("G-type (5,800 K)", 5800),
-            ("K-type (4,500 K)", 4500),
-            ("M-type (3,000 K)", 3000),
+            ("O-type", 40000),
+            ("B-type", 20000),
+            ("A-type", 10000),
+            ("F-type", 7500),
+            ("G-type (Sun)", 5800),
+            ("K-type", 4500),
+            ("M-type", 3000),
             ("Custom", None)
         ]
-        self.temperature_dropdown_selected = None
+        self.temperature_dropdown_selected = "G-type (Sun)"  # Closest to Sun
         self.temperature_dropdown_visible = False
         self.show_custom_temperature_input = False
         self.temperature_input_active = False
@@ -395,11 +406,11 @@ class SolarSystemVisualizer:
         self.star_mass_dropdown_active = False
         self.star_mass_dropdown_options = [
             (".5", 0.5),
-            ("1 (Sun)", 1.0),
+            ("Sun", 1.0),
             ("2", 2),
             ("Custom", None)
         ]
-        self.star_mass_dropdown_selected = None
+        self.star_mass_dropdown_selected = "Sun"  # Default to Sun
         self.star_mass_dropdown_visible = False
         self.show_custom_star_mass_input = False
     
@@ -409,11 +420,11 @@ class SolarSystemVisualizer:
         self.star_age_dropdown_active = False
         self.star_age_dropdown_options = [
             ("1.0 Gyr", 1.0),
-            ("4.6 Gyr (Sun)", 4.6),
+            ("Sun", 4.6),
             ("7.0 Gyr", 7.0),
             ("Custom", None)
         ]
-        self.star_age_dropdown_selected = None
+        self.star_age_dropdown_selected = "Sun"  # Default to Sun
         self.star_age_dropdown_visible = False
         self.show_custom_star_age_input = False
     
@@ -422,16 +433,16 @@ class SolarSystemVisualizer:
                                               self.customization_panel_width - 100, 30)
         self.radius_dropdown_active = False
         self.radius_dropdown_options = [
-            ("10.0 R☉ (O-type)", 10.0),
-            ("5.0 R☉ (B-type)", 5.0),
-            ("2.0 R☉ (A-type)", 2.0),
-            ("1.3 R☉ (F-type)", 1.3),
-            ("1.0 R☉ (G-type, Sun)", 1.0),
-            ("0.8 R☉ (K-type)", 0.8),
-            ("0.3 R☉ (M-type)", 0.3),
+            ("O-type", 10.0),
+            ("B-type", 5.0),
+            ("A-type", 2.0),
+            ("F-type", 1.3),
+            ("Sun", 1.0),
+            ("K-type", 0.8),
+            ("M-type", 0.3),
             ("Custom", None)
         ]
-        self.radius_dropdown_selected = None
+        self.radius_dropdown_selected = "Sun"  # Default to Sun
         self.radius_dropdown_visible = False
         self.show_custom_radius_input = False
         self.radius_input_active = False
@@ -450,7 +461,7 @@ class SolarSystemVisualizer:
             ("Very High", 1.0),
             ("Custom", None)
         ]
-        self.activity_dropdown_selected = None
+        self.activity_dropdown_selected = "Moderate"  # Default to Medium (Moderate)
         self.activity_dropdown_visible = False
         self.show_custom_activity_input = False
         self.activity_input_active = False
@@ -464,11 +475,11 @@ class SolarSystemVisualizer:
         self.metallicity_dropdown_active = False
         self.metallicity_dropdown_options = [
             ("-0.5 (Metal-poor)", -0.5),
-            ("0.0 (Sun-like)", 0.0),
+            ("Sun", 0.0),
             ("+0.3 (Metal-rich)", 0.3),
             ("Custom", None)
         ]
-        self.metallicity_dropdown_selected = None
+        self.metallicity_dropdown_selected = "Sun"  # Default to Sun
         self.metallicity_dropdown_visible = False
         self.show_custom_metallicity_input = False
         self.metallicity_input_active = False
@@ -503,7 +514,7 @@ class SolarSystemVisualizer:
         self.planet_orbital_eccentricity_dropdown_active = False
         self.planet_orbital_eccentricity_dropdown_options = [
             ("Circular Orbit", 0.0),
-            ("Earth", 0.017),
+            ("Earth", 0.0167),
             ("Mars", 0.093),
             ("Mercury", 0.205),
             ("Pluto", 0.248),
@@ -523,7 +534,7 @@ class SolarSystemVisualizer:
         self.planet_orbital_period_dropdown_options = [
             ("Mercury", 88),
             ("Venus", 225),
-            ("Earth", 365),
+            ("Earth", 365.25),
             ("Mars", 687),
             ("Jupiter", 4333),
             ("Saturn", 10759),
@@ -645,7 +656,7 @@ class SolarSystemVisualizer:
                                         if self.selected_body["type"] != "star":
                                             self.generate_orbit_grid(self.selected_body)
                                     self.planet_dropdown_selected = planet_name
-                                    self.planet_age_dropdown_selected = "4.5 Gyr (Earth)"
+                                    self.planet_age_dropdown_selected = "Earth"
                                     self.planet_gravity_dropdown_selected = "Earth"
                                     self.planet_dropdown_visible = False
                                     self.planet_dropdown_active = False
@@ -1642,7 +1653,7 @@ class SolarSystemVisualizer:
                                             self.show_custom_planet_mass_input = True
                                             self.planet_mass_input_active = True
                                         self.planet_dropdown_selected = name
-                                        self.planet_age_dropdown_selected = "4.5 Gyr (Earth)"
+                                        self.planet_age_dropdown_selected = "Earth"
                                         self.planet_gravity_dropdown_selected = "Earth"
                                         self.planet_dropdown_visible = False
                                         self.planet_dropdown_active = False
@@ -1788,8 +1799,8 @@ class SolarSystemVisualizer:
                                         else:
                                             self.show_custom_orbital_eccentricity_input = True
                                             self.orbital_eccentricity_input_active = True
-                                            self.orbital_eccentricity_input_text = f"{self.selected_body.get('eccentricity', 0.017):.3f}"
-                                        self.planet_orbital_eccentricity_dropdown_selected = name
+                                            self.orbital_eccentricity_input_text = f"{self.selected_body.get('eccentricity', 0.0167):.3f}"
+                                        self.planet_orbital_eccentricity_dropdown_selected = ecc_name
                                         self.planet_orbital_eccentricity_dropdown_visible = False
                                         self.planet_orbital_eccentricity_dropdown_active = False
                                         break
@@ -1801,7 +1812,7 @@ class SolarSystemVisualizer:
                                         else:
                                             self.show_custom_orbital_period_input = True
                                             self.orbital_period_input_active = True
-                                            self.orbital_period_input_text = f"{self.selected_body.get('orbital_period', 365):.0f}"
+                                            self.orbital_period_input_text = f"{self.selected_body.get('orbital_period', 365.25):.0f}"
                                         self.planet_orbital_period_dropdown_selected = name
                                         self.planet_orbital_period_dropdown_visible = False
                                         self.planet_orbital_period_dropdown_active = False
@@ -1857,7 +1868,7 @@ class SolarSystemVisualizer:
                                     self.moon_age_dropdown_selected = "Custom"
                                 
                                 # --- Moon radius dropdown selection logic ---
-                                radius = self.selected_body.get('radius', 1737.4)
+                                radius = self.selected_body.get('actual_radius', 1737.4)
                                 found = False
                                 for name, preset_radius in self.moon_radius_dropdown_options:
                                     if preset_radius == radius:
@@ -1871,12 +1882,34 @@ class SolarSystemVisualizer:
                                 orbit_radius = self.selected_body.get('orbit_radius', 384400)
                                 found = False
                                 for name, preset_distance in self.moon_orbital_distance_dropdown_options:
-                                    if preset_distance == orbit_radius:
+                                    if preset_distance is not None and abs(preset_distance - orbit_radius) < 1:
                                         self.moon_orbital_distance_dropdown_selected = name
                                         found = True
                                         break
                                 if not found:
-                                    self.moon_orbital_distance_dropdown_selected = "Custom"
+                                    self.moon_orbital_distance_dropdown_selected = "Moon"  # Default to Moon instead of Custom
+                                
+                                # --- Moon orbital period dropdown selection logic ---
+                                orbital_period = self.selected_body.get('orbital_period', 27.3)
+                                found = False
+                                for name, preset_period in self.moon_orbital_period_dropdown_options:
+                                    if preset_period is not None and abs(preset_period - orbital_period) < 0.1:
+                                        self.moon_orbital_period_dropdown_selected = name
+                                        found = True
+                                        break
+                                if not found:
+                                    self.moon_orbital_period_dropdown_selected = "Moon"  # Default to Moon instead of Custom
+                                
+                                # --- Moon temperature dropdown selection logic ---
+                                temperature = self.selected_body.get('temperature', 220)
+                                found = False
+                                for name, preset_temp in self.moon_temperature_dropdown_options:
+                                    if preset_temp is not None and abs(preset_temp - temperature) < 1:
+                                        self.moon_temperature_dropdown_selected = name
+                                        found = True
+                                        break
+                                if not found:
+                                    self.moon_temperature_dropdown_selected = "Moon"  # Default to Moon instead of Custom
                         elif self.active_tab and space_area.collidepoint(event.pos):
                             # Create a new celestial body at the click position
                             self.body_counter[self.active_tab] += 1
@@ -1886,7 +1919,7 @@ class SolarSystemVisualizer:
                                 # Sun-like defaults
                                 default_mass = 1.0  # Solar masses
                                 default_age = 4.6  # Gyr
-                                default_spectral = "G-type (Yellow, 5,778 K)"
+                                default_spectral = "G-type (Yellow, Sun)"
                                 default_luminosity = 1.0  # Solar luminosities
                                 default_name = "Sun"
                                 default_radius = 20
@@ -1898,10 +1931,10 @@ class SolarSystemVisualizer:
                                 default_radius = 15
                             else:  # moon
                                 # Luna-like defaults
-                                default_mass = 1.0  # Lunar masses
+                                default_mass = 1.0  # Earth's Moon mass (1 lunar mass)
                                 default_age = 4.5  # Gyr
                                 default_name = "Moon"
-                                default_radius = 10
+                                default_radius = 10  # Visual radius for display
                             
                             body = {
                                 "type": self.active_tab,
@@ -1938,19 +1971,34 @@ class SolarSystemVisualizer:
                                     "star_color": (255, 255, 0),  # Yellow color for G-type star
                                 })
                             
+                            # Add moon-specific attributes
+                            if self.active_tab == "moon":
+                                body.update({
+                                    "actual_radius": 1737.4,  # Actual radius in km (The Moon) - for dropdown logic
+                                    "radius": 10,  # Visual radius in pixels for display
+                                    "orbit_radius": 384400,  # Actual orbital distance in km (Earth's Moon)
+                                    "temperature": 220,  # Surface temperature in K (Earth's Moon)
+                                    "gravity": 1.62,  # Surface gravity in m/s² (Earth's Moon)
+                                    "orbital_period": 27.3,  # Orbital period in days (Earth's Moon)
+                                })
+                            
                             self.placed_bodies.append(body)
                             self.orbit_points[body["name"]] = []
                             self.orbit_history[body["name"]] = []
                             
                             # Set dropdown selections to match defaults
                             if self.active_tab == "star":
-                                self.star_mass_dropdown_selected = "1( The Sun)"
-                                self.star_age_dropdown_selected = "4.6 Gyr (Sun)"
-                                self.spectral_dropdown_selected = default_spectral
-                                self.luminosity_dropdown_selected = "Sun-like Star"
+                                self.star_mass_dropdown_selected = "Sun"
+                                self.star_age_dropdown_selected = "Sun"
+                                self.spectral_dropdown_selected = "G-type (Yellow, Sun)"
+                                self.luminosity_dropdown_selected = "Sun"
+                                self.temperature_dropdown_selected = "G-type (Sun)"
+                                self.radius_dropdown_selected = "Sun"
+                                self.activity_dropdown_selected = "Moderate"
+                                self.metallicity_dropdown_selected = "Sun"
                             elif self.active_tab == "planet":
                                 self.planet_dropdown_selected = "Earth"
-                                self.planet_age_dropdown_selected = "4.5 Gyr (Earth)"
+                                self.planet_age_dropdown_selected = "Earth"
                                 self.planet_gravity_dropdown_selected = "Earth"
                                 self.planet_orbital_distance_dropdown_selected = "Earth"
                                 self.planet_orbital_eccentricity_dropdown_selected = "Earth"
@@ -1958,14 +2006,17 @@ class SolarSystemVisualizer:
                                 self.planet_stellar_flux_dropdown_selected = "Earth"
                                 if self.selected_body:
                                     self.selected_body["semiMajorAxis"] = 1.0
-                                    self.selected_body["eccentricity"] = 0.017
-                                    self.selected_body["orbital_period"] = 365
+                                    self.selected_body["eccentricity"] = 0.0167
+                                    self.selected_body["orbital_period"] = 365.25
                                     self.selected_body["stellarFlux"] = 1.0
                             else:  # moon
-                                self.moon_dropdown_selected = "Earth's Moon"
-                                self.moon_age_dropdown_selected = "4.5 Gyr (Earth's Moon)"
-                                self.moon_radius_dropdown_selected = "The Moon"
-                                self.moon_orbital_distance_dropdown_selected = "Earth's Moon"
+                                self.moon_dropdown_selected = "Moon"
+                                self.moon_age_dropdown_selected = "Moon"
+                                self.moon_radius_dropdown_selected = "Moon"
+                                self.moon_orbital_distance_dropdown_selected = "Moon"
+                                self.moon_orbital_period_dropdown_selected = "Moon"
+                                self.moon_temperature_dropdown_selected = "Moon"
+                                self.moon_gravity_dropdown_selected = "Moon"
                             
                             # Automatically start simulation when at least one star and one planet are placed
                             stars = [b for b in self.placed_bodies if b["type"] == "star"]
@@ -2544,17 +2595,25 @@ class SolarSystemVisualizer:
             # Draw option text
             if value is not None:
                 if self.planet_dropdown_visible:
-                    text = f"{name} ({value:.3f} Earth masses)"
+                    text = f"{name} (" + self._format_value(value, 'M⊕') + ")"
                 elif self.moon_dropdown_visible:
-                    text = f"{name} ({value:.2f} M🌕)"
+                    text = f"{name} (" + self._format_value(value, 'M🌕') + ")"
                 elif self.star_mass_dropdown_visible:
-                    text = f"{name} ({value:.1f} M☉)"
-                elif self.planet_age_dropdown_visible or self.star_age_dropdown_visible or self.moon_age_dropdown_visible:
+                    text = f"{name} (" + self._format_value(value, 'M☉') + ")"
+                elif self.planet_age_dropdown_visible or self.star_age_dropdown_visible:
                     text = name  # Age options already include the unit
+                elif self.moon_age_dropdown_visible:
+                    text = f"{name} (" + self._format_value(value, 'Gyr') + ")"
                 elif self.moon_radius_dropdown_visible:
-                    text = f"{name} ({value:.1f} km)"
+                    text = f"{name} (" + self._format_value(value, 'km') + ")"
                 elif self.moon_orbital_distance_dropdown_visible:
-                    text = f"{name} ({value:,.0f} km)"
+                    text = f"{name} (" + self._format_value(value, 'km') + ")"
+                elif self.moon_orbital_period_dropdown_visible:
+                    text = f"{name} (" + self._format_value(value, 'days') + ")"
+                elif self.moon_temperature_dropdown_visible:
+                    text = f"{name} (" + self._format_value(value, 'K') + ")"
+                elif self.moon_gravity_dropdown_visible:
+                    text = f"{name} (" + self._format_value(value, 'm/s²') + ")"
                 elif self.temperature_dropdown_visible:
                     text = name  # Temperature options already include the unit
                 elif self.radius_dropdown_visible:
@@ -2564,23 +2623,23 @@ class SolarSystemVisualizer:
                 elif self.metallicity_dropdown_visible:
                     text = name  # Metallicity options already include the unit
                 elif self.planet_radius_dropdown_visible:
-                    text = f"{name} ({value:.2f} R🜨)"
+                    text = f"{name} (" + self._format_value(value, 'R🜨') + ")"
                 elif self.planet_temperature_dropdown_visible:
-                    text = f"{name} ({value:.2f} K)"
+                    text = f"{name} (" + self._format_value(value, 'K') + ")"
                 elif self.planet_gravity_dropdown_visible:
-                    text = f"{name} ({value:.2f} m/s²)"
+                    text = f"{name} (" + self._format_value(value, 'm/s²') + ")"
                 elif self.planet_orbital_distance_dropdown_visible:
-                    text = f"{name} ({value:.2f} AU)"
+                    text = f"{name} (" + self._format_value(value, 'AU') + ")"
                 elif self.planet_orbital_eccentricity_dropdown_visible:
-                    text = f"{name} ({value:.3f})"
+                    text = f"{name} (" + self._format_value(value, '') + ")"
                 elif self.planet_orbital_period_dropdown_visible:
-                    text = f"{name} ({value:.0f} days)"
+                    text = f"{name} (" + self._format_value(value, 'days') + ")"
                 elif self.planet_stellar_flux_dropdown_visible:
-                    text = f"{name} ({value:.3f} EFU)"
+                    text = f"{name} (" + self._format_value(value, 'EFU') + ")"
                 elif self.planet_density_dropdown_visible:
-                    text = f"{name} ({value:.2f} g/cm³)"
+                    text = f"{name} (" + self._format_value(value, 'g/cm³') + ")"
                 else:  # luminosity dropdown
-                    text = f"{name} ({value:.2f} L☉)"
+                    text = f"{name} (" + self._format_value(value, 'L☉') + ")"
             else:
                 text = f"{name} (Custom)"
             text_surface = self.subtitle_font.render(text, True, self.dropdown_text_color)
@@ -2871,8 +2930,9 @@ class SolarSystemVisualizer:
             
             # Draw habitability probability at the top center
             if self.selected_body and self.selected_body.get('type') != 'star':
+                # Shift right by 60 pixels
                 habitability_text = self.font.render(f"Habitability Probability: {self.selected_body.get('habit_score', 0.0):.2f}%", True, (0, 255, 0))  # Green color
-                habitability_rect = habitability_text.get_rect(center=(self.width//2, 30))
+                habitability_rect = habitability_text.get_rect(center=(self.width//2 + 60, 30))
                 self.screen.blit(habitability_text, habitability_rect)
             
             # MASS SECTION (always show mass label/input, dropdown only for planets)
@@ -2892,10 +2952,36 @@ class SolarSystemVisualizer:
                                self.planet_dropdown_rect, 1)
                 dropdown_text = "Select Reference Planet"
                 if self.planet_dropdown_selected:
-                    dropdown_text = self.planet_dropdown_selected
+                    # Find the selected option's value
+                    selected = next(((name, value) for name, value in self.planet_dropdown_options if name == self.planet_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.3f} Earth masses)"
+                        else:
+                            dropdown_text = name  # Custom
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.planet_dropdown_rect.left + 5, 
                                                          self.planet_dropdown_rect.centery))
+                self.screen.blit(text_surface, text_rect)
+            elif self.selected_body.get('type') == 'moon':
+                # For moons, show the moon dropdown
+                pygame.draw.rect(self.screen, self.WHITE, self.moon_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.moon_dropdown_active else self.GRAY, 
+                               self.moon_dropdown_rect, 1)
+                dropdown_text = "Select Reference Moon"
+                if self.moon_dropdown_selected:
+                    # Find the selected option's value
+                    selected = next(((name, value) for name, value in self.moon_dropdown_options if name == self.moon_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.3f} M☽)"
+                        else:
+                            dropdown_text = name  # Custom
+                text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
+                text_rect = text_surface.get_rect(midleft=(self.moon_dropdown_rect.left + 5, 
+                                                         self.moon_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
             elif self.selected_body.get('type') == 'star':
                 # For stars, show the star mass dropdown
@@ -2904,10 +2990,15 @@ class SolarSystemVisualizer:
                                self.star_mass_dropdown_rect, 1)
                 dropdown_text = "Select Star Mass"
                 if self.star_mass_dropdown_selected:
-                    dropdown_text = self.star_mass_dropdown_selected
+                    selected = next(((name, value) for name, value in self.star_mass_dropdown_options if name == self.star_mass_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.2f} M☉)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
-                text_rect = text_surface.get_rect(midleft=(self.star_mass_dropdown_rect.left + 5, 
-                                                         self.star_mass_dropdown_rect.centery))
+                text_rect = text_surface.get_rect(midleft=(self.star_mass_dropdown_rect.left + 5, self.star_mass_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
 
                 # Show custom mass input if "Custom Mass" is selected
@@ -2966,7 +3057,13 @@ class SolarSystemVisualizer:
                                self.planet_age_dropdown_rect, 1)
                 dropdown_text = "Select Age"
                 if self.planet_age_dropdown_selected:
-                    dropdown_text = self.planet_age_dropdown_selected
+                    selected = next(((name, value) for name, value in self.planet_age_dropdown_options if name == self.planet_age_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.1f} Gyr)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.planet_age_dropdown_rect.left + 5, 
                                                          self.planet_age_dropdown_rect.centery))
@@ -2995,7 +3092,13 @@ class SolarSystemVisualizer:
                                self.moon_age_dropdown_rect, 1)
                 dropdown_text = "Select Age"
                 if self.moon_age_dropdown_selected:
-                    dropdown_text = self.moon_age_dropdown_selected
+                    selected = next(((name, value) for name, value in self.moon_age_dropdown_options if name == self.moon_age_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.1f} Gyr)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.moon_age_dropdown_rect.left + 5, 
                                                          self.moon_age_dropdown_rect.centery))
@@ -3029,7 +3132,13 @@ class SolarSystemVisualizer:
                                self.moon_radius_dropdown_rect, 1)
                 dropdown_text = "Select Radius"
                 if self.moon_radius_dropdown_selected:
-                    dropdown_text = self.moon_radius_dropdown_selected
+                    selected = next(((name, value) for name, value in self.moon_radius_dropdown_options if name == self.moon_radius_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.0f} km)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.moon_radius_dropdown_rect.left + 5, 
                                                          self.moon_radius_dropdown_rect.centery))
@@ -3059,7 +3168,13 @@ class SolarSystemVisualizer:
                                self.moon_orbital_distance_dropdown_rect, 1)
                 dropdown_text = "Select Orbital Distance"
                 if self.moon_orbital_distance_dropdown_selected:
-                    dropdown_text = self.moon_orbital_distance_dropdown_selected
+                    selected = next(((name, value) for name, value in self.moon_orbital_distance_dropdown_options if name == self.moon_orbital_distance_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.0f} km)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.moon_orbital_distance_dropdown_rect.left + 5, 
                                                          self.moon_orbital_distance_dropdown_rect.centery))
@@ -3089,7 +3204,13 @@ class SolarSystemVisualizer:
                                self.moon_orbital_period_dropdown_rect, 1)
                 dropdown_text = "Select Orbital Period"
                 if self.moon_orbital_period_dropdown_selected:
-                    dropdown_text = self.moon_orbital_period_dropdown_selected
+                    selected = next(((name, value) for name, value in self.moon_orbital_period_dropdown_options if name == self.moon_orbital_period_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.1f} days)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.moon_orbital_period_dropdown_rect.left + 5, 
                                                          self.moon_orbital_period_dropdown_rect.centery))
@@ -3119,7 +3240,13 @@ class SolarSystemVisualizer:
                                self.moon_temperature_dropdown_rect, 1)
                 dropdown_text = "Select Temperature"
                 if self.moon_temperature_dropdown_selected:
-                    dropdown_text = self.moon_temperature_dropdown_selected
+                    selected = next(((name, value) for name, value in self.moon_temperature_dropdown_options if name == self.moon_temperature_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.0f} K)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.moon_temperature_dropdown_rect.left + 5, 
                                                          self.moon_temperature_dropdown_rect.centery))
@@ -3149,7 +3276,13 @@ class SolarSystemVisualizer:
                                self.moon_gravity_dropdown_rect, 1)
                 dropdown_text = "Select Gravity"
                 if self.moon_gravity_dropdown_selected:
-                    dropdown_text = self.moon_gravity_dropdown_selected
+                    selected = next(((name, value) for name, value in self.moon_gravity_dropdown_options if name == self.moon_gravity_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.2f} m/s²)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.moon_gravity_dropdown_rect.left + 5, 
                                                          self.moon_gravity_dropdown_rect.centery))
@@ -3193,7 +3326,13 @@ class SolarSystemVisualizer:
                                self.planet_radius_dropdown_rect, 1)
                 dropdown_text = "Select Reference Planet"
                 if self.planet_radius_dropdown_selected:
-                    dropdown_text = self.planet_radius_dropdown_selected
+                    selected = next(((name, value) for name, value in self.planet_radius_dropdown_options if name == self.planet_radius_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.2f} R🜨)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.planet_radius_dropdown_rect.left + 5, 
                                                          self.planet_radius_dropdown_rect.centery))
@@ -3211,7 +3350,13 @@ class SolarSystemVisualizer:
                                self.planet_temperature_dropdown_rect, 1)
                 dropdown_text = "Select Reference Planet"
                 if self.planet_temperature_dropdown_selected:
-                    dropdown_text = self.planet_temperature_dropdown_selected
+                    selected = next(((name, value) for name, value in self.planet_temperature_dropdown_options if name == self.planet_temperature_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.0f} K)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.planet_temperature_dropdown_rect.left + 5, 
                                                          self.planet_temperature_dropdown_rect.centery))
@@ -3221,14 +3366,18 @@ class SolarSystemVisualizer:
                 gravity_label = self.subtitle_font.render("Surface Gravity (m/s²)", True, self.BLACK)
                 gravity_label_rect = gravity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 345))
                 self.screen.blit(gravity_label, gravity_label_rect)
-                
-                # Update the existing dropdown rect position to match the new UI layout
                 self.planet_gravity_dropdown_rect.y = 360
                 pygame.draw.rect(self.screen, self.WHITE, self.planet_gravity_dropdown_rect, 2)
                 pygame.draw.rect(self.screen, self.BLUE if self.planet_gravity_dropdown_active else self.GRAY, self.planet_gravity_dropdown_rect, 1)
                 dropdown_text = "Select Reference Planet"
                 if self.planet_gravity_dropdown_selected:
-                    dropdown_text = self.planet_gravity_dropdown_selected
+                    selected = next(((name, value) for name, value in self.planet_gravity_dropdown_options if name == self.planet_gravity_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.2f} m/s²)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.planet_gravity_dropdown_rect.left + 5, self.planet_gravity_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
@@ -3253,7 +3402,13 @@ class SolarSystemVisualizer:
                 pygame.draw.rect(self.screen, self.BLUE if self.planet_orbital_distance_dropdown_active else self.GRAY, self.planet_orbital_distance_dropdown_rect, 1)
                 dropdown_text = "Select Orbital Distance"
                 if self.planet_orbital_distance_dropdown_selected:
-                    dropdown_text = self.planet_orbital_distance_dropdown_selected
+                    selected = next(((name, value) for name, value in self.planet_orbital_distance_dropdown_options if name == self.planet_orbital_distance_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.2f} AU)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.planet_orbital_distance_dropdown_rect.left + 5, self.planet_orbital_distance_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
@@ -3276,7 +3431,13 @@ class SolarSystemVisualizer:
                 pygame.draw.rect(self.screen, self.BLUE if self.planet_orbital_eccentricity_dropdown_active else self.GRAY, self.planet_orbital_eccentricity_dropdown_rect, 1)
                 dropdown_text = "Select Orbital Eccentricity"
                 if self.planet_orbital_eccentricity_dropdown_selected:
-                    dropdown_text = self.planet_orbital_eccentricity_dropdown_selected
+                    selected = next(((name, value) for name, value in self.planet_orbital_eccentricity_dropdown_options if name == self.planet_orbital_eccentricity_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.3f})"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.planet_orbital_eccentricity_dropdown_rect.left + 5, self.planet_orbital_eccentricity_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
@@ -3299,7 +3460,13 @@ class SolarSystemVisualizer:
                 pygame.draw.rect(self.screen, self.BLUE if self.planet_orbital_period_dropdown_active else self.GRAY, self.planet_orbital_period_dropdown_rect, 1)
                 dropdown_text = "Select Orbital Period"
                 if self.planet_orbital_period_dropdown_selected:
-                    dropdown_text = self.planet_orbital_period_dropdown_selected
+                    selected = next(((name, value) for name, value in self.planet_orbital_period_dropdown_options if name == self.planet_orbital_period_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} (" + self._format_value(value, 'days', allow_scientific=False) + ")"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.planet_orbital_period_dropdown_rect.left + 5, self.planet_orbital_period_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
@@ -3322,7 +3489,13 @@ class SolarSystemVisualizer:
                 pygame.draw.rect(self.screen, self.BLUE if self.planet_stellar_flux_dropdown_active else self.GRAY, self.planet_stellar_flux_dropdown_rect, 1)
                 dropdown_text = "Select Stellar Flux"
                 if self.planet_stellar_flux_dropdown_selected:
-                    dropdown_text = self.planet_stellar_flux_dropdown_selected
+                    selected = next(((name, value) for name, value in self.planet_stellar_flux_dropdown_options if name == self.planet_stellar_flux_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.3f} EFU)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.planet_stellar_flux_dropdown_rect.left + 5, self.planet_stellar_flux_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
@@ -3345,7 +3518,13 @@ class SolarSystemVisualizer:
                 pygame.draw.rect(self.screen, self.BLUE if self.planet_density_dropdown_active else self.GRAY, self.planet_density_dropdown_rect, 1)
                 dropdown_text = "Select Density"
                 if self.planet_density_dropdown_selected:
-                    dropdown_text = self.planet_density_dropdown_selected
+                    selected = next(((name, value) for name, value in self.planet_density_dropdown_options if name == self.planet_density_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.2f} g/cm³)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.planet_density_dropdown_rect.left + 5, self.planet_density_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
@@ -3366,14 +3545,38 @@ class SolarSystemVisualizer:
                 spectral_label_rect = spectral_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 225))
                 self.screen.blit(spectral_label, spectral_label_rect)
                 pygame.draw.rect(self.screen, self.WHITE, self.spectral_dropdown_rect, 2)
-                pygame.draw.rect(self.screen, self.BLUE if self.spectral_dropdown_active else self.GRAY, 
-                               self.spectral_dropdown_rect, 1)
+                pygame.draw.rect(self.screen, self.BLUE if self.spectral_dropdown_active else self.GRAY, self.spectral_dropdown_rect, 1)
                 dropdown_text = "Select Spectral Type"
                 if self.spectral_dropdown_selected:
-                    dropdown_text = self.spectral_dropdown_selected
+                    selected = next(((name, value, color) for name, value, color in self.spectral_dropdown_options if name == self.spectral_dropdown_selected), None)
+                    if selected:
+                        name, value, _ = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.0f} K)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
-                text_rect = text_surface.get_rect(midleft=(self.spectral_dropdown_rect.left + 5, 
-                                                         self.spectral_dropdown_rect.centery))
+                text_rect = text_surface.get_rect(midleft=(self.spectral_dropdown_rect.left + 5, self.spectral_dropdown_rect.centery))
+                self.screen.blit(text_surface, text_rect)
+
+                # Draw star age dropdown
+                age_label = self.subtitle_font.render("Age (Gyr)", True, self.BLACK)
+                age_label_rect = age_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 165))
+                self.screen.blit(age_label, age_label_rect)
+                pygame.draw.rect(self.screen, self.WHITE, self.star_age_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.star_age_dropdown_active else self.GRAY, 
+                               self.star_age_dropdown_rect, 1)
+                dropdown_text = "Select Age"
+                if self.star_age_dropdown_selected:
+                    selected = next(((name, value) for name, value in self.star_age_dropdown_options if name == self.star_age_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.2f} Gyr)"
+                        else:
+                            dropdown_text = name
+                text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
+                text_rect = text_surface.get_rect(midleft=(self.star_age_dropdown_rect.left + 5, self.star_age_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
 
                 # Draw temperature dropdown
@@ -3381,17 +3584,18 @@ class SolarSystemVisualizer:
                 temperature_label_rect = temperature_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 285))
                 self.screen.blit(temperature_label, temperature_label_rect)
                 pygame.draw.rect(self.screen, self.WHITE, self.temperature_dropdown_rect, 2)
-                pygame.draw.rect(self.screen, self.BLUE if self.temperature_dropdown_active else self.GRAY, 
-                               self.temperature_dropdown_rect, 1)
+                pygame.draw.rect(self.screen, self.BLUE if self.temperature_dropdown_active else self.GRAY, self.temperature_dropdown_rect, 1)
                 dropdown_text = "Select Temperature"
                 if self.temperature_dropdown_selected:
-                    dropdown_text = self.temperature_dropdown_selected
-                elif self.selected_body and self.selected_body.get('type') == 'star':
-                    temp = self.selected_body.get('temperature', 5778)
-                    dropdown_text = f"{temp:.0f} K"
+                    selected = next(((name, value) for name, value in self.temperature_dropdown_options if name == self.temperature_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.0f} K)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
-                text_rect = text_surface.get_rect(midleft=(self.temperature_dropdown_rect.left + 5, 
-                                                         self.temperature_dropdown_rect.centery))
+                text_rect = text_surface.get_rect(midleft=(self.temperature_dropdown_rect.left + 5, self.temperature_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
 
                 # Draw luminosity input for stars
@@ -3403,10 +3607,15 @@ class SolarSystemVisualizer:
                                self.luminosity_dropdown_rect, 1)
                 dropdown_text = "Select Star Luminosity"
                 if self.luminosity_dropdown_selected:
-                    dropdown_text = self.luminosity_dropdown_selected
+                    selected = next(((name, value) for name, value in self.luminosity_dropdown_options if name == self.luminosity_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.4f} L☉)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
-                text_rect = text_surface.get_rect(midleft=(self.luminosity_dropdown_rect.left + 5, 
-                                                         self.luminosity_dropdown_rect.centery))
+                text_rect = text_surface.get_rect(midleft=(self.luminosity_dropdown_rect.left + 5, self.luminosity_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
 
                 # Draw radius dropdown
@@ -3418,13 +3627,15 @@ class SolarSystemVisualizer:
                                self.radius_dropdown_rect, 1)
                 dropdown_text = "Select Radius"
                 if self.radius_dropdown_selected:
-                    dropdown_text = self.radius_dropdown_selected
-                elif self.selected_body and self.selected_body.get('type') == 'star':
-                    radius = self.selected_body.get('radius', 1.0)
-                    dropdown_text = f"{radius:.1f} R☉"
+                    selected = next(((name, value) for name, value in self.radius_dropdown_options if name == self.radius_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.2f} R☉)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
-                text_rect = text_surface.get_rect(midleft=(self.radius_dropdown_rect.left + 5, 
-                                                         self.radius_dropdown_rect.centery))
+                text_rect = text_surface.get_rect(midleft=(self.radius_dropdown_rect.left + 5, self.radius_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
 
                 # Draw activity level dropdown
@@ -3436,13 +3647,15 @@ class SolarSystemVisualizer:
                                self.activity_dropdown_rect, 1)
                 dropdown_text = "Select Activity Level"
                 if self.activity_dropdown_selected:
-                    dropdown_text = self.activity_dropdown_selected
-                elif self.selected_body and self.selected_body.get('type') == 'star':
-                    activity = self.selected_body.get('activity_level', 0.5)
-                    dropdown_text = f"{activity:.2f}"
+                    selected = next(((name, value) for name, value in self.activity_dropdown_options if name == self.activity_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.2f})"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
-                text_rect = text_surface.get_rect(midleft=(self.activity_dropdown_rect.left + 5, 
-                                                         self.activity_dropdown_rect.centery))
+                text_rect = text_surface.get_rect(midleft=(self.activity_dropdown_rect.left + 5, self.activity_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
 
                 # Draw metallicity dropdown
@@ -3454,13 +3667,15 @@ class SolarSystemVisualizer:
                                self.metallicity_dropdown_rect, 1)
                 dropdown_text = "Select Metallicity"
                 if self.metallicity_dropdown_selected:
-                    dropdown_text = self.metallicity_dropdown_selected
-                elif self.selected_body and self.selected_body.get('type') == 'star':
-                    metallicity = self.selected_body.get('metallicity', 0.0)
-                    dropdown_text = f"{metallicity:+.1f} [Fe/H]"
+                    selected = next(((name, value) for name, value in self.metallicity_dropdown_options if name == self.metallicity_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:+.2f} [Fe/H])"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
-                text_rect = text_surface.get_rect(midleft=(self.metallicity_dropdown_rect.left + 5, 
-                                                         self.metallicity_dropdown_rect.centery))
+                text_rect = text_surface.get_rect(midleft=(self.metallicity_dropdown_rect.left + 5, self.metallicity_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
 
                 # Draw spacetime grid
@@ -3758,7 +3973,13 @@ class SolarSystemVisualizer:
                                self.moon_orbital_distance_dropdown_rect, 1)
                 dropdown_text = "Select Orbital Distance"
                 if self.moon_orbital_distance_dropdown_selected:
-                    dropdown_text = self.moon_orbital_distance_dropdown_selected
+                    selected = next(((name, value) for name, value in self.moon_orbital_distance_dropdown_options if name == self.moon_orbital_distance_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.0f} km)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.moon_orbital_distance_dropdown_rect.left + 5, 
                                                          self.moon_orbital_distance_dropdown_rect.centery))
@@ -3788,7 +4009,13 @@ class SolarSystemVisualizer:
                                self.moon_orbital_period_dropdown_rect, 1)
                 dropdown_text = "Select Orbital Period"
                 if self.moon_orbital_period_dropdown_selected:
-                    dropdown_text = self.moon_orbital_period_dropdown_selected
+                    selected = next(((name, value) for name, value in self.moon_orbital_period_dropdown_options if name == self.moon_orbital_period_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.1f} days)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.moon_orbital_period_dropdown_rect.left + 5, 
                                                          self.moon_orbital_period_dropdown_rect.centery))
@@ -3818,7 +4045,13 @@ class SolarSystemVisualizer:
                                self.moon_temperature_dropdown_rect, 1)
                 dropdown_text = "Select Temperature"
                 if self.moon_temperature_dropdown_selected:
-                    dropdown_text = self.moon_temperature_dropdown_selected
+                    selected = next(((name, value) for name, value in self.moon_temperature_dropdown_options if name == self.moon_temperature_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.0f} K)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.moon_temperature_dropdown_rect.left + 5, 
                                                          self.moon_temperature_dropdown_rect.centery))
@@ -3848,7 +4081,13 @@ class SolarSystemVisualizer:
                                self.moon_gravity_dropdown_rect, 1)
                 dropdown_text = "Select Gravity"
                 if self.moon_gravity_dropdown_selected:
-                    dropdown_text = self.moon_gravity_dropdown_selected
+                    selected = next(((name, value) for name, value in self.moon_gravity_dropdown_options if name == self.moon_gravity_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.2f} m/s²)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.moon_gravity_dropdown_rect.left + 5, 
                                                          self.moon_gravity_dropdown_rect.centery))
@@ -3892,7 +4131,13 @@ class SolarSystemVisualizer:
                                self.planet_radius_dropdown_rect, 1)
                 dropdown_text = "Select Reference Planet"
                 if self.planet_radius_dropdown_selected:
-                    dropdown_text = self.planet_radius_dropdown_selected
+                    selected = next(((name, value) for name, value in self.planet_radius_dropdown_options if name == self.planet_radius_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.2f} R🜨)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.planet_radius_dropdown_rect.left + 5, 
                                                          self.planet_radius_dropdown_rect.centery))
@@ -3910,7 +4155,13 @@ class SolarSystemVisualizer:
                                self.planet_temperature_dropdown_rect, 1)
                 dropdown_text = "Select Reference Planet"
                 if self.planet_temperature_dropdown_selected:
-                    dropdown_text = self.planet_temperature_dropdown_selected
+                    selected = next(((name, value) for name, value in self.planet_temperature_dropdown_options if name == self.planet_temperature_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.0f} K)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.planet_temperature_dropdown_rect.left + 5, 
                                                          self.planet_temperature_dropdown_rect.centery))
@@ -3920,14 +4171,18 @@ class SolarSystemVisualizer:
                 gravity_label = self.subtitle_font.render("Surface Gravity (m/s²)", True, self.BLACK)
                 gravity_label_rect = gravity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 345))
                 self.screen.blit(gravity_label, gravity_label_rect)
-                
-                # Update the existing dropdown rect position to match the new UI layout
                 self.planet_gravity_dropdown_rect.y = 360
                 pygame.draw.rect(self.screen, self.WHITE, self.planet_gravity_dropdown_rect, 2)
                 pygame.draw.rect(self.screen, self.BLUE if self.planet_gravity_dropdown_active else self.GRAY, self.planet_gravity_dropdown_rect, 1)
                 dropdown_text = "Select Reference Planet"
                 if self.planet_gravity_dropdown_selected:
-                    dropdown_text = self.planet_gravity_dropdown_selected
+                    selected = next(((name, value) for name, value in self.planet_gravity_dropdown_options if name == self.planet_gravity_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.2f} m/s²)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.planet_gravity_dropdown_rect.left + 5, self.planet_gravity_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
@@ -3952,7 +4207,13 @@ class SolarSystemVisualizer:
                 pygame.draw.rect(self.screen, self.BLUE if self.planet_orbital_distance_dropdown_active else self.GRAY, self.planet_orbital_distance_dropdown_rect, 1)
                 dropdown_text = "Select Orbital Distance"
                 if self.planet_orbital_distance_dropdown_selected:
-                    dropdown_text = self.planet_orbital_distance_dropdown_selected
+                    selected = next(((name, value) for name, value in self.planet_orbital_distance_dropdown_options if name == self.planet_orbital_distance_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.2f} AU)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.planet_orbital_distance_dropdown_rect.left + 5, self.planet_orbital_distance_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
@@ -3975,7 +4236,13 @@ class SolarSystemVisualizer:
                 pygame.draw.rect(self.screen, self.BLUE if self.planet_orbital_eccentricity_dropdown_active else self.GRAY, self.planet_orbital_eccentricity_dropdown_rect, 1)
                 dropdown_text = "Select Orbital Eccentricity"
                 if self.planet_orbital_eccentricity_dropdown_selected:
-                    dropdown_text = self.planet_orbital_eccentricity_dropdown_selected
+                    selected = next(((name, value) for name, value in self.planet_orbital_eccentricity_dropdown_options if name == self.planet_orbital_eccentricity_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.3f})"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.planet_orbital_eccentricity_dropdown_rect.left + 5, self.planet_orbital_eccentricity_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
@@ -3998,7 +4265,13 @@ class SolarSystemVisualizer:
                 pygame.draw.rect(self.screen, self.BLUE if self.planet_orbital_period_dropdown_active else self.GRAY, self.planet_orbital_period_dropdown_rect, 1)
                 dropdown_text = "Select Orbital Period"
                 if self.planet_orbital_period_dropdown_selected:
-                    dropdown_text = self.planet_orbital_period_dropdown_selected
+                    selected = next(((name, value) for name, value in self.planet_orbital_period_dropdown_options if name == self.planet_orbital_period_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} (" + self._format_value(value, 'days', allow_scientific=False) + ")"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.planet_orbital_period_dropdown_rect.left + 5, self.planet_orbital_period_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
@@ -4021,7 +4294,13 @@ class SolarSystemVisualizer:
                 pygame.draw.rect(self.screen, self.BLUE if self.planet_stellar_flux_dropdown_active else self.GRAY, self.planet_stellar_flux_dropdown_rect, 1)
                 dropdown_text = "Select Stellar Flux"
                 if self.planet_stellar_flux_dropdown_selected:
-                    dropdown_text = self.planet_stellar_flux_dropdown_selected
+                    selected = next(((name, value) for name, value in self.planet_stellar_flux_dropdown_options if name == self.planet_stellar_flux_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.3f} EFU)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.planet_stellar_flux_dropdown_rect.left + 5, self.planet_stellar_flux_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
@@ -4044,7 +4323,13 @@ class SolarSystemVisualizer:
                 pygame.draw.rect(self.screen, self.BLUE if self.planet_density_dropdown_active else self.GRAY, self.planet_density_dropdown_rect, 1)
                 dropdown_text = "Select Density"
                 if self.planet_density_dropdown_selected:
-                    dropdown_text = self.planet_density_dropdown_selected
+                    selected = next(((name, value) for name, value in self.planet_density_dropdown_options if name == self.planet_density_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.2f} g/cm³)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.planet_density_dropdown_rect.left + 5, self.planet_density_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
@@ -4065,14 +4350,38 @@ class SolarSystemVisualizer:
                 spectral_label_rect = spectral_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 225))
                 self.screen.blit(spectral_label, spectral_label_rect)
                 pygame.draw.rect(self.screen, self.WHITE, self.spectral_dropdown_rect, 2)
-                pygame.draw.rect(self.screen, self.BLUE if self.spectral_dropdown_active else self.GRAY, 
-                               self.spectral_dropdown_rect, 1)
+                pygame.draw.rect(self.screen, self.BLUE if self.spectral_dropdown_active else self.GRAY, self.spectral_dropdown_rect, 1)
                 dropdown_text = "Select Spectral Type"
                 if self.spectral_dropdown_selected:
-                    dropdown_text = self.spectral_dropdown_selected
+                    selected = next(((name, value, color) for name, value, color in self.spectral_dropdown_options if name == self.spectral_dropdown_selected), None)
+                    if selected:
+                        name, value, _ = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.0f} K)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
-                text_rect = text_surface.get_rect(midleft=(self.spectral_dropdown_rect.left + 5, 
-                                                         self.spectral_dropdown_rect.centery))
+                text_rect = text_surface.get_rect(midleft=(self.spectral_dropdown_rect.left + 5, self.spectral_dropdown_rect.centery))
+                self.screen.blit(text_surface, text_rect)
+
+                # Draw star age dropdown
+                age_label = self.subtitle_font.render("Age (Gyr)", True, self.BLACK)
+                age_label_rect = age_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 165))
+                self.screen.blit(age_label, age_label_rect)
+                pygame.draw.rect(self.screen, self.WHITE, self.star_age_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.star_age_dropdown_active else self.GRAY, 
+                               self.star_age_dropdown_rect, 1)
+                dropdown_text = "Select Age"
+                if self.star_age_dropdown_selected:
+                    selected = next(((name, value) for name, value in self.star_age_dropdown_options if name == self.star_age_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.2f} Gyr)"
+                        else:
+                            dropdown_text = name
+                text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
+                text_rect = text_surface.get_rect(midleft=(self.star_age_dropdown_rect.left + 5, self.star_age_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
 
                 # Draw temperature dropdown
@@ -4080,17 +4389,18 @@ class SolarSystemVisualizer:
                 temperature_label_rect = temperature_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 285))
                 self.screen.blit(temperature_label, temperature_label_rect)
                 pygame.draw.rect(self.screen, self.WHITE, self.temperature_dropdown_rect, 2)
-                pygame.draw.rect(self.screen, self.BLUE if self.temperature_dropdown_active else self.GRAY, 
-                               self.temperature_dropdown_rect, 1)
+                pygame.draw.rect(self.screen, self.BLUE if self.temperature_dropdown_active else self.GRAY, self.temperature_dropdown_rect, 1)
                 dropdown_text = "Select Temperature"
                 if self.temperature_dropdown_selected:
-                    dropdown_text = self.temperature_dropdown_selected
-                elif self.selected_body and self.selected_body.get('type') == 'star':
-                    temp = self.selected_body.get('temperature', 5778)
-                    dropdown_text = f"{temp:.0f} K"
+                    selected = next(((name, value) for name, value in self.temperature_dropdown_options if name == self.temperature_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.0f} K)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
-                text_rect = text_surface.get_rect(midleft=(self.temperature_dropdown_rect.left + 5, 
-                                                         self.temperature_dropdown_rect.centery))
+                text_rect = text_surface.get_rect(midleft=(self.temperature_dropdown_rect.left + 5, self.temperature_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
 
                 # Draw luminosity input for stars
@@ -4102,10 +4412,15 @@ class SolarSystemVisualizer:
                                self.luminosity_dropdown_rect, 1)
                 dropdown_text = "Select Star Luminosity"
                 if self.luminosity_dropdown_selected:
-                    dropdown_text = self.luminosity_dropdown_selected
+                    selected = next(((name, value) for name, value in self.luminosity_dropdown_options if name == self.luminosity_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.4f} L☉)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
-                text_rect = text_surface.get_rect(midleft=(self.luminosity_dropdown_rect.left + 5, 
-                                                         self.luminosity_dropdown_rect.centery))
+                text_rect = text_surface.get_rect(midleft=(self.luminosity_dropdown_rect.left + 5, self.luminosity_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
 
                 # Draw radius dropdown
@@ -4117,13 +4432,15 @@ class SolarSystemVisualizer:
                                self.radius_dropdown_rect, 1)
                 dropdown_text = "Select Radius"
                 if self.radius_dropdown_selected:
-                    dropdown_text = self.radius_dropdown_selected
-                elif self.selected_body and self.selected_body.get('type') == 'star':
-                    radius = self.selected_body.get('radius', 1.0)
-                    dropdown_text = f"{radius:.1f} R☉"
+                    selected = next(((name, value) for name, value in self.radius_dropdown_options if name == self.radius_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.2f} R☉)"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
-                text_rect = text_surface.get_rect(midleft=(self.radius_dropdown_rect.left + 5, 
-                                                         self.radius_dropdown_rect.centery))
+                text_rect = text_surface.get_rect(midleft=(self.radius_dropdown_rect.left + 5, self.radius_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
 
                 # Draw activity level dropdown
@@ -4135,13 +4452,15 @@ class SolarSystemVisualizer:
                                self.activity_dropdown_rect, 1)
                 dropdown_text = "Select Activity Level"
                 if self.activity_dropdown_selected:
-                    dropdown_text = self.activity_dropdown_selected
-                elif self.selected_body and self.selected_body.get('type') == 'star':
-                    activity = self.selected_body.get('activity_level', 0.5)
-                    dropdown_text = f"{activity:.2f}"
+                    selected = next(((name, value) for name, value in self.activity_dropdown_options if name == self.activity_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:.2f})"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
-                text_rect = text_surface.get_rect(midleft=(self.activity_dropdown_rect.left + 5, 
-                                                         self.activity_dropdown_rect.centery))
+                text_rect = text_surface.get_rect(midleft=(self.activity_dropdown_rect.left + 5, self.activity_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
 
                 # Draw metallicity dropdown
@@ -4153,13 +4472,15 @@ class SolarSystemVisualizer:
                                self.metallicity_dropdown_rect, 1)
                 dropdown_text = "Select Metallicity"
                 if self.metallicity_dropdown_selected:
-                    dropdown_text = self.metallicity_dropdown_selected
-                elif self.selected_body and self.selected_body.get('type') == 'star':
-                    metallicity = self.selected_body.get('metallicity', 0.0)
-                    dropdown_text = f"{metallicity:+.1f} [Fe/H]"
+                    selected = next(((name, value) for name, value in self.metallicity_dropdown_options if name == self.metallicity_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} ({value:+.2f} [Fe/H])"
+                        else:
+                            dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
-                text_rect = text_surface.get_rect(midleft=(self.metallicity_dropdown_rect.left + 5, 
-                                                         self.metallicity_dropdown_rect.centery))
+                text_rect = text_surface.get_rect(midleft=(self.metallicity_dropdown_rect.left + 5, self.metallicity_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
 
                 # Draw spacetime grid
@@ -4234,3 +4555,38 @@ class SolarSystemVisualizer:
             self.render_simulation(engine)
         
         pygame.display.flip() 
+
+    def _format_value(self, value, unit, allow_scientific=True):
+        if value is None:
+            return "Custom"
+        # For orbital period in days, never use scientific notation
+        if unit == 'days':
+            if abs(value) < 1:
+                return f"{value:.4f} {unit}"
+            elif abs(value) < 10:
+                return f"{value:.3f} {unit}"
+            elif abs(value) < 100:
+                return f"{value:.2f} {unit}"
+            else:
+                return f"{value:.0f} {unit}"
+        # Default adaptive formatting
+        if allow_scientific and (abs(value) < 0.01 or abs(value) > 9999):
+            return f"{value:.2e} {unit}"
+        elif abs(value) < 1:
+            return f"{value:.4f} {unit}"
+        elif abs(value) < 10:
+            return f"{value:.3f} {unit}"
+        elif abs(value) < 100:
+            return f"{value:.2f} {unit}"
+        else:
+            return f"{value:.1f} {unit}"
+
+    # --- In all dropdown rendering code blocks (moons, planets, stars) ---
+    # Replace formatting like f"{name} ({value:.3f} M🌕)" with:
+    # f"{name} (" + self._format_value(value, 'M🌕') + ")"
+    # And similarly for all other units (Earth masses, R🜨, km, AU, L☉, etc.)
+    # For example:
+    # dropdown_text = f"{name} (" + self._format_value(value, 'M🌕') + ")"
+    # or
+    # dropdown_text = f"{name} (" + self._format_value(value, 'Earth masses') + ")"
+    # etc.
