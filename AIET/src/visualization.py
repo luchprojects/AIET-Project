@@ -206,7 +206,7 @@ class SolarSystemVisualizer:
             ("K-type (Orange)", 4400, (255, 165, 0)),
             ("M-type (Red)", 3000, (255, 0, 0))
         ]
-        self.spectral_dropdown_selected = "G-type (Yellow, Sun)"
+        self.spectral_dropdown_selected = "G-type (Yellow, Sun) (5,778 K)"
         self.spectral_dropdown_visible = False
 
         # Star mass dropdown properties
@@ -236,12 +236,12 @@ class SolarSystemVisualizer:
             ("0.1 Gyr", 0.1),
             ("0.5 Gyr", 0.5),
             ("1.0 Gyr", 1.0),
-            ("Sun", 4.6),
+            ("Sun (4.6 Gyr)", 4.6),
             ("7.0 Gyr", 7.0),
             ("10.0 Gyr", 10.0),
             ("Custom Age", None)
         ]
-        self.star_age_dropdown_selected = None
+        self.star_age_dropdown_selected = "Sun (4.6 Gyr)"  # Default to Sun
         self.star_age_dropdown_visible = False
         self.show_custom_star_age_input = False
     
@@ -455,6 +455,34 @@ class SolarSystemVisualizer:
                             self.spectral_dropdown_active = True
                             self.spectral_dropdown_visible = True
                             self.create_spectral_dropdown_surface()
+                        # Handle spectral dropdown selection
+                        elif self.spectral_dropdown_visible:
+                            # First check if click is within the spectral dropdown area
+                            dropdown_area = pygame.Rect(
+                                self.spectral_dropdown_rect.left,
+                                self.spectral_dropdown_rect.top,
+                                self.spectral_dropdown_rect.width,
+                                self.spectral_dropdown_rect.height + len(self.spectral_dropdown_options) * self.dropdown_option_height
+                            )
+                            
+                            if dropdown_area.collidepoint(event.pos):
+                                # Convert click position to be relative to the dropdown surface
+                                relative_y = event.pos[1] - self.spectral_dropdown_rect.bottom
+                                option_index = relative_y // self.dropdown_option_height
+                                
+                                if 0 <= option_index < len(self.spectral_dropdown_options):
+                                    spectral_type, temp, color = self.spectral_dropdown_options[option_index]
+                                    if self.selected_body:
+                                        self.selected_body["star_temperature"] = temp
+                                        self.selected_body["star_color"] = color
+                                    # Store the full text including temperature
+                                    self.spectral_dropdown_selected = f"{spectral_type} ({temp:,} K)"
+                                    self.spectral_dropdown_visible = False
+                                    self.spectral_dropdown_active = False
+                            else:
+                                # Click outside the spectral dropdown area
+                                self.spectral_dropdown_visible = False
+                                self.spectral_dropdown_active = False
                         # Handle star mass dropdown (only for stars)
                         elif (self.selected_body and self.selected_body.get('type') == 'star' and 
                               self.star_mass_dropdown_rect.collidepoint(event.pos)):
@@ -636,8 +664,8 @@ class SolarSystemVisualizer:
                             # Set dropdown selections to match defaults
                             if self.active_tab == "star":
                                 self.star_mass_dropdown_selected = "Sun"
-                                self.star_age_dropdown_selected = "Sun"
-                                self.spectral_dropdown_selected = "G-type (Yellow, Sun)"
+                                self.star_age_dropdown_selected = "Sun (4.6 Gyr)"
+                                self.spectral_dropdown_selected = "G-type (Yellow, Sun) (5,778 K)"
                                 self.luminosity_dropdown_selected = "Sun"
                             elif self.active_tab == "planet":
                                 self.planet_dropdown_selected = "Earth"
@@ -1115,7 +1143,9 @@ class SolarSystemVisualizer:
             self.spectral_dropdown_options_rects.append(option_rect)
             pygame.draw.rect(self.spectral_dropdown_surface, self.dropdown_background_color, option_rect)
             pygame.draw.rect(self.spectral_dropdown_surface, self.dropdown_border_color, option_rect, self.dropdown_border_width)
-            text_surface = self.subtitle_font.render(spectral_type, True, self.dropdown_text_color)
+            # Display spectral type with temperature in dropdown
+            dropdown_text = f"{spectral_type} ({temp:,} K)"
+            text_surface = self.subtitle_font.render(dropdown_text, True, self.dropdown_text_color)
             text_rect = text_surface.get_rect(midleft=(self.dropdown_padding, option_rect.centery))
             self.spectral_dropdown_surface.blit(text_surface, text_rect)
         self.spectral_dropdown_rect_floating = pygame.Rect(
@@ -1297,8 +1327,8 @@ class SolarSystemVisualizer:
                     text_rect = text_surface.get_rect(midleft=(self.age_input_rect.left + 5, 
                                                              self.age_input_rect.centery))
                     self.screen.blit(text_surface, text_rect)
-            else:
-                # For non-planets, show the age input box
+            elif self.selected_body.get('type') == 'moon':
+                # For moons, show the age input box
                 pygame.draw.rect(self.screen, self.WHITE, self.age_input_rect, 2)
                 pygame.draw.rect(self.screen, self.BLUE if self.age_input_active else self.GRAY, self.age_input_rect, 1)
                 if self.age_input_active:
@@ -1354,6 +1384,7 @@ class SolarSystemVisualizer:
                 self.screen.blit(spectral_label, spectral_label_rect)
                 pygame.draw.rect(self.screen, self.WHITE, self.spectral_dropdown_rect, 2)
                 pygame.draw.rect(self.screen, self.BLUE if self.spectral_dropdown_active else self.GRAY, self.spectral_dropdown_rect, 1)
+                # Display the selected spectral type directly
                 spectral_text = self.subtitle_font.render(self.spectral_dropdown_selected, True, self.BLACK)
                 spectral_text_rect = spectral_text.get_rect(midleft=(self.spectral_dropdown_rect.left + 5, self.spectral_dropdown_rect.centery))
                 self.screen.blit(spectral_text, spectral_text_rect)
@@ -1448,6 +1479,7 @@ class SolarSystemVisualizer:
         
         # Render dropdown menu last, so it appears on top of everything
         self.render_dropdown()
+        self.render_spectral_dropdown()
         
         pygame.display.flip()
     
@@ -1611,8 +1643,8 @@ class SolarSystemVisualizer:
                     text_rect = text_surface.get_rect(midleft=(self.age_input_rect.left + 5, 
                                                              self.age_input_rect.centery))
                     self.screen.blit(text_surface, text_rect)
-            else:
-                # For non-planets, show the age input box
+            elif self.selected_body.get('type') == 'moon':
+                # For moons, show the age input box
                 pygame.draw.rect(self.screen, self.WHITE, self.age_input_rect, 2)
                 pygame.draw.rect(self.screen, self.BLUE if self.age_input_active else self.GRAY, self.age_input_rect, 1)
                 if self.age_input_active:
@@ -1681,6 +1713,7 @@ class SolarSystemVisualizer:
         
         # Render dropdown menu last, so it appears on top of everything
         self.render_dropdown()
+        self.render_spectral_dropdown()
         
         pygame.display.flip()
 
