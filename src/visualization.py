@@ -118,10 +118,9 @@ class SolarSystemVisualizer:
         self.planet_age_dropdown_active = False
         self.planet_age_dropdown_options = [
             ("0.1 Gyr", 0.1),
-            ("1.0 Gyr (1 billion years)", 1.0),
-            ("4.6 Gyr (Earth’s age)", 4.6),
-            ("6 Gyr", 6.0),
-            ("10.0 Gyr", 10.0),
+            ("1.0 Gyr", 1.0),
+            ("4.6 Gyr (Earth's age)", 4.6),
+            ("6.0 Gyr", 6.0),
             ("Custom", None)
         ]
         self.planet_age_dropdown_selected = "4.6 Gyr (Earth’s age)"
@@ -191,15 +190,15 @@ class SolarSystemVisualizer:
                                             self.customization_panel_width - 100, 30)
         self.moon_dropdown_active = False
         self.moon_dropdown_options = [
-            ("Deimos", 0.000003),
-            ("Phobos", 0.0000001),
-            ("Europa", 0.0073),
-            ("Enceladus", 0.0001),
-            ("Titan", 0.0135),
-            ("Ganymede", 0.0148),
-            ("Callisto", 0.0107),
-            ("Moon", 0.0123),
-            ("Custom", None)
+            ("Deimos", 1.48e15, "kg"),  # Small moon - use kg
+            ("Phobos", 1.07e16, "kg"),  # Small moon - use kg
+            ("Europa", 0.0073, "M☾"),   # Major moon - use M☾
+            ("Enceladus", 0.0001, "M☾"), # Major moon - use M☾
+            ("Titan", 0.0135, "M☾"),    # Major moon - use M☾
+            ("Ganymede", 0.0148, "M☾"), # Major moon - use M☾
+            ("Callisto", 0.0107, "M☾"), # Major moon - use M☾
+            ("Moon", 1.0, "M☾"),        # Earth's Moon - use M☾
+            ("Custom", None, None)
         ]
         self.moon_dropdown_selected = "Moon"
         self.moon_dropdown_visible = False
@@ -210,17 +209,10 @@ class SolarSystemVisualizer:
                                                 self.customization_panel_width - 100, 30)
         self.moon_age_dropdown_active = False
         self.moon_age_dropdown_options = [
-            ("Deimos", 1.0),
-            ("Phobos", 1.0),
-            ("Europa", 4.6),
-            ("Enceladus", 4.6),
-            ("Titan", 10.0),
-            ("Ganymede", 10.0),
-            ("Callisto", 10.0),
-            ("Moon", 4.5),
+            ("Solar System Moons (~4.6 Gyr)", 4.6),
             ("Custom", None)
         ]
-        self.moon_age_dropdown_selected = "Moon"
+        self.moon_age_dropdown_selected = "Solar System Moons (~4.6 Gyr)"
         self.moon_age_dropdown_visible = False
         self.show_custom_moon_age_input = False
         
@@ -316,6 +308,7 @@ class SolarSystemVisualizer:
         self.moon_gravity_dropdown_selected = "Moon"
         self.moon_gravity_dropdown_visible = False
         self.show_custom_moon_gravity_input = False
+        self.moon_gravity_input_text = ""
         
         # Close button for customization panel
         self.close_button_size = 20
@@ -331,20 +324,20 @@ class SolarSystemVisualizer:
         self.age_max = 10.0  # 10 Gyr
         
         # Luminosity input properties
-        self.luminosity_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 360,
+        self.luminosity_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 300,
                                                   self.customization_panel_width - 100, 30)
         self.luminosity_dropdown_active = False
         self.luminosity_dropdown_options = [
             ("Red Dwarf", 0.04),
             ("Orange Dwarf", 0.15),
-            ("White Dwarf (Sun)", 1.00),
+            ("G-type Main Sequence (Sun)", 1.00),
             ("Bright F-type Star", 2.00),
             ("Blue A-type Star", 25.00),
             ("B-type Giant", 10000.00),
             ("O-type Supergiant", 100000.00),
             ("Custom", None)
         ]
-        self.luminosity_dropdown_selected = "White Dwarf (Sun)"  # Default to Sun
+        self.luminosity_dropdown_selected = "G-type Main Sequence (Sun)"  # Default to Sun
         self.luminosity_dropdown_visible = False
         self.show_custom_luminosity_input = False
         self.luminosity_input_active = False
@@ -415,7 +408,6 @@ class SolarSystemVisualizer:
             ("1.0 Gyr", 1.0),
             ("Sun (4.6 Gyr)", 4.6),
             ("7.0 Gyr", 7.0),
-            ("10.0 Gyr", 10.0),
             ("Custom", None)
         ]
         self.star_age_dropdown_selected = "Sun (4.6 Gyr)"  # Default to Sun
@@ -423,7 +415,7 @@ class SolarSystemVisualizer:
         self.show_custom_star_age_input = False
     
         # Star radius dropdown properties
-        self.radius_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 420,
+        self.radius_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 360,
                                               self.customization_panel_width - 100, 30)
         self.radius_dropdown_active = False
         self.radius_dropdown_options = [
@@ -445,7 +437,7 @@ class SolarSystemVisualizer:
         self.radius_max = 100.0  # Maximum radius (R☉)
     
         # Star activity level dropdown properties
-        self.activity_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 480,
+        self.activity_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 420,
                                                 self.customization_panel_width - 100, 30)
         self.activity_dropdown_active = False
         self.activity_dropdown_options = [
@@ -464,7 +456,7 @@ class SolarSystemVisualizer:
         self.activity_max = 1.0  # Maximum activity level
 
         # Star metallicity dropdown properties
-        self.metallicity_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 540,
+        self.metallicity_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 480,
                                                    self.customization_panel_width - 100, 30)
         self.metallicity_dropdown_active = False
         self.metallicity_dropdown_options = [
@@ -643,7 +635,7 @@ class SolarSystemVisualizer:
                                     if planet_name == "Custom":
                                         self.show_custom_mass_input = True
                                         self.mass_input_active = True
-                                        self.mass_input_text = f"{self.selected_body.get('mass', 1.0):.3f}"
+                                        self.mass_input_text = self._format_value(self.selected_body.get('mass', 1.0), '', for_dropdown=False)
                                     else:
                                         self.selected_body["mass"] = mass
                                         self.show_custom_mass_input = False
@@ -690,7 +682,7 @@ class SolarSystemVisualizer:
                                     if age_name == "Custom":
                                         self.show_custom_age_input = True
                                         self.age_input_active = True
-                                        self.age_input_text = f"{self.selected_body.get('age', 0.0):.1f}"
+                                        self.age_input_text = self._format_value(self.selected_body.get('age', 0.0), '', for_dropdown=False)
                                     else:
                                         self.selected_body["age"] = age
                                         self.show_custom_age_input = False
@@ -1167,7 +1159,12 @@ class SolarSystemVisualizer:
                         elif (self.selected_body and self.selected_body.get('type') == 'moon' and 
                               self.moon_dropdown_visible):
                             dropdown_y = self.moon_dropdown_rect.bottom
-                            for i, (moon_name, mass) in enumerate(self.moon_dropdown_options):
+                            for i, option_data in enumerate(self.moon_dropdown_options):
+                                if len(option_data) == 3:
+                                    moon_name, mass, unit = option_data
+                                else:
+                                    moon_name, mass = option_data
+                                    unit = None
                                 option_rect = pygame.Rect(
                                     self.moon_dropdown_rect.left,
                                     dropdown_y + i * 30,
@@ -1178,10 +1175,20 @@ class SolarSystemVisualizer:
                                     if moon_name == "Custom":
                                         self.show_custom_moon_mass_input = True
                                         self.mass_input_active = True
-                                        self.mass_input_text = f"{self.selected_body.get('mass', 1.0):.3f}"
+                                        self.mass_input_text = self._format_value(self.selected_body.get('mass', 1.0), '', for_dropdown=False)
                                     else:
-                                        self.selected_body["mass"] = mass
+                                        # Convert kg to lunar masses if needed (1 M☾ = 7.35e22 kg)
+                                        if unit == "kg":
+                                            self.selected_body["mass"] = mass / 7.35e22  # Convert kg to M☾
+                                        else:
+                                            self.selected_body["mass"] = mass
                                         self.show_custom_moon_mass_input = False
+                                        # Update the text input to show the actual value, preserving scientific notation
+                                        if mass is not None:
+                                            if abs(mass) < 0.001 or abs(mass) >= 1000:
+                                                self.mass_input_text = f"{mass:.2e}"
+                                            else:
+                                                self.mass_input_text = f"{mass:.6f}".rstrip('0').rstrip('.')
                                     self.moon_dropdown_selected = moon_name
                                     self.moon_dropdown_visible = False
                                     if self.selected_body["type"] != "star":
@@ -1215,7 +1222,7 @@ class SolarSystemVisualizer:
                                     if age_name == "Custom":
                                         self.show_custom_moon_age_input = True
                                         self.age_input_active = True
-                                        self.age_input_text = f"{self.selected_body.get('age', 0.0):.1f}"
+                                        self.age_input_text = self._format_value(self.selected_body.get('age', 0.0), '', for_dropdown=False)
                                     else:
                                         self.selected_body["age"] = age
                                         self.show_custom_moon_age_input = False
@@ -1288,6 +1295,12 @@ class SolarSystemVisualizer:
                                         # Scale the orbital distance for visual display
                                         self.selected_body["orbit_radius"] = max(50, min(200, distance / 1000))  # Scale down and clamp
                                         self.show_custom_moon_orbital_distance_input = False
+                                        # Update the text input to show the actual value, preserving scientific notation
+                                        if distance is not None:
+                                            if abs(distance) < 0.001 or abs(distance) >= 1000:
+                                                self.orbital_distance_input_text = f"{distance:.2e}"
+                                            else:
+                                                self.orbital_distance_input_text = f"{distance:.2f}"
                                     self.moon_orbital_distance_dropdown_selected = distance_name
                                     self.moon_orbital_distance_dropdown_visible = False
                                     self.moon_orbital_distance_dropdown_active = False
@@ -1387,6 +1400,12 @@ class SolarSystemVisualizer:
                                     else:
                                         self.selected_body["surfaceGravity"] = gravity
                                         self.show_custom_moon_gravity_input = False
+                                        # Update the text input to show the actual value, preserving scientific notation
+                                        if gravity is not None:
+                                            if abs(gravity) < 0.001 or abs(gravity) >= 1000:
+                                                self.moon_gravity_input_text = f"{gravity:.2e}"
+                                            else:
+                                                self.moon_gravity_input_text = f"{gravity:.3f}".rstrip('0').rstrip('.')
                                     self.moon_gravity_dropdown_selected = gravity_name
                                     self.moon_gravity_dropdown_visible = False
                                     self.moon_gravity_dropdown_active = False
@@ -1425,7 +1444,7 @@ class SolarSystemVisualizer:
                                     if luminosity_name == "Custom":
                                         self.show_custom_luminosity_input = True
                                         self.luminosity_input_active = True
-                                        self.luminosity_input_text = f"{self.selected_body.get('luminosity', 1.0):.3f}"
+                                        self.luminosity_input_text = self._format_value(self.selected_body.get('luminosity', 1.0), '', for_dropdown=False)
                                     else:
                                         self.selected_body["luminosity"] = luminosity
                                         self.show_custom_luminosity_input = False
@@ -1479,7 +1498,7 @@ class SolarSystemVisualizer:
                                     if age_name == "Custom":
                                         self.show_custom_star_age_input = True
                                         self.age_input_active = True
-                                        self.age_input_text = f"{self.selected_body.get('age', 0.0):.1f}"
+                                        self.age_input_text = self._format_value(self.selected_body.get('age', 0.0), '', for_dropdown=False)
                                     else:
                                         self.selected_body["age"] = age
                                         self.show_custom_star_age_input = False
@@ -1514,7 +1533,7 @@ class SolarSystemVisualizer:
                                     if mass_name == "Custom":
                                         self.show_custom_star_mass_input = True
                                         self.mass_input_active = True
-                                        self.mass_input_text = f"{self.selected_body.get('mass', 1.0):.3f}"
+                                        self.mass_input_text = self._format_value(self.selected_body.get('mass', 1.0), '', for_dropdown=False)
                                     else:
                                         self.selected_body["mass"] = mass * 1000.0  # Convert to Earth masses
                                         self.show_custom_star_mass_input = False
@@ -1560,7 +1579,7 @@ class SolarSystemVisualizer:
                                     else:  # Custom option
                                         self.show_custom_temperature_input = True
                                         self.temperature_input_active = True
-                                        self.temperature_input_text = f"{self.selected_body.get('temperature', 5800):.0f}"
+                                        self.temperature_input_text = self._format_value(self.selected_body.get('temperature', 5800), '', for_dropdown=False)
                                     self.spectral_class_dropdown_visible = False
                                     self.spectral_class_dropdown_active = False
                             else:
@@ -1620,9 +1639,18 @@ class SolarSystemVisualizer:
                                         self.planet_dropdown_visible = False
                                         self.planet_dropdown_active = False
                                     elif self.moon_dropdown_visible:
-                                        name, value = self.moon_dropdown_options[i]
+                                        option_data = self.moon_dropdown_options[i]
+                                        if len(option_data) == 3:
+                                            name, value, unit = option_data
+                                        else:
+                                            name, value = option_data
+                                            unit = None
                                         if value is not None:
-                                            self.selected_body["mass"] = value
+                                            # Convert kg to lunar masses if needed (1 M☾ = 7.35e22 kg)
+                                            if unit == "kg":
+                                                self.selected_body["mass"] = value / 7.35e22  # Convert kg to M☾
+                                            else:
+                                                self.selected_body["mass"] = value
                                         else:
                                             self.show_custom_moon_mass_input = True
                                             self.moon_mass_input_active = True
@@ -1884,7 +1912,7 @@ class SolarSystemVisualizer:
                             else:  # moon
                                 # Luna-like defaults
                                 default_mass = 1.0  # Earth's Moon mass (1 lunar mass)
-                                default_age = 4.5  # Gyr
+                                default_age = 4.6  # Gyr
                                 default_name = "Moon"
                                 default_radius = 10  # Visual radius for display
                             
@@ -1943,7 +1971,7 @@ class SolarSystemVisualizer:
                                 self.star_mass_dropdown_selected = "1.0 M☉ (Sun)"
                                 self.star_age_dropdown_selected = "Sun (4.6 Gyr)"
                                 self.spectral_dropdown_selected = "G-type (Yellow, Sun) (5,778 K)"
-                                self.luminosity_dropdown_selected = "White Dwarf (Sun)"
+                                self.luminosity_dropdown_selected = "G-type Main Sequence (Sun)"
                                 self.temperature_dropdown_selected = "G-type (Sun) (5,800 K)"
                                 self.radius_dropdown_selected = "G-type (Sun)"
                                 self.activity_dropdown_selected = "Moderate (Sun)"
@@ -2010,12 +2038,20 @@ class SolarSystemVisualizer:
                 if self.mass_input_active and self.selected_body:
                     if event.key == pygame.K_RETURN:
                         # Try to convert input to float and validate
-                        try:
-                            new_mass = float(self.mass_input_text)
+                        new_mass = self._parse_input_value(self.mass_input_text)
+                        if new_mass is not None:
                             if self.selected_body.get('type') == 'moon':
-                                # For moons, mass is already in Lunar masses
-                                if self.mass_min <= new_mass <= self.mass_max:
-                                    self.selected_body["mass"] = new_mass
+                                # For moons, check if input is in kg or M☾
+                                input_text = self.mass_input_text.strip().lower()
+                                if 'kg' in input_text:
+                                    # Convert kg to lunar masses (1 M☾ = 7.35e22 kg)
+                                    lunar_mass = new_mass / 7.35e22
+                                else:
+                                    # Assume M☾ if no unit specified
+                                    lunar_mass = new_mass
+                                
+                                if self.mass_min <= lunar_mass <= self.mass_max:
+                                    self.selected_body["mass"] = lunar_mass
                                     self.generate_orbit_grid(self.selected_body)
                             else:
                                 if self.mass_min <= new_mass <= self.mass_max:
@@ -2023,14 +2059,14 @@ class SolarSystemVisualizer:
                                     if self.selected_body["type"] != "star":
                                         self.generate_orbit_grid(self.selected_body)
                                 self.mass_input_active = False
-                        except ValueError:
+                        else:
                             # Invalid input, keep current value
                             if self.selected_body.get('type') == 'moon':
                                 # For moons, mass is already in Lunar masses
                                 lunar_mass = self.selected_body.get('mass', 1.0)
-                                self.mass_input_text = f"{lunar_mass:.3f}"
+                                self.mass_input_text = self._format_value(lunar_mass, '', for_dropdown=False)
                             else:
-                                self.mass_input_text = f"{self.selected_body.get('mass', 1.0):.3f}"
+                                self.mass_input_text = self._format_value(self.selected_body.get('mass', 1.0), '', for_dropdown=False)
                     elif event.key == pygame.K_BACKSPACE:
                         self.mass_input_text = self.mass_input_text[:-1]
                     elif event.key == pygame.K_ESCAPE:
@@ -2038,38 +2074,44 @@ class SolarSystemVisualizer:
                         if self.selected_body.get('type') == 'moon':
                             # For moons, mass is already in Lunar masses
                             lunar_mass = self.selected_body.get('mass', 1.0)
-                            self.mass_input_text = f"{lunar_mass:.3f}"
+                            self.mass_input_text = self._format_value(lunar_mass, '', for_dropdown=False)
                         else:
-                            self.mass_input_text = f"{self.selected_body.get('mass', 1.0):.3f}"
-                    elif event.unicode.isnumeric() or event.unicode == '.':
-                        # Only allow numbers and a single decimal point, not as the first character
-                        if event.unicode == '.':
-                            if '.' in self.mass_input_text or len(self.mass_input_text) == 0:
-                                pass  # Don't allow multiple decimals or starting with a decimal
-                            else:
-                                self.mass_input_text += event.unicode
+                            self.mass_input_text = self._format_value(self.selected_body.get('mass', 1.0), '', for_dropdown=False)
+                    elif event.unicode.isnumeric() or event.unicode == '.' or event.unicode.lower() == 'e' or event.unicode == '-' or event.unicode == '+' or event.unicode.lower() in ['k', 'g', 'm', '☾']:
+                        # Allow numbers, decimal point, scientific notation (e, E), signs, and unit characters
+                        if self.selected_body.get('type') == 'moon':
+                            # For moons, allow scientific notation and unit characters for very small masses
+                            self.mass_input_text += event.unicode
                         else:
-                            # Prevent leading zeros unless followed by a decimal
-                            if self.mass_input_text == "0" and event.unicode != '.':
-                                pass
+                            # For other bodies, only allow numbers and decimal point
+                            if event.unicode == '.':
+                                if '.' in self.mass_input_text or len(self.mass_input_text) == 0:
+                                    pass  # Don't allow multiple decimals or starting with a decimal
+                                else:
+                                    self.mass_input_text += event.unicode
+                            elif event.unicode.lower() == 'e' or event.unicode == '-' or event.unicode == '+':
+                                pass  # Don't allow scientific notation for non-moons
                             else:
-                                self.mass_input_text += event.unicode
+                                # Prevent leading zeros unless followed by a decimal
+                                if self.mass_input_text == "0" and event.unicode != '.':
+                                    pass
+                                else:
+                                    self.mass_input_text += event.unicode
                 if self.luminosity_input_active and self.selected_body and self.selected_body.get('type') == 'star':
                     if event.key == pygame.K_RETURN:
                         # Try to convert input to float and validate
-                        try:
-                            new_luminosity = float(self.luminosity_input_text)
-                            if self.luminosity_min <= new_luminosity <= self.luminosity_max:
-                                self.selected_body["luminosity"] = new_luminosity
-                            selfFluminosity_input_active = False
-                        except ValueError:
+                        new_luminosity = self._parse_input_value(self.luminosity_input_text)
+                        if new_luminosity is not None and self.luminosity_min <= new_luminosity <= self.luminosity_max:
+                            self.selected_body["luminosity"] = new_luminosity
+                            self.luminosity_input_active = False
+                        else:
                             # Invalid input, keep current value
-                            self.luminosity_input_text = f"{self.selected_body.get('luminosity', 1.0):.3f}"
+                            self.luminosity_input_text = self._format_value(self.selected_body.get('luminosity', 1.0), '', for_dropdown=False)
                     elif event.key == pygame.K_BACKSPACE:
                         self.luminosity_input_text = self.luminosity_input_text[:-1]
                     elif event.key == pygame.K_ESCAPE:
                         self.luminosity_input_active = False
-                        self.luminosity_input_text = f"{self.selected_body.get('luminosity', 1.0):.3f}"
+                        self.luminosity_input_text = self._format_value(self.selected_body.get('luminosity', 1.0), '', for_dropdown=False)
                     elif event.unicode.isnumeric() or event.unicode == '.':
                         # Only allow numbers and a single decimal point
                         if event.unicode == '.':
@@ -2085,46 +2127,37 @@ class SolarSystemVisualizer:
                                 self.luminosity_input_text += event.unicode
                 if self.temperature_input_active and self.selected_body and self.selected_body.get('type') == 'star':
                     if event.key == pygame.K_RETURN:
-                        try:
-                            temp = float(self.temperature_input_text)
-                            if self.temperature_min <= temp <= self.temperature_max:
-                                if self.selected_body:
-                                    self.selected_body["temperature"] = temp
-                                self.temperature_dropdown_selected = f"Custom ({temp:.0f} K)"
+                        temp = self._parse_input_value(self.temperature_input_text)
+                        if temp is not None and self.temperature_min <= temp <= self.temperature_max:
+                            if self.selected_body:
+                                self.selected_body["temperature"] = temp
+                            self.temperature_dropdown_selected = f"Custom ({temp:.0f} K)"
                             self.temperature_input_text = ""
                             self.temperature_input_active = False
                             self.show_custom_temperature_input = False
-                        except ValueError:
-                            pass
                     elif event.key == pygame.K_BACKSPACE:
                         self.temperature_input_text = self.temperature_input_text[:-1]
                     elif event.unicode.isnumeric() or event.unicode == '.':
                         self.temperature_input_text += event.unicode
                 if self.metallicity_input_active and self.selected_body and self.selected_body.get('type') == 'star':
                     if event.key == pygame.K_RETURN:
-                        try:
-                            metallicity = float(self.metallicity_input_text)
-                            if self.metallicity_min <= metallicity <= self.metallicity_max:
-                                self.selected_body["metallicity"] = metallicity
+                        metallicity = self._parse_input_value(self.metallicity_input_text)
+                        if metallicity is not None and self.metallicity_min <= metallicity <= self.metallicity_max:
+                            self.selected_body["metallicity"] = metallicity
                             self.metallicity_input_text = ""
                             self.metallicity_input_active = False
                             self.show_custom_metallicity_input = False
-                        except ValueError:
-                            pass
                     elif event.key == pygame.K_BACKSPACE:
                         self.metallicity_input_text = self.metallicity_input_text[:-1]
                     elif event.unicode.isnumeric() or event.unicode == '.':
                         self.metallicity_input_text += event.unicode
                 if self.show_custom_planet_gravity_input and self.selected_body and self.selected_body.get('type') == 'planet':
                     if event.key == pygame.K_RETURN:
-                        try:
-                            gravity = float(self.planet_gravity_input_text)
-                            if 0.1 <= gravity <= 100.0:  # Reasonable gravity range
-                                self.selected_body["gravity"] = gravity
+                        gravity = self._parse_input_value(self.planet_gravity_input_text)
+                        if gravity is not None and 0.1 <= gravity <= 100.0:  # Reasonable gravity range
+                            self.selected_body["gravity"] = gravity
                             self.planet_gravity_input_text = ""
                             self.show_custom_planet_gravity_input = False
-                        except ValueError:
-                            pass
                     elif event.key == pygame.K_BACKSPACE:
                         self.planet_gravity_input_text = self.planet_gravity_input_text[:-1]
                     elif event.key == pygame.K_ESCAPE:
@@ -2132,18 +2165,46 @@ class SolarSystemVisualizer:
                         self.planet_gravity_input_text = ""
                     elif event.unicode.isnumeric() or event.unicode == '.':
                         self.planet_gravity_input_text += event.unicode
+                if self.show_custom_moon_gravity_input and self.selected_body and self.selected_body.get('type') == 'moon':
+                    if event.key == pygame.K_RETURN:
+                        gravity = self._parse_input_value(self.moon_gravity_input_text)
+                        if gravity is not None and 0.001 <= gravity <= 100.0:  # Reasonable gravity range for moons
+                            self.selected_body["surfaceGravity"] = gravity
+                            self.moon_gravity_input_text = ""
+                            self.show_custom_moon_gravity_input = False
+                    elif event.key == pygame.K_BACKSPACE:
+                        self.moon_gravity_input_text = self.moon_gravity_input_text[:-1]
+                    elif event.key == pygame.K_ESCAPE:
+                        self.show_custom_moon_gravity_input = False
+                        self.moon_gravity_input_text = ""
+                    elif event.unicode.isnumeric() or event.unicode == '.' or event.unicode.lower() == 'e' or event.unicode == '-' or event.unicode == '+':
+                        # Allow numbers, decimal point, scientific notation (e, E), and signs
+                        self.moon_gravity_input_text += event.unicode
+                if self.show_custom_moon_orbital_distance_input and self.selected_body and self.selected_body.get('type') == 'moon':
+                    if event.key == pygame.K_RETURN:
+                        distance = self._parse_input_value(self.orbital_distance_input_text)
+                        if distance is not None and 1000 <= distance <= 10000000:  # Reasonable orbital distance range for moons (km)
+                            # Scale the orbital distance for visual display
+                            self.selected_body["orbit_radius"] = max(50, min(200, distance / 1000))
+                            self.orbital_distance_input_text = ""
+                            self.show_custom_moon_orbital_distance_input = False
+                    elif event.key == pygame.K_BACKSPACE:
+                        self.orbital_distance_input_text = self.orbital_distance_input_text[:-1]
+                    elif event.key == pygame.K_ESCAPE:
+                        self.show_custom_moon_orbital_distance_input = False
+                        self.orbital_distance_input_text = ""
+                    elif event.unicode.isnumeric() or event.unicode == '.' or event.unicode.lower() == 'e' or event.unicode == '-' or event.unicode == '+':
+                        # Allow numbers, decimal point, scientific notation (e, E), and signs
+                        self.orbital_distance_input_text += event.unicode
                 if self.show_custom_orbital_distance_input and self.selected_body and self.selected_body.get('type') == 'planet':
                     if event.key == pygame.K_RETURN:
-                        try:
-                            dist = float(self.orbital_distance_input_text)
-                            if self.orbital_distance_min <= dist <= self.orbital_distance_max:
-                                self.selected_body["semiMajorAxis"] = dist
-                                self.planet_orbital_distance_dropdown_selected = f"Custom ({dist:.2f} AU)"
+                        dist = self._parse_input_value(self.orbital_distance_input_text)
+                        if dist is not None and self.orbital_distance_min <= dist <= self.orbital_distance_max:
+                            self.selected_body["semiMajorAxis"] = dist
+                            self.planet_orbital_distance_dropdown_selected = f"Custom ({dist:.2f} AU)"
                             self.orbital_distance_input_text = ""
                             self.orbital_distance_input_active = False
                             self.show_custom_orbital_distance_input = False
-                        except ValueError:
-                            pass
                     elif event.key == pygame.K_BACKSPACE:
                         self.orbital_distance_input_text = self.orbital_distance_input_text[:-1]
                     elif event.key == pygame.K_ESCAPE:
@@ -2533,10 +2594,15 @@ class SolarSystemVisualizer:
         self.dropdown_options_rects = []
         for i, option_data in enumerate(options):
             # Handle different option formats
-            if len(option_data) == 3:  # spectral_class_dropdown_options: (name, temp, color)
-                name, value, color = option_data
+            if len(option_data) == 3:  # moon_dropdown_options: (name, value, unit) or spectral_class_dropdown_options: (name, temp, color)
+                name, value, third_param = option_data
+                if self.moon_dropdown_visible:
+                    unit = third_param
+                else:
+                    color = third_param
             else:  # other dropdowns: (name, value)
                 name, value = option_data
+                unit = None
                 
             option_rect = pygame.Rect(
                 0,  # x position relative to dropdown surface
@@ -2555,13 +2621,21 @@ class SolarSystemVisualizer:
                 if self.planet_dropdown_visible:
                     text = f"{name} (" + self._format_value(value, 'M⊕') + ")"
                 elif self.moon_dropdown_visible:
-                    text = f"{name} (" + self._format_value(value, 'M🌕') + ")"
+                    if unit == "kg":
+                        # For small moons, format in scientific notation with kg
+                        text = f"{name} ({self._format_value(value, 'kg')})"
+                    else:
+                        # For major moons, use M☾
+                        text = f"{name} ({self._format_value(value, 'M☾')})"
                 elif self.star_mass_dropdown_visible:
                     text = name  # Mass options already include the unit
                 elif self.planet_age_dropdown_visible or self.star_age_dropdown_visible:
                     text = name  # Age options already include the unit
                 elif self.moon_age_dropdown_visible:
-                    text = f"{name} (" + self._format_value(value, 'Gyr') + ")"
+                    if "Gyr" not in name:
+                        text = f"{name} (" + self._format_value(value, 'Gyr') + ")"
+                    else:
+                        text = name
                 elif self.moon_radius_dropdown_visible:
                     text = f"{name} (" + self._format_value(value, 'km') + ")"
                 elif self.moon_orbital_distance_dropdown_visible:
@@ -2873,7 +2947,7 @@ class SolarSystemVisualizer:
                     if selected:
                         name, value = selected
                         if value is not None:
-                            dropdown_text = f"{name} ({value:.3f} Earth masses)"
+                            dropdown_text = f"{name} (" + self._format_value(value, 'M⊕') + ")"
                         else:
                             dropdown_text = name  # Custom
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -2888,11 +2962,18 @@ class SolarSystemVisualizer:
                 dropdown_text = "Select Reference Moon"
                 if self.moon_dropdown_selected:
                     # Find the selected option's value
-                    selected = next(((name, value) for name, value in self.moon_dropdown_options if name == self.moon_dropdown_selected), None)
+                    selected = next((option_data for option_data in self.moon_dropdown_options if option_data[0] == self.moon_dropdown_selected), None)
                     if selected:
-                        name, value = selected
+                        if len(selected) == 3:
+                            name, value, unit = selected
+                        else:
+                            name, value = selected
+                            unit = None
                         if value is not None:
-                            dropdown_text = f"{name} ({value:.3f} M☽)"
+                            if unit == "kg":
+                                dropdown_text = f"{name} ({self._format_value(value, 'kg')})"
+                            else:
+                                dropdown_text = f"{name} ({self._format_value(value, 'M☾')})"
                         else:
                             dropdown_text = name  # Custom
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -2932,12 +3013,12 @@ class SolarSystemVisualizer:
                         if self.mass_input_active:
                             text_surface = self.subtitle_font.render(self.mass_input_text, True, self.BLACK)
                         else:
-                            text_surface = self.subtitle_font.render(f"{lunar_mass:.3f}", True, self.BLACK)
+                            text_surface = self.subtitle_font.render(self._format_value(lunar_mass, '', for_dropdown=False), True, self.BLACK)
                     else:
                         if self.mass_input_active:
                             text_surface = self.subtitle_font.render(self.mass_input_text, True, self.BLACK)
                         else:
-                            text_surface = self.subtitle_font.render(f"{self.selected_body.get('mass', 1.0):.3f}", True, self.BLACK)
+                            text_surface = self.subtitle_font.render(self._format_value(self.selected_body.get('mass', 1.0), '', for_dropdown=False), True, self.BLACK)
                     text_rect = text_surface.get_rect(midleft=(self.mass_input_rect.left + 5, 
                                                              self.mass_input_rect.centery))
                     self.screen.blit(text_surface, text_rect)
@@ -2952,12 +3033,12 @@ class SolarSystemVisualizer:
                     if self.mass_input_active:
                         text_surface = self.subtitle_font.render(self.mass_input_text, True, self.BLACK)
                     else:
-                        text_surface = self.subtitle_font.render(f"{lunar_mass:.3f}", True, self.BLACK)
+                        text_surface = self.subtitle_font.render(self._format_value(lunar_mass, '', for_dropdown=False), True, self.BLACK)
                 else:
                     if self.mass_input_active:
                         text_surface = self.subtitle_font.render(self.mass_input_text, True, self.BLACK)
                     else:
-                        text_surface = self.subtitle_font.render(f"{self.selected_body.get('mass', 1.0):.3f}", True, self.BLACK)
+                        text_surface = self.subtitle_font.render(self._format_value(self.selected_body.get('mass', 1.0), '', for_dropdown=False), True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.mass_input_rect.left + 5, self.mass_input_rect.centery))
                 self.screen.blit(text_surface, text_rect)
             
@@ -2991,7 +3072,7 @@ class SolarSystemVisualizer:
                     if self.age_input_active:
                         text_surface = self.subtitle_font.render(self.age_input_text, True, self.BLACK)
                     else:
-                        text_surface = self.subtitle_font.render(f"{self.selected_body.get('age', 0.0):.1f}", True, self.BLACK)
+                        text_surface = self.subtitle_font.render(self._format_value(self.selected_body.get('age', 0.0), '', for_dropdown=False), True, self.BLACK)
                     text_rect = text_surface.get_rect(midleft=(self.age_input_rect.left + 5, 
                                                              self.age_input_rect.centery))
                     self.screen.blit(text_surface, text_rect)
@@ -3005,8 +3086,8 @@ class SolarSystemVisualizer:
                     selected = next(((name, value) for name, value in self.moon_age_dropdown_options if name == self.moon_age_dropdown_selected), None)
                     if selected:
                         name, value = selected
-                        if value is not None:
-                            dropdown_text = f"{name} ({value:.1f} Gyr)"
+                        if value is not None and "Gyr" not in name:
+                            dropdown_text = f"{name} (" + self._format_value(value, 'Gyr') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -3026,7 +3107,7 @@ class SolarSystemVisualizer:
                     if self.age_input_active:
                         text_surface = self.subtitle_font.render(self.age_input_text, True, self.BLACK)
                     else:
-                        text_surface = self.subtitle_font.render(f"{self.selected_body.get('age', 0.0):.1f}", True, self.BLACK)
+                        text_surface = self.subtitle_font.render(self._format_value(self.selected_body.get('age', 0.0), '', for_dropdown=False), True, self.BLACK)
                     text_rect = text_surface.get_rect(midleft=(self.age_input_rect.left + 5, 
                                                              self.age_input_rect.centery))
                     self.screen.blit(text_surface, text_rect)
@@ -3046,7 +3127,7 @@ class SolarSystemVisualizer:
                     if selected:
                         name, value = selected
                         if value is not None:
-                            dropdown_text = f"{name} ({value:.0f} km)"
+                            dropdown_text = f"{name} (" + self._format_value(value, 'km') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -3063,7 +3144,7 @@ class SolarSystemVisualizer:
                     custom_radius_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 315, self.customization_panel_width - 100, 30)
                     pygame.draw.rect(self.screen, self.WHITE, custom_radius_input_rect, 2)
                     pygame.draw.rect(self.screen, self.BLUE, custom_radius_input_rect, 1)
-                    text_surface = self.subtitle_font.render("", True, self.BLACK)  # Placeholder for input text
+                    text_surface = self.subtitle_font.render(self.moon_gravity_input_text, True, self.BLACK)
                     text_rect = text_surface.get_rect(midleft=(custom_radius_input_rect.left + 5, custom_radius_input_rect.centery))
                     self.screen.blit(text_surface, text_rect)
                 
@@ -3082,7 +3163,7 @@ class SolarSystemVisualizer:
                     if selected:
                         name, value = selected
                         if value is not None:
-                            dropdown_text = f"{name} ({value:.0f} km)"
+                            dropdown_text = f"{name} (" + self._format_value(value, 'km') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -3099,7 +3180,7 @@ class SolarSystemVisualizer:
                     custom_distance_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 375, self.customization_panel_width - 100, 30)
                     pygame.draw.rect(self.screen, self.WHITE, custom_distance_input_rect, 2)
                     pygame.draw.rect(self.screen, self.BLUE, custom_distance_input_rect, 1)
-                    text_surface = self.subtitle_font.render("", True, self.BLACK)  # Placeholder for input text
+                    text_surface = self.subtitle_font.render(self.moon_gravity_input_text, True, self.BLACK)
                     text_rect = text_surface.get_rect(midleft=(custom_distance_input_rect.left + 5, custom_distance_input_rect.centery))
                     self.screen.blit(text_surface, text_rect)
                 
@@ -3118,7 +3199,7 @@ class SolarSystemVisualizer:
                     if selected:
                         name, value = selected
                         if value is not None:
-                            dropdown_text = f"{name} ({value:.1f} days)"
+                            dropdown_text = f"{name} (" + self._format_value(value, 'days') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -3135,7 +3216,7 @@ class SolarSystemVisualizer:
                     custom_period_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 435, self.customization_panel_width - 100, 30)
                     pygame.draw.rect(self.screen, self.WHITE, custom_period_input_rect, 2)
                     pygame.draw.rect(self.screen, self.BLUE, custom_period_input_rect, 1)
-                    text_surface = self.subtitle_font.render("", True, self.BLACK)  # Placeholder for input text
+                    text_surface = self.subtitle_font.render(self.moon_gravity_input_text, True, self.BLACK)
                     text_rect = text_surface.get_rect(midleft=(custom_period_input_rect.left + 5, custom_period_input_rect.centery))
                     self.screen.blit(text_surface, text_rect)
                 
@@ -3154,7 +3235,7 @@ class SolarSystemVisualizer:
                     if selected:
                         name, value = selected
                         if value is not None:
-                            dropdown_text = f"{name} ({value:.0f} K)"
+                            dropdown_text = f"{name} (" + self._format_value(value, 'K') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -3171,7 +3252,7 @@ class SolarSystemVisualizer:
                     custom_temp_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 495, self.customization_panel_width - 100, 30)
                     pygame.draw.rect(self.screen, self.WHITE, custom_temp_input_rect, 2)
                     pygame.draw.rect(self.screen, self.BLUE, custom_temp_input_rect, 1)
-                    text_surface = self.subtitle_font.render("", True, self.BLACK)  # Placeholder for input text
+                    text_surface = self.subtitle_font.render(self.moon_gravity_input_text, True, self.BLACK)
                     text_rect = text_surface.get_rect(midleft=(custom_temp_input_rect.left + 5, custom_temp_input_rect.centery))
                     self.screen.blit(text_surface, text_rect)
                 
@@ -3190,7 +3271,7 @@ class SolarSystemVisualizer:
                     if selected:
                         name, value = selected
                         if value is not None:
-                            dropdown_text = f"{name} ({value:.2f} m/s²)"
+                            dropdown_text = f"{name} (" + self._format_value(value, 'm/s²') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -3207,7 +3288,7 @@ class SolarSystemVisualizer:
                     custom_gravity_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 555, self.customization_panel_width - 100, 30)
                     pygame.draw.rect(self.screen, self.WHITE, custom_gravity_input_rect, 2)
                     pygame.draw.rect(self.screen, self.BLUE, custom_gravity_input_rect, 1)
-                    text_surface = self.subtitle_font.render("", True, self.BLACK)  # Placeholder for input text
+                    text_surface = self.subtitle_font.render(self.moon_gravity_input_text, True, self.BLACK)
                     text_rect = text_surface.get_rect(midleft=(custom_gravity_input_rect.left + 5, custom_gravity_input_rect.centery))
                     self.screen.blit(text_surface, text_rect)
             else:
@@ -3230,7 +3311,7 @@ class SolarSystemVisualizer:
                     if selected:
                         name, value = selected
                         if value is not None:
-                            dropdown_text = f"{name} ({value:.2f} R🜨)"
+                            dropdown_text = f"{name} (" + self._format_value(value, 'R🜨') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -3254,7 +3335,7 @@ class SolarSystemVisualizer:
                     if selected:
                         name, value = selected
                         if value is not None:
-                            dropdown_text = f"{name} ({value:.0f} K)"
+                            dropdown_text = f"{name} (" + self._format_value(value, 'K') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -3275,7 +3356,7 @@ class SolarSystemVisualizer:
                     if selected:
                         name, value = selected
                         if value is not None:
-                            dropdown_text = f"{name} ({value:.2f} m/s²)"
+                            dropdown_text = f"{name} (" + self._format_value(value, 'm/s²') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -3306,7 +3387,7 @@ class SolarSystemVisualizer:
                     if selected:
                         name, value = selected
                         if value is not None:
-                            dropdown_text = f"{name} ({value:.2f} AU)"
+                            dropdown_text = f"{name} (" + self._format_value(value, 'AU') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -3335,7 +3416,7 @@ class SolarSystemVisualizer:
                     if selected:
                         name, value = selected
                         if value is not None:
-                            dropdown_text = f"{name} ({value:.3f})"
+                            dropdown_text = f"{name} (" + self._format_value(value, '') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -3393,7 +3474,7 @@ class SolarSystemVisualizer:
                     if selected:
                         name, value = selected
                         if value is not None:
-                            dropdown_text = f"{name} ({value:.3f} EFU)"
+                            dropdown_text = f"{name} (" + self._format_value(value, 'EFU') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -3422,7 +3503,7 @@ class SolarSystemVisualizer:
                     if selected:
                         name, value = selected
                         if value is not None:
-                            dropdown_text = f"{name} ({value:.2f} g/cm³)"
+                            dropdown_text = f"{name} (" + self._format_value(value, 'g/cm³') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -3501,7 +3582,7 @@ class SolarSystemVisualizer:
 
                 # Draw luminosity input for stars
                 luminosity_label = self.subtitle_font.render("Luminosity (L☉)", True, self.BLACK)
-                luminosity_label_rect = luminosity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 345))
+                luminosity_label_rect = luminosity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 285))
                 self.screen.blit(luminosity_label, luminosity_label_rect)
                 pygame.draw.rect(self.screen, self.WHITE, self.luminosity_dropdown_rect, 2)
                 pygame.draw.rect(self.screen, self.BLUE if self.luminosity_dropdown_active else self.GRAY, 
@@ -3511,10 +3592,8 @@ class SolarSystemVisualizer:
                     selected = next(((name, value) for name, value in self.luminosity_dropdown_options if name == self.luminosity_dropdown_selected), None)
                     if selected:
                         name, value = selected
-                        if value is not None and "(Sun)" in name:
-                            dropdown_text = f"Sun ({value:.4f} L☉)"
-                        elif value is not None:
-                            dropdown_text = f"{name} ({value:.4f} L☉)"
+                        if value is not None:
+                            dropdown_text = f"{name} (" + self._format_value(value, 'L☉') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -3523,7 +3602,7 @@ class SolarSystemVisualizer:
 
                 # Draw radius dropdown
                 radius_label = self.subtitle_font.render("Radius (R☉)", True, self.BLACK)
-                radius_label_rect = radius_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 405))
+                radius_label_rect = radius_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 345))
                 self.screen.blit(radius_label, radius_label_rect)
                 pygame.draw.rect(self.screen, self.WHITE, self.radius_dropdown_rect, 2)
                 pygame.draw.rect(self.screen, self.BLUE if self.radius_dropdown_active else self.GRAY, 
@@ -3536,7 +3615,7 @@ class SolarSystemVisualizer:
                         if value is not None and "(Sun)" in name:
                             dropdown_text = f"Sun ({value:.2f} R☉)"
                         elif value is not None:
-                            dropdown_text = f"{name} ({value:.2f} R☉)"
+                            dropdown_text = f"{name} (" + self._format_value(value, 'R☉') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -3545,7 +3624,7 @@ class SolarSystemVisualizer:
 
                 # Draw activity level dropdown
                 activity_label = self.subtitle_font.render("Activity Level", True, self.BLACK)
-                activity_label_rect = activity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 465))
+                activity_label_rect = activity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 405))
                 self.screen.blit(activity_label, activity_label_rect)
                 pygame.draw.rect(self.screen, self.WHITE, self.activity_dropdown_rect, 2)
                 pygame.draw.rect(self.screen, self.BLUE if self.activity_dropdown_active else self.GRAY, 
@@ -3558,7 +3637,7 @@ class SolarSystemVisualizer:
                         if value is not None and "(Sun)" in name:
                             dropdown_text = f"Sun ({value:.2f})"
                         elif value is not None:
-                            dropdown_text = f"{name} ({value:.2f})"
+                            dropdown_text = f"{name} (" + self._format_value(value, '') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -3567,7 +3646,7 @@ class SolarSystemVisualizer:
 
                 # Draw metallicity dropdown
                 metallicity_label = self.subtitle_font.render("Metallicity [Fe/H]", True, self.BLACK)
-                metallicity_label_rect = metallicity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 525))
+                metallicity_label_rect = metallicity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 465))
                 self.screen.blit(metallicity_label, metallicity_label_rect)
                 pygame.draw.rect(self.screen, self.WHITE, self.metallicity_dropdown_rect, 2)
                 pygame.draw.rect(self.screen, self.BLUE if self.metallicity_dropdown_active else self.GRAY, 
@@ -3580,7 +3659,7 @@ class SolarSystemVisualizer:
                         if value is not None and "(Sun)" in name:
                             dropdown_text = f"Sun ({value:+.2f} [Fe/H])"
                         elif value is not None:
-                            dropdown_text = f"{name} ({value:+.2f} [Fe/H])"
+                            dropdown_text = f"{name} (" + self._format_value(value, '[Fe/H]') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -3748,12 +3827,12 @@ class SolarSystemVisualizer:
                         if self.mass_input_active:
                             text_surface = self.subtitle_font.render(self.mass_input_text, True, self.BLACK)
                         else:
-                            text_surface = self.subtitle_font.render(f"{lunar_mass:.3f}", True, self.BLACK)
+                            text_surface = self.subtitle_font.render(self._format_value(lunar_mass, '', for_dropdown=False), True, self.BLACK)
                     else:
                         if self.mass_input_active:
                             text_surface = self.subtitle_font.render(self.mass_input_text, True, self.BLACK)
                         else:
-                            text_surface = self.subtitle_font.render(f"{self.selected_body.get('mass', 1.0):.3f}", True, self.BLACK)
+                            text_surface = self.subtitle_font.render(self._format_value(self.selected_body.get('mass', 1.0), '', for_dropdown=False), True, self.BLACK)
                     text_rect = text_surface.get_rect(midleft=(self.mass_input_rect.left + 5, 
                                                              self.mass_input_rect.centery))
                     self.screen.blit(text_surface, text_rect)
@@ -3768,12 +3847,12 @@ class SolarSystemVisualizer:
                     if self.mass_input_active:
                         text_surface = self.subtitle_font.render(self.mass_input_text, True, self.BLACK)
                     else:
-                        text_surface = self.subtitle_font.render(f"{lunar_mass:.3f}", True, self.BLACK)
+                        text_surface = self.subtitle_font.render(self._format_value(lunar_mass, '', for_dropdown=False), True, self.BLACK)
                 else:
                     if self.mass_input_active:
                         text_surface = self.subtitle_font.render(self.mass_input_text, True, self.BLACK)
                     else:
-                        text_surface = self.subtitle_font.render(f"{self.selected_body.get('mass', 1.0):.3f}", True, self.BLACK)
+                        text_surface = self.subtitle_font.render(self._format_value(self.selected_body.get('mass', 1.0), '', for_dropdown=False), True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.mass_input_rect.left + 5, self.mass_input_rect.centery))
                 self.screen.blit(text_surface, text_rect)
             
@@ -3807,7 +3886,7 @@ class SolarSystemVisualizer:
                     if self.age_input_active:
                         text_surface = self.subtitle_font.render(self.age_input_text, True, self.BLACK)
                     else:
-                        text_surface = self.subtitle_font.render(f"{self.selected_body.get('age', 0.0):.1f}", True, self.BLACK)
+                        text_surface = self.subtitle_font.render(self._format_value(self.selected_body.get('age', 0.0), '', for_dropdown=False), True, self.BLACK)
                     text_rect = text_surface.get_rect(midleft=(self.age_input_rect.left + 5, 
                                                              self.age_input_rect.centery))
                     self.screen.blit(text_surface, text_rect)
@@ -3836,7 +3915,7 @@ class SolarSystemVisualizer:
                     if self.age_input_active:
                         text_surface = self.subtitle_font.render(self.age_input_text, True, self.BLACK)
                     else:
-                        text_surface = self.subtitle_font.render(f"{self.selected_body.get('age', 0.0):.1f}", True, self.BLACK)
+                        text_surface = self.subtitle_font.render(self._format_value(self.selected_body.get('age', 0.0), '', for_dropdown=False), True, self.BLACK)
                     text_rect = text_surface.get_rect(midleft=(self.age_input_rect.left + 5, 
                                                              self.age_input_rect.centery))
                     self.screen.blit(text_surface, text_rect)
@@ -3867,7 +3946,7 @@ class SolarSystemVisualizer:
                     custom_radius_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 315, self.customization_panel_width - 100, 30)
                     pygame.draw.rect(self.screen, self.WHITE, custom_radius_input_rect, 2)
                     pygame.draw.rect(self.screen, self.BLUE, custom_radius_input_rect, 1)
-                    text_surface = self.subtitle_font.render("", True, self.BLACK)  # Placeholder for input text
+                    text_surface = self.subtitle_font.render(self.moon_gravity_input_text, True, self.BLACK)
                     text_rect = text_surface.get_rect(midleft=(custom_radius_input_rect.left + 5, custom_radius_input_rect.centery))
                     self.screen.blit(text_surface, text_rect)
                 
@@ -3886,7 +3965,7 @@ class SolarSystemVisualizer:
                     if selected:
                         name, value = selected
                         if value is not None:
-                            dropdown_text = f"{name} ({value:.0f} km)"
+                            dropdown_text = f"{name} (" + self._format_value(value, 'km') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -3903,7 +3982,7 @@ class SolarSystemVisualizer:
                     custom_distance_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 375, self.customization_panel_width - 100, 30)
                     pygame.draw.rect(self.screen, self.WHITE, custom_distance_input_rect, 2)
                     pygame.draw.rect(self.screen, self.BLUE, custom_distance_input_rect, 1)
-                    text_surface = self.subtitle_font.render("", True, self.BLACK)  # Placeholder for input text
+                    text_surface = self.subtitle_font.render(self.moon_gravity_input_text, True, self.BLACK)
                     text_rect = text_surface.get_rect(midleft=(custom_distance_input_rect.left + 5, custom_distance_input_rect.centery))
                     self.screen.blit(text_surface, text_rect)
                 
@@ -3922,7 +4001,7 @@ class SolarSystemVisualizer:
                     if selected:
                         name, value = selected
                         if value is not None:
-                            dropdown_text = f"{name} ({value:.1f} days)"
+                            dropdown_text = f"{name} (" + self._format_value(value, 'days') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -3939,7 +4018,7 @@ class SolarSystemVisualizer:
                     custom_period_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 435, self.customization_panel_width - 100, 30)
                     pygame.draw.rect(self.screen, self.WHITE, custom_period_input_rect, 2)
                     pygame.draw.rect(self.screen, self.BLUE, custom_period_input_rect, 1)
-                    text_surface = self.subtitle_font.render("", True, self.BLACK)  # Placeholder for input text
+                    text_surface = self.subtitle_font.render(self.moon_gravity_input_text, True, self.BLACK)
                     text_rect = text_surface.get_rect(midleft=(custom_period_input_rect.left + 5, custom_period_input_rect.centery))
                     self.screen.blit(text_surface, text_rect)
                 
@@ -3958,7 +4037,7 @@ class SolarSystemVisualizer:
                     if selected:
                         name, value = selected
                         if value is not None:
-                            dropdown_text = f"{name} ({value:.0f} K)"
+                            dropdown_text = f"{name} (" + self._format_value(value, 'K') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -3975,7 +4054,7 @@ class SolarSystemVisualizer:
                     custom_temp_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 495, self.customization_panel_width - 100, 30)
                     pygame.draw.rect(self.screen, self.WHITE, custom_temp_input_rect, 2)
                     pygame.draw.rect(self.screen, self.BLUE, custom_temp_input_rect, 1)
-                    text_surface = self.subtitle_font.render("", True, self.BLACK)  # Placeholder for input text
+                    text_surface = self.subtitle_font.render(self.moon_gravity_input_text, True, self.BLACK)
                     text_rect = text_surface.get_rect(midleft=(custom_temp_input_rect.left + 5, custom_temp_input_rect.centery))
                     self.screen.blit(text_surface, text_rect)
                 
@@ -3994,7 +4073,7 @@ class SolarSystemVisualizer:
                     if selected:
                         name, value = selected
                         if value is not None:
-                            dropdown_text = f"{name} ({value:.2f} m/s²)"
+                            dropdown_text = f"{name} (" + self._format_value(value, 'm/s²') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -4011,7 +4090,7 @@ class SolarSystemVisualizer:
                     custom_gravity_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 555, self.customization_panel_width - 100, 30)
                     pygame.draw.rect(self.screen, self.WHITE, custom_gravity_input_rect, 2)
                     pygame.draw.rect(self.screen, self.BLUE, custom_gravity_input_rect, 1)
-                    text_surface = self.subtitle_font.render("", True, self.BLACK)  # Placeholder for input text
+                    text_surface = self.subtitle_font.render(self.moon_gravity_input_text, True, self.BLACK)
                     text_rect = text_surface.get_rect(midleft=(custom_gravity_input_rect.left + 5, custom_gravity_input_rect.centery))
                     self.screen.blit(text_surface, text_rect)
             else:
@@ -4044,7 +4123,7 @@ class SolarSystemVisualizer:
                     if selected:
                         name, value = selected
                         if value is not None:
-                            dropdown_text = f"{name} ({value:.2f} R🜨)"
+                            dropdown_text = f"{name} (" + self._format_value(value, 'R🜨') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -4068,7 +4147,7 @@ class SolarSystemVisualizer:
                     if selected:
                         name, value = selected
                         if value is not None:
-                            dropdown_text = f"{name} ({value:.0f} K)"
+                            dropdown_text = f"{name} (" + self._format_value(value, 'K') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -4089,7 +4168,7 @@ class SolarSystemVisualizer:
                     if selected:
                         name, value = selected
                         if value is not None:
-                            dropdown_text = f"{name} ({value:.2f} m/s²)"
+                            dropdown_text = f"{name} (" + self._format_value(value, 'm/s²') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -4120,7 +4199,7 @@ class SolarSystemVisualizer:
                     if selected:
                         name, value = selected
                         if value is not None:
-                            dropdown_text = f"{name} ({value:.2f} AU)"
+                            dropdown_text = f"{name} (" + self._format_value(value, 'AU') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -4149,7 +4228,7 @@ class SolarSystemVisualizer:
                     if selected:
                         name, value = selected
                         if value is not None:
-                            dropdown_text = f"{name} ({value:.3f})"
+                            dropdown_text = f"{name} (" + self._format_value(value, '') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -4207,7 +4286,7 @@ class SolarSystemVisualizer:
                     if selected:
                         name, value = selected
                         if value is not None:
-                            dropdown_text = f"{name} ({value:.3f} EFU)"
+                            dropdown_text = f"{name} (" + self._format_value(value, 'EFU') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -4236,7 +4315,7 @@ class SolarSystemVisualizer:
                     if selected:
                         name, value = selected
                         if value is not None:
-                            dropdown_text = f"{name} ({value:.2f} g/cm³)"
+                            dropdown_text = f"{name} (" + self._format_value(value, 'g/cm³') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -4269,7 +4348,7 @@ class SolarSystemVisualizer:
                         if value is not None and "(Sun)" in name:
                             dropdown_text = f"Sun ({value:.0f} K)"
                         elif value is not None:
-                            dropdown_text = f"{name} ({value:.0f} K)"
+                            dropdown_text = f"{name} (" + self._format_value(value, 'K') + ")"
                         else:
                             dropdown_text = name
                     else:
@@ -4309,7 +4388,7 @@ class SolarSystemVisualizer:
                     if selected:
                         name, value = selected
                         if value is not None:
-                            dropdown_text = f"{name} ({value:.4f} L☉)"
+                            dropdown_text = f"{name} (" + self._format_value(value, 'L☉') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -4329,7 +4408,7 @@ class SolarSystemVisualizer:
                     if selected:
                         name, value = selected
                         if value is not None:
-                            dropdown_text = f"{name} ({value:.2f} R☉)"
+                            dropdown_text = f"{name} (" + self._format_value(value, 'R☉') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -4349,7 +4428,7 @@ class SolarSystemVisualizer:
                     if selected:
                         name, value = selected
                         if value is not None:
-                            dropdown_text = f"{name} ({value:.2f})"
+                            dropdown_text = f"{name} (" + self._format_value(value, '') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -4369,7 +4448,7 @@ class SolarSystemVisualizer:
                     if selected:
                         name, value = selected
                         if value is not None:
-                            dropdown_text = f"{name} ({value:+.2f} [Fe/H])"
+                            dropdown_text = f"{name} (" + self._format_value(value, '[Fe/H]') + ")"
                         else:
                             dropdown_text = name
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
@@ -4449,30 +4528,134 @@ class SolarSystemVisualizer:
         
         pygame.display.flip() 
 
-    def _format_value(self, value, unit, allow_scientific=True):
+    def _parse_input_value(self, input_text):
+        """Parse input text that can be in decimal or scientific notation, with optional units."""
+        if not input_text or input_text.strip() == "":
+            return None
+        
+        # Remove unit characters for parsing
+        text = input_text.strip().lower()
+        # Remove common unit suffixes
+        for unit in ['kg', 'm☾', 'm⊕', 'm☉', 'k', 'g', '☾', '⊕', '☉']:
+            if text.endswith(unit):
+                text = text[:-len(unit)].strip()
+                break
+        
+        try:
+            # Try to parse as float (handles both decimal and scientific notation)
+            value = float(text)
+            return value
+        except ValueError:
+            return None
+    
+    def _render_tooltip(self, rect, text, font, color=(128, 128, 128)):
+        """Render tooltip text in an input field."""
+        if not text:
+            return
+        tooltip_surface = font.render(text, True, color)
+        tooltip_rect = tooltip_surface.get_rect(midleft=(rect.left + 5, rect.centery))
+        self.screen.blit(tooltip_surface, tooltip_rect)
+    
+    def _format_value(self, value, unit, allow_scientific=True, for_dropdown=True):
         if value is None:
             return "Custom"
-        # For orbital period in days, never use scientific notation
-        if unit == 'days':
-            if abs(value) < 1:
-                return f"{value:.4f} {unit}"
-            elif abs(value) < 10:
-                return f"{value:.3f} {unit}"
-            elif abs(value) < 100:
-                return f"{value:.2f} {unit}"
-            else:
+        
+        # For dropdown menus, always show human-readable values
+        if for_dropdown:
+            # Special handling for specific units to show human-readable values
+            if unit == 'days':
+                if abs(value) < 1:
+                    return f"{value:.4f} {unit}"
+                elif abs(value) < 10:
+                    return f"{value:.3f} {unit}"
+                elif abs(value) < 100:
+                    return f"{value:.2f} {unit}"
+                else:
+                    return f"{value:.0f} {unit}"
+            elif unit == 'Gyr':
+                if abs(value) < 1:
+                    return f"{value:.1f} {unit}"
+                else:
+                    return f"{value:.1f} {unit}"
+            elif unit == 'M⊕' or unit == 'M🌕' or unit == 'M☉':
+                if abs(value) < 0.01:
+                    return f"{value:.4f} {unit}"
+                elif abs(value) < 1:
+                    return f"{value:.3f} {unit}"
+                elif abs(value) < 10:
+                    return f"{value:.2f} {unit}"
+                else:
+                    return f"{value:.1f} {unit}"
+            elif unit == 'kg':
+                # For kg units, use scientific notation for large values
+                if abs(value) >= 1e12:
+                    return f"{value:.2e} {unit}"
+                elif abs(value) >= 1e9:
+                    return f"{value/1e9:.1f}×10⁹ {unit}"
+                elif abs(value) >= 1e6:
+                    return f"{value/1e6:.1f}×10⁶ {unit}"
+                elif abs(value) >= 1e3:
+                    return f"{value/1e3:.1f}×10³ {unit}"
+                else:
+                    return f"{value:.0f} {unit}"
+            elif unit == 'R🜨' or unit == 'R☉':
+                if abs(value) < 1:
+                    return f"{value:.3f} {unit}"
+                else:
+                    return f"{value:.2f} {unit}"
+            elif unit == 'km':
+                if abs(value) < 1000:
+                    return f"{value:.0f} {unit}"
+                else:
+                    return f"{value:.0f} {unit}"
+            elif unit == 'AU':
+                if abs(value) < 1:
+                    return f"{value:.3f} {unit}"
+                else:
+                    return f"{value:.2f} {unit}"
+            elif unit == 'K':
                 return f"{value:.0f} {unit}"
-        # Default adaptive formatting
-        if allow_scientific and (abs(value) < 0.01 or abs(value) > 9999):
-            return f"{value:.2e} {unit}"
-        elif abs(value) < 1:
-            return f"{value:.4f} {unit}"
-        elif abs(value) < 10:
-            return f"{value:.3f} {unit}"
-        elif abs(value) < 100:
-            return f"{value:.2f} {unit}"
+            elif unit == 'm/s²':
+                if abs(value) < 1:
+                    return f"{value:.3f} {unit}"
+                else:
+                    return f"{value:.2f} {unit}"
+            elif unit == 'L☉':
+                if abs(value) < 1:
+                    return f"{value:.3f} {unit}"
+                else:
+                    return f"{value:.2f} {unit}"
+            elif unit == 'g/cm³':
+                return f"{value:.2f} {unit}"
+            elif unit == 'EFU':
+                if abs(value) < 1:
+                    return f"{value:.3f} {unit}"
+                else:
+                    return f"{value:.2f} {unit}"
+            elif unit == '[Fe/H]':
+                return f"{value:+.2f} {unit}"
+            else:
+                # Generic formatting for other units
+                if abs(value) < 1:
+                    return f"{value:.3f} {unit}"
+                elif abs(value) < 10:
+                    return f"{value:.2f} {unit}"
+                else:
+                    return f"{value:.1f} {unit}"
+        
+        # For custom input display, use scientific notation rule
         else:
-            return f"{value:.1f} {unit}"
+            # Scientific notation rule: < 0.001 or ≥ 10,000
+            if abs(value) < 0.001 or abs(value) >= 10000:
+                return f"{value:.2e}"
+            else:
+                # Decimal format with 2-3 significant digits
+                if abs(value) < 1:
+                    return f"{value:.3f}"
+                elif abs(value) < 10:
+                    return f"{value:.2f}"
+                else:
+                    return f"{value:.1f}"
 
     # --- In all dropdown rendering code blocks (moons, planets, stars) ---
     # Replace formatting like f"{name} ({value:.3f} M🌕)" with:
