@@ -4666,3 +4666,4 @@ class SolarSystemVisualizer:
     # or
     # dropdown_text = f"{name} (" + self._format_value(value, 'Earth masses') + ")"
     # etc.
+    #pre-refactor
