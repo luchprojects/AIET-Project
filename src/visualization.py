@@ -1,7 +1,15 @@
 import pygame
 import numpy as np
+import threading
 from typing import List, Tuple
 from simulation_engine import CelestialBody, SimulationEngine
+
+# Constants for AIET sandbox scaling (Earth–Sun system baseline)
+AU_TO_PX = 100        # 1 AU = 100 pixels (sets visual spacing)
+EARTH_RADIUS_PX = 10  # Earth's radius in sandbox pixels
+SUN_RADIUS_PX = 40    # Sun's radius
+MOON_ORBIT_PX = 30    # Moon's orbital distance in pixels (scaled up for visibility)
+TIME_SCALE = 0.001    # Orbital motion speed multiplier (lower = slower orbit)
 
 class SolarSystemVisualizer:
     def __init__(self, width: int = 1200, height: int = 800):
@@ -11,7 +19,7 @@ class SolarSystemVisualizer:
         self.screen = pygame.display.set_mode((width, height))
         pygame.display.set_caption("AIET - Solar System Simulator")
         self.clock = pygame.time.Clock()
-        self.scale = 100  # pixels per AU
+        self.scale = AU_TO_PX  # pixels per AU
         self.center = np.array([width/2, height/2])
         
         # Initialize fonts consistently using pygame.font.Font
@@ -22,10 +30,14 @@ class SolarSystemVisualizer:
         self.button_font = pygame.font.Font(None, 36)
         
         # Screen states
-        self.show_home_screen = True
-        self.show_simulation_builder = False
+        # Home screen removed - start directly in sandbox
+        self.show_home_screen = False
+        self.show_simulation_builder = True  # Start directly in sandbox
         self.show_simulation = False
         self.show_customization_panel = False
+        
+        # Log sandbox initialization
+        print("AIET sandbox initialized.")
         
         # Colors
         self.BLACK = (0, 0, 0)
@@ -64,13 +76,17 @@ class SolarSystemVisualizer:
         self.space_area = pygame.Rect(0, self.tab_height + 2*self.tab_margin, 
                                     self.width, self.height - (self.tab_height + 2*self.tab_margin))
         
+        # Preview state for placement
+        self.preview_position = None  # Mouse position for preview
+        self.preview_radius = None  # Preview radius based on object type
+        
         # Track placed celestial bodies
         self.placed_bodies = []
         self.body_counter = {"moon": 0, "planet": 0, "star": 0}
         
         # Physics parameters
         self.G = 0.5  # Gravitational constant (reduced for more stable orbits)
-        self.time_step = 0.05  # Simulation time step (reduced for smoother motion)
+        self.time_step = 0.05 * TIME_SCALE  # Simulation time step (reduced for smoother motion)
         self.orbit_points = {}  # Store orbit points for visualization
         self.orbit_history = {}  # Store orbit history for trail effect
         self.orbit_grid_points = {}  # Store grid points for orbit visualization
@@ -165,8 +181,25 @@ class SolarSystemVisualizer:
         self.planet_temperature_dropdown_visible = False
         self.show_custom_planet_temperature_input = False
         
+        # Planet atmospheric composition / greenhouse type dropdown properties
+        self.planet_atmosphere_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 360,
+                                                          self.customization_panel_width - 100, 30)
+        self.planet_atmosphere_dropdown_active = False
+        self.planet_atmosphere_dropdown_options = [
+            ("No Atmosphere", 0.0),
+            ("Thin CO₂ / N₂", 10.0),
+            ("Earth-like (N₂–O₂ + H₂O + CO₂)", 33.0),
+            ("Dense CO₂ (Runaway Greenhouse)", 500.0),
+            ("H₂-rich", 70.0),
+            ("Custom", None)
+        ]
+        self.planet_atmosphere_dropdown_selected = "Earth-like (N₂–O₂ + H₂O + CO₂)"  # Default to Earth-like
+        self.planet_atmosphere_dropdown_visible = False
+        self.show_custom_atmosphere_input = False
+        self.planet_atmosphere_input_text = ""
+        
         # Planet gravity dropdown properties
-        self.planet_gravity_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 540,
+        self.planet_gravity_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 420,
                                                       self.customization_panel_width - 100, 30)
         self.planet_gravity_dropdown_active = False
         self.planet_gravity_dropdown_options = [
@@ -474,7 +507,7 @@ class SolarSystemVisualizer:
         self.metallicity_max = 1.0  # Maximum metallicity [Fe/H]
         
         # Planet orbital distance (semi-major axis) dropdown properties
-        self.planet_orbital_distance_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 420, self.customization_panel_width - 100, 30)
+        self.planet_orbital_distance_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 480, self.customization_panel_width - 100, 30)
         self.planet_orbital_distance_dropdown_active = False
         self.planet_orbital_distance_dropdown_options = [
             ("Mercury", 0.39),
@@ -496,7 +529,7 @@ class SolarSystemVisualizer:
         self.orbital_distance_max = 1000.0
         
         # Planet orbital eccentricity dropdown properties
-        self.planet_orbital_eccentricity_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 480, self.customization_panel_width - 100, 30)
+        self.planet_orbital_eccentricity_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 540, self.customization_panel_width - 100, 30)
         self.planet_orbital_eccentricity_dropdown_active = False
         self.planet_orbital_eccentricity_dropdown_options = [
             ("Circular Orbit", 0.0),
@@ -515,7 +548,7 @@ class SolarSystemVisualizer:
         self.orbital_eccentricity_max = 1.0
         
         # Planet orbital period dropdown properties
-        self.planet_orbital_period_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 540, self.customization_panel_width - 100, 30)
+        self.planet_orbital_period_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 600, self.customization_panel_width - 100, 30)
         self.planet_orbital_period_dropdown_active = False
         self.planet_orbital_period_dropdown_options = [
             ("Mercury", 88),
@@ -537,7 +570,7 @@ class SolarSystemVisualizer:
         self.orbital_period_max = 100000.0
         
         # Planet stellar flux dropdown properties
-        self.planet_stellar_flux_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 600, self.customization_panel_width - 100, 30)
+        self.planet_stellar_flux_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 660, self.customization_panel_width - 100, 30)
         self.planet_stellar_flux_dropdown_active = False
         self.planet_stellar_flux_dropdown_options = [
             ("Mercury", 6.67),
@@ -559,7 +592,7 @@ class SolarSystemVisualizer:
         self.stellar_flux_max = 100.0
         
         # Planet density dropdown properties
-        self.planet_density_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 660, self.customization_panel_width - 100, 30)
+        self.planet_density_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 720, self.customization_panel_width - 100, 30)
         self.planet_density_dropdown_active = False
         self.planet_density_dropdown_options = [
             ("Saturn", 0.69),
@@ -578,6 +611,204 @@ class SolarSystemVisualizer:
         self.planet_density_input_text = ""
         self.planet_density_min = 0.1
         self.planet_density_max = 20.0
+        
+        # Initialize sandbox with auto-spawn (after all properties are initialized)
+        self.initSandbox()
+    
+    def place_object(self, obj_type: str, params: dict = None):
+        """
+        Place a celestial object using the same logic as user clicks.
+        This ensures full parameter lists, event bindings, orbit initialization, and physics behavior.
+        
+        Args:
+            obj_type: "star", "planet", or "moon"
+            params: Optional dict with parameters like:
+                - "name": Custom name (defaults to "Sun", "Earth", "Moon")
+                - "semi_major_axis": For planets, orbital distance in AU (defaults to 1.0)
+                - Other type-specific parameters
+        """
+        if params is None:
+            params = {}
+        
+        # Set active tab to the object type
+        self.active_tab = obj_type
+        
+        # Increment body counter
+        self.body_counter[obj_type] += 1
+        
+        # Set default values based on body type
+        if obj_type == "star":
+            # Sun-like defaults
+            default_mass = 1.0  # Solar masses
+            default_age = 4.6  # Gyr
+            default_spectral = "G-type (Yellow, Sun)"
+            default_luminosity = 1.0  # Solar luminosities
+            default_name = params.get("name", "Sun")
+            default_radius = SUN_RADIUS_PX
+            
+            # Calculate position (center of screen for star)
+            position = np.array([self.width/2, self.height/2], dtype=float)
+        elif obj_type == "planet":
+            # Earth-like defaults
+            default_mass = 1.0  # Earth masses
+            default_age = 4.5  # Gyr
+            default_name = params.get("name", "Earth")
+            default_radius = EARTH_RADIUS_PX
+            
+            # Calculate position based on semi_major_axis
+            semi_major_axis = params.get("semi_major_axis", 1.0)
+            position = np.array([self.width/2 + AU_TO_PX * semi_major_axis, self.height/2], dtype=float)
+        else:  # moon
+            # Luna-like defaults
+            default_mass = 1.0  # Earth's Moon mass (1 lunar mass)
+            default_age = 4.6  # Gyr
+            default_name = params.get("name", "Moon")
+            default_radius = EARTH_RADIUS_PX * 0.27  # Moon is ~27% of Earth's radius
+            
+            # Calculate position based on semi_major_axis (relative to parent planet)
+            semi_major_axis = params.get("semi_major_axis", 0.00257)  # Moon's distance in AU
+            # Find parent planet (Earth) to position moon relative to it
+            parent_planet = next((b for b in self.placed_bodies if b["name"] == "Earth" and b["type"] == "planet"), None)
+            if parent_planet:
+                # Position moon at the right of the planet
+                position = np.array([parent_planet["position"][0] + MOON_ORBIT_PX, parent_planet["position"][1]], dtype=float)
+            else:
+                # Fallback: position relative to center
+                position = np.array([self.width/2 + MOON_ORBIT_PX, self.height/2], dtype=float)
+        
+        body = {
+            "type": obj_type,
+            "position": position,
+            "velocity": np.array([0.0, 0.0]),
+            "radius": default_radius,
+            "name": default_name,
+            "mass": default_mass * (1000.0 if obj_type == "star" else 1.0),  # Convert to Earth masses for stars
+            "parent": None,
+            "orbit_radius": 0.0,  # Distance from parent
+            "orbit_angle": 0.0,   # Current angle in orbit
+            "orbit_speed": 0.0,   # Angular speed
+            "rotation_angle": 0.0, # Current rotation angle
+            "rotation_speed": self.rotation_speed * (1.0 if obj_type == "planet" else 2.0 if obj_type == "moon" else 0.0), # Rotation speed
+            "age": default_age,  # Set default age
+            "habit_score": 0.0,  # Added habitability score attribute
+        }
+        
+        # Add planet-specific attributes
+        if obj_type == "planet":
+            # Default equilibrium temperature (Earth's T_eq ~255K)
+            default_T_eq = 255.0
+            # Default atmosphere offset (Earth-like: +33K)
+            default_greenhouse_offset = 33.0
+            default_T_surface = default_T_eq + default_greenhouse_offset  # 288K
+            semi_major_axis = params.get("semi_major_axis", 1.0)
+            body.update({
+                "gravity": 9.81,  # Earth's gravity in m/s²
+                "semiMajorAxis": semi_major_axis,  # Orbital distance (AU)
+                "eccentricity": 0.017,  # Default orbital eccentricity (Earth-like)
+                "orbital_period": 365,  # Default orbital period (days)
+                "stellarFlux": 1.0,  # Default stellar flux (Earth units)
+                "temperature": default_T_surface,  # Surface temperature with greenhouse effect
+                "equilibrium_temperature": default_T_eq,  # Equilibrium temperature
+                "greenhouse_offset": default_greenhouse_offset,  # Greenhouse offset
+            })
+        
+        # Add star-specific attributes
+        if obj_type == "star":
+            body.update({
+                "luminosity": default_luminosity,
+                "star_temperature": 5778,  # Sun's temperature in Kelvin
+                "star_color": (255, 255, 0),  # Yellow color for G-type star
+            })
+        
+        # Add moon-specific attributes
+        if obj_type == "moon":
+            semi_major_axis = params.get("semi_major_axis", 0.00257)
+            # Find parent planet to set orbit relative to it
+            parent_planet = next((b for b in self.placed_bodies if b["name"] == "Earth" and b["type"] == "planet"), None)
+            if parent_planet:
+                # Calculate orbit radius from parent planet's position
+                orbit_radius = np.linalg.norm(position - parent_planet["position"])
+                body.update({
+                    "actual_radius": 1737.4,  # Actual radius in km (The Moon) - for dropdown logic
+                    "radius": default_radius,  # Visual radius in pixels for display
+                    "orbit_radius": orbit_radius,  # Orbital distance in pixels (calculated from position)
+                    "parent": parent_planet["name"],  # Set parent explicitly
+                    "temperature": 220,  # Surface temperature in K (Earth's Moon)
+                    "gravity": 1.62,  # Surface gravity in m/s² (Earth's Moon)
+                    "orbital_period": 27.3,  # Orbital period in days (Earth's Moon)
+                })
+            else:
+                body.update({
+                    "actual_radius": 1737.4,
+                    "radius": default_radius,
+                    "orbit_radius": MOON_ORBIT_PX,  # Fallback orbital distance
+                    "temperature": 220,
+                    "gravity": 1.62,
+                    "orbital_period": 27.3,
+                })
+        
+        self.placed_bodies.append(body)
+        self.orbit_points[body["name"]] = []
+        self.orbit_history[body["name"]] = []
+        
+        # Set dropdown selections to match defaults
+        if obj_type == "star":
+            self.star_mass_dropdown_selected = "1.0 M☉ (Sun)"
+            self.star_age_dropdown_selected = "Sun (4.6 Gyr)"
+            self.spectral_dropdown_selected = "G-type (Yellow, Sun) (5,778 K)"
+            self.luminosity_dropdown_selected = "G-type Main Sequence (Sun)"
+            self.temperature_dropdown_selected = "G-type (Sun) (5,800 K)"
+            self.radius_dropdown_selected = "G-type (Sun)"
+            self.activity_dropdown_selected = "Moderate (Sun)"
+            self.metallicity_dropdown_selected = "0.0 (Sun)"
+        elif obj_type == "planet":
+            self.planet_dropdown_selected = "Earth"
+            self.planet_age_dropdown_selected = "4.6 Gyr (Earth's age)"
+            self.planet_gravity_dropdown_selected = "Earth"
+            self.planet_atmosphere_dropdown_selected = "Earth-like (N₂–O₂ + H₂O + CO₂)"
+            self.planet_orbital_distance_dropdown_selected = "Earth"
+            self.planet_orbital_eccentricity_dropdown_selected = "Earth"
+            self.planet_orbital_period_dropdown_selected = "Earth"
+            self.planet_stellar_flux_dropdown_selected = "Earth"
+        else:  # moon
+            self.moon_dropdown_selected = "Moon"
+            self.moon_age_dropdown_selected = "Moon"
+            self.moon_radius_dropdown_selected = "Moon"
+            self.moon_orbital_distance_dropdown_selected = "Moon"
+            self.moon_orbital_period_dropdown_selected = "Moon"
+            self.moon_temperature_dropdown_selected = "Moon"
+            self.moon_gravity_dropdown_selected = "Moon"
+        
+        # Generate orbit grid for planets and moons
+        # For moons, only generate orbit if parent is already set (from above)
+        # For planets, always generate orbit
+        if obj_type == "planet":
+            self.generate_orbit_grid(body)
+        elif obj_type == "moon" and body.get("parent"):
+            # Moon's parent is already set, generate orbit grid
+            self.generate_orbit_grid(body)
+        
+        # Automatically start simulation when at least one star and one planet are placed
+        stars = [b for b in self.placed_bodies if b["type"] == "star"]
+        planets = [b for b in self.placed_bodies if b["type"] == "planet"]
+        
+        if len(stars) > 0 and len(planets) > 0:
+            self.show_simulation_builder = False
+            self.show_simulation = True
+    
+    def auto_spawn_default_system(self):
+        """Spawn default Sun–Earth–Moon using user-placement logic after init."""
+        print("🌍 Auto-placing Sun–Earth–Moon system...")
+        # Use the *exact same* functions that user clicks trigger
+        self.place_object("star", {"name": "Sun"})
+        self.place_object("planet", {"name": "Earth", "semi_major_axis": 1.0})
+        self.place_object("moon", {"name": "Moon", "semi_major_axis": 0.00257})
+    
+    def initSandbox(self):
+        """Initialize the sandbox with scene setup and auto-spawn default system."""
+        # Scene setup is already done in __init__
+        # Delay spawn until everything ready
+        threading.Timer(1.0, self.auto_spawn_default_system).start()
     
     def handle_events(self) -> bool:
         """Handle pygame events. Returns False if the window should close."""
@@ -585,22 +816,23 @@ class SolarSystemVisualizer:
             if event.type == pygame.QUIT:
                 return False
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                if self.show_home_screen:
-                    # Check if click is within the create button area
-                    button_center_x = self.width//2
-                    button_center_y = self.height*3/4
-                    button_width = 200
-                    button_height = 50
-                    button_rect = pygame.Rect(
-                        button_center_x - button_width//2,
-                        button_center_y - button_height//2,
-                        button_width,
-                        button_height
-                    )
-                    if button_rect.collidepoint(event.pos):
-                        self.show_home_screen = False
-                        self.show_simulation_builder = True
-                elif self.show_simulation_builder or self.show_simulation:
+                # Home screen removed - start directly in sandbox
+                # if self.show_home_screen:
+                #     # Check if click is within the create button area
+                #     button_center_x = self.width//2
+                #     button_center_y = self.height*3/4
+                #     button_width = 200
+                #     button_height = 50
+                #     button_rect = pygame.Rect(
+                #         button_center_x - button_width//2,
+                #         button_center_y - button_height//2,
+                #         button_width,
+                #         button_height
+                #     )
+                #     if button_rect.collidepoint(event.pos):
+                #         self.show_home_screen = False
+                #         self.show_simulation_builder = True
+                if self.show_simulation_builder or self.show_simulation:
                     # Check if click is in the customization panel
                     if self.show_customization_panel and self.customization_panel.collidepoint(event.pos):
                         print(f'DEBUG: Mouse click at {event.pos}')
@@ -723,7 +955,8 @@ class SolarSystemVisualizer:
                                     if radius_name == "Custom":
                                         self.show_custom_radius_input = True
                                     else:
-                                        self.selected_body["radius"] = radius
+                                        # radius is in Earth radii, convert to pixels
+                                        self.selected_body["radius"] = EARTH_RADIUS_PX * radius
                                         self.show_custom_radius_input = False
                                     self.planet_radius_dropdown_selected = radius_name
                                     self.planet_radius_dropdown_visible = False
@@ -762,8 +995,16 @@ class SolarSystemVisualizer:
                                     if temp_name == "Custom":
                                         self.show_custom_planet_temperature_input = True
                                     else:
+                                        # When temperature is set via dropdown, set it as equilibrium temperature
+                                        # (assuming no greenhouse effect is applied yet)
                                         self.selected_body["temperature"] = temp
+                                        self.selected_body["equilibrium_temperature"] = temp
+                                        # Apply current greenhouse offset if set
+                                        if 'greenhouse_offset' in self.selected_body:
+                                            delta_t = self.selected_body.get('greenhouse_offset', 0.0)
+                                            self.selected_body["temperature"] = temp + delta_t
                                         self.show_custom_planet_temperature_input = False
+                                        self._update_planet_scores()
                                     self.planet_temperature_dropdown_selected = temp_name
                                     self.planet_temperature_dropdown_visible = False
                                     self.planet_temperature_dropdown_active = False
@@ -780,6 +1021,56 @@ class SolarSystemVisualizer:
                                  for i in range(len(self.planet_temperature_dropdown_options))))):
                                 self.planet_temperature_dropdown_visible = False
                                 self.planet_temperature_dropdown_active = False
+                        # Handle planet atmospheric composition dropdown (only for planets)
+                        elif (self.selected_body and self.selected_body.get('type') == 'planet' and 
+                              self.planet_atmosphere_dropdown_rect.collidepoint(event.pos)):
+                            self.planet_atmosphere_dropdown_active = True
+                            self.planet_atmosphere_dropdown_visible = True
+                            self.create_dropdown_surface()
+                        # Check if clicked on an atmospheric composition option (only for planets)
+                        elif (self.selected_body and self.selected_body.get('type') == 'planet' and 
+                              self.planet_atmosphere_dropdown_visible):
+                            dropdown_y = self.planet_atmosphere_dropdown_rect.bottom
+                            for i, (atm_name, delta_t) in enumerate(self.planet_atmosphere_dropdown_options):
+                                option_rect = pygame.Rect(
+                                    self.planet_atmosphere_dropdown_rect.left,
+                                    dropdown_y + i * 30,
+                                    self.planet_atmosphere_dropdown_rect.width,
+                                    30
+                                )
+                                if option_rect.collidepoint(event.pos):
+                                    if atm_name == "Custom":
+                                        self.show_custom_atmosphere_input = True
+                                    else:
+                                        # Calculate new surface temperature: T_surface = T_eq + ΔT_greenhouse
+                                        # If T_eq is not set, use current temperature as T_eq
+                                        if 'equilibrium_temperature' not in self.selected_body:
+                                            # Use current temperature as equilibrium if not set
+                                            current_temp = self.selected_body.get('temperature', 255)  # Default to ~Earth's T_eq
+                                            self.selected_body['equilibrium_temperature'] = current_temp
+                                        T_eq = self.selected_body.get('equilibrium_temperature', 255)
+                                        T_surface = T_eq + delta_t
+                                        self.selected_body["temperature"] = T_surface
+                                        self.selected_body["greenhouse_offset"] = delta_t
+                                        self.show_custom_atmosphere_input = False
+                                        # Update scores (f_T and H) - will be handled by score calculation
+                                        self._update_planet_scores()
+                                    self.planet_atmosphere_dropdown_selected = atm_name
+                                    self.planet_atmosphere_dropdown_visible = False
+                                    self.planet_atmosphere_dropdown_active = False
+                                    break
+                            # Only close dropdown if clicking outside both the dropdown and its options
+                            if (self.planet_atmosphere_dropdown_visible and not 
+                                (self.planet_atmosphere_dropdown_rect.collidepoint(event.pos) or 
+                                 any(pygame.Rect(
+                                     self.planet_atmosphere_dropdown_rect.left,
+                                     self.planet_atmosphere_dropdown_rect.bottom + i * 30,
+                                     self.planet_atmosphere_dropdown_rect.width,
+                                     30
+                                 ).collidepoint(event.pos)
+                                 for i in range(len(self.planet_atmosphere_dropdown_options))))):
+                                self.planet_atmosphere_dropdown_visible = False
+                                self.planet_atmosphere_dropdown_active = False
                         # Handle planet gravity dropdown (only for planets)
                         elif (self.selected_body and self.selected_body.get('type') == 'planet' and 
                               self.planet_gravity_dropdown_rect.collidepoint(event.pos)):
@@ -801,6 +1092,8 @@ class SolarSystemVisualizer:
                             self.planet_radius_dropdown_visible = False
                             self.planet_temperature_dropdown_active = False
                             self.planet_temperature_dropdown_visible = False
+                            self.planet_atmosphere_dropdown_active = False
+                            self.planet_atmosphere_dropdown_visible = False
                             self.planet_gravity_dropdown_active = False
                             self.planet_gravity_dropdown_visible = False
                             self.planet_orbital_eccentricity_dropdown_active = False
@@ -905,6 +1198,13 @@ class SolarSystemVisualizer:
                                         self.orbital_distance_input_text = f"{self.selected_body.get('semiMajorAxis', 1.0):.2f}"
                                     else:
                                         self.selected_body["semiMajorAxis"] = dist
+                                        # Update position based on new semi_major_axis
+                                        parent_star = next((b for b in self.placed_bodies if b["name"] == self.selected_body.get("parent")), None)
+                                        if parent_star:
+                                            # Position planet at the right of the star based on AU_TO_PX
+                                            self.selected_body["position"][0] = parent_star["position"][0] + AU_TO_PX * dist
+                                            self.selected_body["position"][1] = parent_star["position"][1]
+                                        self.generate_orbit_grid(self.selected_body)
                                         self.show_custom_orbital_distance_input = False
                                     self.planet_orbital_distance_dropdown_selected = dist_name
                                     self.planet_orbital_distance_dropdown_visible = False
@@ -1762,6 +2062,13 @@ class SolarSystemVisualizer:
                                         name, value = self.planet_orbital_distance_dropdown_options[i]
                                         if value is not None:
                                             self.selected_body["semiMajorAxis"] = value
+                                            # Update position based on new semi_major_axis
+                                            parent_star = next((b for b in self.placed_bodies if b["name"] == self.selected_body.get("parent")), None)
+                                            if parent_star:
+                                                # Position planet at the right of the star based on AU_TO_PX
+                                                self.selected_body["position"][0] = parent_star["position"][0] + AU_TO_PX * value
+                                                self.selected_body["position"][1] = parent_star["position"][1]
+                                            self.generate_orbit_grid(self.selected_body)
                                             self.show_custom_orbital_distance_input = False
                                         else:
                                             self.show_custom_orbital_distance_input = True
@@ -1804,11 +2111,16 @@ class SolarSystemVisualizer:
                                 # Toggle active tab - if clicking the same tab, deactivate it
                                 if self.active_tab == tab_name:
                                     self.active_tab = None
+                                    self.preview_position = None
+                                    self.preview_radius = None
                                 else:
                                     self.active_tab = tab_name
                                 # Clear selected body when changing tabs
                                 self.selected_body = None
                                 self.show_customization_panel = False
+                                # Clear preview when switching tabs
+                                self.preview_position = None
+                                self.preview_radius = None
                                 self.mass_input_active = False
                                 self.planet_dropdown_active = False
                                 self.planet_dropdown_visible = False
@@ -1891,6 +2203,10 @@ class SolarSystemVisualizer:
                                 if not found:
                                     self.moon_temperature_dropdown_selected = "Moon"  # Default to Moon instead of Custom
                         elif self.active_tab and space_area.collidepoint(event.pos):
+                            # Clear preview when placing object
+                            self.preview_position = None
+                            self.preview_radius = None
+                            
                             # Create a new celestial body at the click position
                             self.body_counter[self.active_tab] += 1
                             
@@ -1902,19 +2218,19 @@ class SolarSystemVisualizer:
                                 default_spectral = "G-type (Yellow, Sun)"
                                 default_luminosity = 1.0  # Solar luminosities
                                 default_name = "Sun"
-                                default_radius = 20
+                                default_radius = SUN_RADIUS_PX
                             elif self.active_tab == "planet":
                                 # Earth-like defaults
                                 default_mass = 1.0  # Earth masses
                                 default_age = 4.5  # Gyr
                                 default_name = "Earth"
-                                default_radius = 15
+                                default_radius = EARTH_RADIUS_PX
                             else:  # moon
                                 # Luna-like defaults
                                 default_mass = 1.0  # Earth's Moon mass (1 lunar mass)
                                 default_age = 4.6  # Gyr
                                 default_name = "Moon"
-                                default_radius = 10  # Visual radius for display
+                                default_radius = EARTH_RADIUS_PX * 0.27  # Moon is ~27% of Earth's radius
                             
                             body = {
                                 "type": self.active_tab,
@@ -1935,12 +2251,20 @@ class SolarSystemVisualizer:
                             
                             # Add planet-specific attributes
                             if self.active_tab == "planet":
+                                # Default equilibrium temperature (Earth's T_eq ~255K)
+                                default_T_eq = 255.0
+                                # Default atmosphere offset (Earth-like: +33K)
+                                default_greenhouse_offset = 33.0
+                                default_T_surface = default_T_eq + default_greenhouse_offset  # 288K
                                 body.update({
                                     "gravity": 9.81,  # Earth's gravity in m/s²
                                     "semiMajorAxis": 1.0,  # Default orbital distance (AU)
                                     "eccentricity": 0.017,  # Default orbital eccentricity (Earth-like)
                                     "orbital_period": 365,  # Default orbital period (days)
                                     "stellarFlux": 1.0,  # Default stellar flux (Earth units)
+                                    "temperature": default_T_surface,  # Surface temperature with greenhouse effect
+                                    "equilibrium_temperature": default_T_eq,  # Equilibrium temperature
+                                    "greenhouse_offset": default_greenhouse_offset,  # Greenhouse offset
                                 })
                             
                             # Add star-specific attributes
@@ -1955,8 +2279,8 @@ class SolarSystemVisualizer:
                             if self.active_tab == "moon":
                                 body.update({
                                     "actual_radius": 1737.4,  # Actual radius in km (The Moon) - for dropdown logic
-                                    "radius": 10,  # Visual radius in pixels for display
-                                    "orbit_radius": 384400,  # Actual orbital distance in km (Earth's Moon)
+                                    "radius": default_radius,  # Visual radius in pixels for display
+                                    "orbit_radius": MOON_ORBIT_PX,  # Orbital distance in pixels
                                     "temperature": 220,  # Surface temperature in K (Earth's Moon)
                                     "gravity": 1.62,  # Surface gravity in m/s² (Earth's Moon)
                                     "orbital_period": 27.3,  # Orbital period in days (Earth's Moon)
@@ -1978,8 +2302,9 @@ class SolarSystemVisualizer:
                                 self.metallicity_dropdown_selected = "0.0 (Sun)"
                             elif self.active_tab == "planet":
                                 self.planet_dropdown_selected = "Earth"
-                                self.planet_age_dropdown_selected = "4.6 Gyr (Earth’s age)"
+                                self.planet_age_dropdown_selected = "4.6 Gyr (Earth's age)"
                                 self.planet_gravity_dropdown_selected = "Earth"
+                                self.planet_atmosphere_dropdown_selected = "Earth-like (N₂–O₂ + H₂O + CO₂)"
                                 self.planet_orbital_distance_dropdown_selected = "Earth"
                                 self.planet_orbital_eccentricity_dropdown_selected = "Earth"
                                 self.planet_orbital_period_dropdown_selected = "Earth"
@@ -2165,6 +2490,32 @@ class SolarSystemVisualizer:
                         self.planet_gravity_input_text = ""
                     elif event.unicode.isnumeric() or event.unicode == '.':
                         self.planet_gravity_input_text += event.unicode
+                if self.show_custom_atmosphere_input and self.selected_body and self.selected_body.get('type') == 'planet':
+                    if event.key == pygame.K_RETURN:
+                        delta_t = self._parse_input_value(self.planet_atmosphere_input_text)
+                        if delta_t is not None and -273.15 <= delta_t <= 1000.0:  # Reasonable range for ΔT
+                            # Calculate new surface temperature: T_surface = T_eq + ΔT_greenhouse
+                            if 'equilibrium_temperature' not in self.selected_body:
+                                # Use current temperature as equilibrium if not set
+                                current_temp = self.selected_body.get('temperature', 255)
+                                self.selected_body['equilibrium_temperature'] = current_temp
+                            T_eq = self.selected_body.get('equilibrium_temperature', 255)
+                            T_surface = T_eq + delta_t
+                            self.selected_body["temperature"] = T_surface
+                            self.selected_body["greenhouse_offset"] = delta_t
+                            self.planet_atmosphere_dropdown_selected = f"Custom ({delta_t:+.0f} K)"
+                            self.planet_atmosphere_input_text = ""
+                            self.show_custom_atmosphere_input = False
+                            # Update scores (f_T and H)
+                            self._update_planet_scores()
+                    elif event.key == pygame.K_BACKSPACE:
+                        self.planet_atmosphere_input_text = self.planet_atmosphere_input_text[:-1]
+                    elif event.key == pygame.K_ESCAPE:
+                        self.show_custom_atmosphere_input = False
+                        self.planet_atmosphere_input_text = ""
+                    elif event.unicode.isnumeric() or event.unicode == '.' or event.unicode == '-' or event.unicode == '+':
+                        # Allow numbers, decimal point, and signs for ΔT
+                        self.planet_atmosphere_input_text += event.unicode
                 if self.show_custom_moon_gravity_input and self.selected_body and self.selected_body.get('type') == 'moon':
                     if event.key == pygame.K_RETURN:
                         gravity = self._parse_input_value(self.moon_gravity_input_text)
@@ -2201,6 +2552,13 @@ class SolarSystemVisualizer:
                         dist = self._parse_input_value(self.orbital_distance_input_text)
                         if dist is not None and self.orbital_distance_min <= dist <= self.orbital_distance_max:
                             self.selected_body["semiMajorAxis"] = dist
+                            # Update position based on new semi_major_axis
+                            parent_star = next((b for b in self.placed_bodies if b["name"] == self.selected_body.get("parent")), None)
+                            if parent_star:
+                                # Position planet at the right of the star based on AU_TO_PX
+                                self.selected_body["position"][0] = parent_star["position"][0] + AU_TO_PX * dist
+                                self.selected_body["position"][1] = parent_star["position"][1]
+                            self.generate_orbit_grid(self.selected_body)
                             self.planet_orbital_distance_dropdown_selected = f"Custom ({dist:.2f} AU)"
                             self.orbital_distance_input_text = ""
                             self.orbital_distance_input_active = False
@@ -2284,6 +2642,27 @@ class SolarSystemVisualizer:
                         self.planet_density_input_text = ""
                     elif event.unicode.isnumeric() or event.unicode == '.':
                         self.planet_density_input_text += event.unicode
+            elif event.type == pygame.MOUSEMOTION:
+                # Update preview position when mouse moves and a tab is active
+                if self.active_tab:
+                    space_area = pygame.Rect(0, self.tab_height + 2*self.tab_margin, 
+                                              self.width, 
+                                              self.height - (self.tab_height + 2*self.tab_margin))
+                    if space_area.collidepoint(event.pos):
+                        self.preview_position = event.pos
+                        # Set preview radius based on object type
+                        if self.active_tab == "star":
+                            self.preview_radius = 20
+                        elif self.active_tab == "planet":
+                            self.preview_radius = 15
+                        else:  # moon
+                            self.preview_radius = 10
+                    else:
+                        self.preview_position = None
+                        self.preview_radius = None
+                else:
+                    self.preview_position = None
+                    self.preview_radius = None
         return True
     
     def update_ambient_colors(self):
@@ -2447,41 +2826,42 @@ class SolarSystemVisualizer:
                                 (x + self.grid_size//2, space_top), 
                                 (x + self.grid_size//2, self.height), 1)
     
-    def render_home_screen(self):
-        """Render the home screen with the title and create button"""
-        # Fill background
-        self.screen.fill(self.BLACK)
-        
-        # Update ambient colors
-        self.update_ambient_colors()
-        
-        # Render title with current ambient color
-        title_text = self.title_font.render("AIET", True, self.ambient_colors[self.current_color_index])
-        title_rect = title_text.get_rect(center=(self.width//2, self.height//3))
-        self.screen.blit(title_text, title_rect)
-        
-        # Draw instruction with current ambient color
-        instruction_text = self.font.render("Create", True, self.ambient_colors[self.current_color_index])
-        instruction_rect = instruction_text.get_rect(center=(self.width//2, self.height*3/4))
-        
-        # Draw a button around the text
-        button_width = instruction_text.get_width() + 40
-        button_height = instruction_text.get_height() + 20
-        button_rect = pygame.Rect(
-            instruction_rect.centerx - button_width//2,
-            instruction_rect.centery - button_height//2,
-            button_width,
-            button_height
-        )
-        
-        # Draw button with current ambient color
-        pygame.draw.rect(self.screen, (50, 50, 50), button_rect, border_radius=10)
-        pygame.draw.rect(self.screen, self.ambient_colors[self.current_color_index], button_rect, 2, border_radius=10)
-        
-        # Draw the text on top of the button
-        self.screen.blit(instruction_text, instruction_rect)
-        
-        pygame.display.flip()
+    # Home screen removed - start directly in sandbox
+    # def render_home_screen(self):
+    #     """Render the home screen with the title and create button"""
+    #     # Fill background
+    #     self.screen.fill(self.BLACK)
+    #     
+    #     # Update ambient colors
+    #     self.update_ambient_colors()
+    #     
+    #     # Render title with current ambient color
+    #     title_text = self.title_font.render("AIET", True, self.ambient_colors[self.current_color_index])
+    #     title_rect = title_text.get_rect(center=(self.width//2, self.height//3))
+    #     self.screen.blit(title_text, title_rect)
+    #     
+    #     # Draw instruction with current ambient color
+    #     instruction_text = self.font.render("Create", True, self.ambient_colors[self.current_color_index])
+    #     instruction_rect = instruction_text.get_rect(center=(self.width//2, self.height*3/4))
+    #     
+    #     # Draw a button around the text
+    #     button_width = instruction_text.get_width() + 40
+    #     button_height = instruction_text.get_height() + 20
+    #     button_rect = pygame.Rect(
+    #         instruction_rect.centerx - button_width//2,
+    #         instruction_rect.centery - button_height//2,
+    #         button_width,
+    #         button_height
+    #     )
+    #     
+    #     # Draw button with current ambient color
+    #     pygame.draw.rect(self.screen, (50, 50, 50), button_rect, border_radius=10)
+    #     pygame.draw.rect(self.screen, self.ambient_colors[self.current_color_index], button_rect, 2, border_radius=10)
+    #     
+    #     # Draw the text on top of the button
+    #     self.screen.blit(instruction_text, instruction_rect)
+    #     
+    #     pygame.display.flip()
     
     def format_age_display(self, age: float) -> str:
         """Format age for display, converting to Myr if less than 0.5 Gyr"""
@@ -2502,7 +2882,7 @@ class SolarSystemVisualizer:
                 self.moon_age_dropdown_visible or self.moon_radius_dropdown_visible or self.moon_orbital_distance_dropdown_visible or self.moon_orbital_period_dropdown_visible or self.moon_temperature_dropdown_visible or self.moon_gravity_dropdown_visible or self.spectral_class_dropdown_visible or 
                 self.radius_dropdown_visible or self.activity_dropdown_visible or 
                 self.metallicity_dropdown_visible or self.planet_radius_dropdown_visible or 
-                self.planet_temperature_dropdown_visible or self.planet_gravity_dropdown_visible or 
+                self.planet_temperature_dropdown_visible or self.planet_atmosphere_dropdown_visible or self.planet_gravity_dropdown_visible or 
                 self.planet_orbital_distance_dropdown_visible or self.planet_orbital_eccentricity_dropdown_visible or
                 self.planet_orbital_period_dropdown_visible or self.planet_stellar_flux_dropdown_visible or self.planet_density_dropdown_visible):
             return
@@ -2562,6 +2942,9 @@ class SolarSystemVisualizer:
         elif self.planet_temperature_dropdown_visible:
             options = self.planet_temperature_dropdown_options
             width = self.planet_temperature_dropdown_rect.width
+        elif self.planet_atmosphere_dropdown_visible:
+            options = self.planet_atmosphere_dropdown_options
+            width = self.planet_atmosphere_dropdown_rect.width
         elif self.planet_gravity_dropdown_visible:
             options = self.planet_gravity_dropdown_options
             width = self.planet_gravity_dropdown_rect.width
@@ -2658,6 +3041,8 @@ class SolarSystemVisualizer:
                     text = f"{name} (" + self._format_value(value, 'R🜨') + ")"
                 elif self.planet_temperature_dropdown_visible:
                     text = f"{name} (" + self._format_value(value, 'K') + ")"
+                elif self.planet_atmosphere_dropdown_visible:
+                    text = f"{name} (" + self._format_value(value, 'K') + " ΔT)"
                 elif self.planet_gravity_dropdown_visible:
                     text = f"{name} (" + self._format_value(value, 'm/s²') + ")"
                 elif self.planet_orbital_distance_dropdown_visible:
@@ -2798,6 +3183,13 @@ class SolarSystemVisualizer:
                 width,
                 total_height
             )
+        elif self.planet_atmosphere_dropdown_visible:
+            self.dropdown_rect = pygame.Rect(
+                self.planet_atmosphere_dropdown_rect.left,
+                self.planet_atmosphere_dropdown_rect.bottom,
+                width,
+                total_height
+            )
         elif self.planet_gravity_dropdown_visible:
             self.dropdown_rect = pygame.Rect(
                 self.planet_gravity_dropdown_rect.left,
@@ -2859,7 +3251,7 @@ class SolarSystemVisualizer:
             self.moon_age_dropdown_visible or self.moon_radius_dropdown_visible or self.moon_orbital_distance_dropdown_visible or self.moon_orbital_period_dropdown_visible or self.moon_temperature_dropdown_visible or self.moon_gravity_dropdown_visible or self.spectral_class_dropdown_visible or 
             self.radius_dropdown_visible or self.activity_dropdown_visible or self.metallicity_dropdown_visible or 
             self.planet_radius_dropdown_visible or self.planet_temperature_dropdown_visible or 
-            self.planet_gravity_dropdown_visible or self.planet_orbital_distance_dropdown_visible or
+            self.planet_atmosphere_dropdown_visible or self.planet_gravity_dropdown_visible or self.planet_orbital_distance_dropdown_visible or
             self.planet_orbital_eccentricity_dropdown_visible or self.planet_orbital_period_dropdown_visible or
             self.planet_stellar_flux_dropdown_visible or self.planet_density_dropdown_visible) and self.dropdown_surface:
             # Create a new surface that covers the entire screen
@@ -3343,11 +3735,47 @@ class SolarSystemVisualizer:
                                                          self.planet_temperature_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
 
+                # ATMOSPHERIC COMPOSITION / GREENHOUSE TYPE SECTION (only for planets)
+                atmosphere_label = self.subtitle_font.render("Atmospheric Composition / Greenhouse Type", True, self.BLACK)
+                atmosphere_label_rect = atmosphere_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 345))
+                self.screen.blit(atmosphere_label, atmosphere_label_rect)
+                
+                # Draw the planet atmospheric composition dropdown
+                pygame.draw.rect(self.screen, self.WHITE, self.planet_atmosphere_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.planet_atmosphere_dropdown_active else self.GRAY, 
+                               self.planet_atmosphere_dropdown_rect, 1)
+                dropdown_text = "Select Atmospheric Composition"
+                if self.planet_atmosphere_dropdown_selected:
+                    selected = next(((name, value) for name, value in self.planet_atmosphere_dropdown_options if name == self.planet_atmosphere_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} (" + self._format_value(value, 'K') + " ΔT)"
+                        else:
+                            dropdown_text = name
+                text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
+                text_rect = text_surface.get_rect(midleft=(self.planet_atmosphere_dropdown_rect.left + 5, 
+                                                         self.planet_atmosphere_dropdown_rect.centery))
+                self.screen.blit(text_surface, text_rect)
+                
+                # Show custom atmosphere input if "Custom" is selected, just below dropdown
+                if self.show_custom_atmosphere_input:
+                    custom_atmosphere_label = self.subtitle_font.render("Enter Custom ΔT (K):", True, self.BLACK)
+                    custom_atmosphere_label_rect = custom_atmosphere_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 415))
+                    self.screen.blit(custom_atmosphere_label, custom_atmosphere_label_rect)
+                    
+                    custom_atmosphere_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 445, self.customization_panel_width - 100, 30)
+                    pygame.draw.rect(self.screen, self.WHITE, custom_atmosphere_input_rect, 2)
+                    pygame.draw.rect(self.screen, self.BLUE, custom_atmosphere_input_rect, 1)
+                    text_surface = self.subtitle_font.render(self.planet_atmosphere_input_text, True, self.BLACK)
+                    text_rect = text_surface.get_rect(midleft=(custom_atmosphere_input_rect.left + 5, custom_atmosphere_input_rect.centery))
+                    self.screen.blit(text_surface, text_rect)
+
                 # GRAVITY SECTION (only for planets)
                 gravity_label = self.subtitle_font.render("Surface Gravity (m/s²)", True, self.BLACK)
-                gravity_label_rect = gravity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 345))
+                gravity_label_rect = gravity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 405))
                 self.screen.blit(gravity_label, gravity_label_rect)
-                self.planet_gravity_dropdown_rect.y = 360
+                self.planet_gravity_dropdown_rect.y = 420
                 pygame.draw.rect(self.screen, self.WHITE, self.planet_gravity_dropdown_rect, 2)
                 pygame.draw.rect(self.screen, self.BLUE if self.planet_gravity_dropdown_active else self.GRAY, self.planet_gravity_dropdown_rect, 1)
                 dropdown_text = "Select Reference Planet"
@@ -3377,8 +3805,9 @@ class SolarSystemVisualizer:
                     self.screen.blit(text_surface, text_rect)
                 # Orbital Distance (AU) dropdown
                 orbital_distance_label = self.subtitle_font.render("Orbital Distance (AU)", True, self.BLACK)
-                orbital_distance_label_rect = orbital_distance_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 405))
+                orbital_distance_label_rect = orbital_distance_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 465))
                 self.screen.blit(orbital_distance_label, orbital_distance_label_rect)
+                self.planet_orbital_distance_dropdown_rect.y = 480
                 pygame.draw.rect(self.screen, self.WHITE, self.planet_orbital_distance_dropdown_rect, 2)
                 pygame.draw.rect(self.screen, self.BLUE if self.planet_orbital_distance_dropdown_active else self.GRAY, self.planet_orbital_distance_dropdown_rect, 1)
                 dropdown_text = "Select Orbital Distance"
@@ -3406,8 +3835,9 @@ class SolarSystemVisualizer:
                     self.screen.blit(text_surface, text_rect)
                 # Orbital Eccentricity dropdown
                 orbital_eccentricity_label = self.subtitle_font.render("Orbital Eccentricity", True, self.BLACK)
-                orbital_eccentricity_label_rect = orbital_eccentricity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 465))
+                orbital_eccentricity_label_rect = orbital_eccentricity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 525))
                 self.screen.blit(orbital_eccentricity_label, orbital_eccentricity_label_rect)
+                self.planet_orbital_eccentricity_dropdown_rect.y = 540
                 pygame.draw.rect(self.screen, self.WHITE, self.planet_orbital_eccentricity_dropdown_rect, 2)
                 pygame.draw.rect(self.screen, self.BLUE if self.planet_orbital_eccentricity_dropdown_active else self.GRAY, self.planet_orbital_eccentricity_dropdown_rect, 1)
                 dropdown_text = "Select Orbital Eccentricity"
@@ -3435,8 +3865,9 @@ class SolarSystemVisualizer:
                     self.screen.blit(text_surface, text_rect)
                 # Orbital Period dropdown
                 orbital_period_label = self.subtitle_font.render("Orbital Period (days)", True, self.BLACK)
-                orbital_period_label_rect = orbital_period_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 525))
+                orbital_period_label_rect = orbital_period_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 585))
                 self.screen.blit(orbital_period_label, orbital_period_label_rect)
+                self.planet_orbital_period_dropdown_rect.y = 600
                 pygame.draw.rect(self.screen, self.WHITE, self.planet_orbital_period_dropdown_rect, 2)
                 pygame.draw.rect(self.screen, self.BLUE if self.planet_orbital_period_dropdown_active else self.GRAY, self.planet_orbital_period_dropdown_rect, 1)
                 dropdown_text = "Select Orbital Period"
@@ -3464,8 +3895,9 @@ class SolarSystemVisualizer:
                     self.screen.blit(text_surface, text_rect)
                 # Stellar Flux dropdown
                 stellar_flux_label = self.subtitle_font.render("Stellar Flux (Earth Units)", True, self.BLACK)
-                stellar_flux_label_rect = stellar_flux_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 585))
+                stellar_flux_label_rect = stellar_flux_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 645))
                 self.screen.blit(stellar_flux_label, stellar_flux_label_rect)
+                self.planet_stellar_flux_dropdown_rect.y = 660
                 pygame.draw.rect(self.screen, self.WHITE, self.planet_stellar_flux_dropdown_rect, 2)
                 pygame.draw.rect(self.screen, self.BLUE if self.planet_stellar_flux_dropdown_active else self.GRAY, self.planet_stellar_flux_dropdown_rect, 1)
                 dropdown_text = "Select Stellar Flux"
@@ -3483,9 +3915,9 @@ class SolarSystemVisualizer:
                 # Show custom stellar flux input if "Custom" is selected, just below dropdown
                 if self.show_custom_stellar_flux_input:
                     custom_flux_label = self.subtitle_font.render("Enter Custom Flux (EFU):", True, self.BLACK)
-                    custom_flux_label_rect = custom_flux_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 625))
+                    custom_flux_label_rect = custom_flux_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 685))
                     self.screen.blit(custom_flux_label, custom_flux_label_rect)
-                    custom_flux_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 655, self.customization_panel_width - 100, 30)
+                    custom_flux_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 715, self.customization_panel_width - 100, 30)
                     pygame.draw.rect(self.screen, self.WHITE, custom_flux_input_rect, 2)
                     pygame.draw.rect(self.screen, self.BLUE, custom_flux_input_rect, 1)
                     text_surface = self.subtitle_font.render(self.stellar_flux_input_text, True, self.BLACK)
@@ -3493,8 +3925,9 @@ class SolarSystemVisualizer:
                     self.screen.blit(text_surface, text_rect)
                 # Density dropdown (NEW)
                 density_label = self.subtitle_font.render("Density (g/cm³)", True, self.BLACK)
-                density_label_rect = density_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 645))
+                density_label_rect = density_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 705))
                 self.screen.blit(density_label, density_label_rect)
+                self.planet_density_dropdown_rect.y = 720
                 pygame.draw.rect(self.screen, self.WHITE, self.planet_density_dropdown_rect, 2)
                 pygame.draw.rect(self.screen, self.BLUE if self.planet_density_dropdown_active else self.GRAY, self.planet_density_dropdown_rect, 1)
                 dropdown_text = "Select Density"
@@ -3717,6 +4150,10 @@ class SolarSystemVisualizer:
                 # Draw a circle around the selected body
                 pygame.draw.circle(self.screen, self.RED, body["position"].astype(int), body["radius"] + 5, 2)
         
+        # Draw placement preview if active tab is selected
+        if self.active_tab and self.preview_position and self.preview_radius:
+            self.draw_placement_preview()
+        
         # Draw instructions
         if self.active_tab:
             instruction_text = self.subtitle_font.render(f"Click in the space to place a {self.active_tab}", True, self.WHITE)
@@ -3729,6 +4166,61 @@ class SolarSystemVisualizer:
         self.render_dropdown()
         
         pygame.display.flip()
+    
+    def draw_placement_preview(self):
+        """Draw a semi-transparent preview of the object being placed"""
+        if not self.preview_position or not self.preview_radius:
+            return
+        
+        # Determine preview color and glow color based on object type
+        if self.active_tab == "star":
+            preview_color = (255, 255, 0)  # Yellow
+            glow_color = (255, 255, 100)  # Bright yellow for glow
+        elif self.active_tab == "planet":
+            preview_color = (100, 150, 255)  # Blue
+            glow_color = (150, 200, 255)  # Light blue for glow
+        else:  # moon
+            preview_color = (200, 200, 200)  # Gray
+            glow_color = (230, 230, 230)  # Light gray for glow
+        
+        center_x, center_y = int(self.preview_position[0]), int(self.preview_position[1])
+        
+        # Draw glow outline (outer ring) - multiple circles for smoother glow effect
+        glow_radius = self.preview_radius + 3
+        for i in range(3):
+            alpha = 64 - i * 15
+            if alpha > 0:
+                glow_surface = pygame.Surface((glow_radius * 2 + 6, glow_radius * 2 + 6), pygame.SRCALPHA)
+                pygame.draw.circle(glow_surface, (*glow_color, alpha), 
+                                  (glow_surface.get_width() // 2, glow_surface.get_height() // 2), 
+                                  glow_radius - i, 2)
+                self.screen.blit(glow_surface, (center_x - glow_surface.get_width() // 2, 
+                                               center_y - glow_surface.get_height() // 2))
+        
+        # Draw main preview circle (semi-transparent)
+        preview_surface = pygame.Surface((self.preview_radius * 2 + 4, self.preview_radius * 2 + 4), pygame.SRCALPHA)
+        preview_center = (preview_surface.get_width() // 2, preview_surface.get_height() // 2)
+        pygame.draw.circle(preview_surface, (*preview_color, 128), preview_center, self.preview_radius)
+        self.screen.blit(preview_surface, (center_x - preview_surface.get_width() // 2,
+                                          center_y - preview_surface.get_height() // 2))
+        
+        # Draw outer outline for better visibility
+        outline_surface = pygame.Surface((self.preview_radius * 2 + 4, self.preview_radius * 2 + 4), pygame.SRCALPHA)
+        pygame.draw.circle(outline_surface, (*glow_color, 255), preview_center, self.preview_radius, 2)
+        self.screen.blit(outline_surface, (center_x - outline_surface.get_width() // 2,
+                                          center_y - outline_surface.get_height() // 2))
+        
+        # Draw tooltip below the preview
+        tooltip_text = "Click to confirm placement."
+        tooltip_surface = self.subtitle_font.render(tooltip_text, True, self.WHITE)
+        tooltip_rect = tooltip_surface.get_rect(center=(center_x, center_y + self.preview_radius + 25))
+        
+        # Draw tooltip background for better visibility
+        tooltip_bg_rect = tooltip_rect.inflate(10, 5)
+        tooltip_bg_surface = pygame.Surface(tooltip_bg_rect.size, pygame.SRCALPHA)
+        tooltip_bg_surface.fill((0, 0, 0, 180))  # Semi-transparent black background
+        self.screen.blit(tooltip_bg_surface, tooltip_bg_rect)
+        self.screen.blit(tooltip_surface, tooltip_rect)
     
     def draw_rotating_body(self, body, color):
         """Draw a celestial body with rotation"""
@@ -4155,11 +4647,47 @@ class SolarSystemVisualizer:
                                                          self.planet_temperature_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
 
+                # ATMOSPHERIC COMPOSITION / GREENHOUSE TYPE SECTION (only for planets)
+                atmosphere_label = self.subtitle_font.render("Atmospheric Composition / Greenhouse Type", True, self.BLACK)
+                atmosphere_label_rect = atmosphere_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 345))
+                self.screen.blit(atmosphere_label, atmosphere_label_rect)
+                
+                # Draw the planet atmospheric composition dropdown
+                pygame.draw.rect(self.screen, self.WHITE, self.planet_atmosphere_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.planet_atmosphere_dropdown_active else self.GRAY, 
+                               self.planet_atmosphere_dropdown_rect, 1)
+                dropdown_text = "Select Atmospheric Composition"
+                if self.planet_atmosphere_dropdown_selected:
+                    selected = next(((name, value) for name, value in self.planet_atmosphere_dropdown_options if name == self.planet_atmosphere_dropdown_selected), None)
+                    if selected:
+                        name, value = selected
+                        if value is not None:
+                            dropdown_text = f"{name} (" + self._format_value(value, 'K') + " ΔT)"
+                        else:
+                            dropdown_text = name
+                text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
+                text_rect = text_surface.get_rect(midleft=(self.planet_atmosphere_dropdown_rect.left + 5, 
+                                                         self.planet_atmosphere_dropdown_rect.centery))
+                self.screen.blit(text_surface, text_rect)
+                
+                # Show custom atmosphere input if "Custom" is selected, just below dropdown
+                if self.show_custom_atmosphere_input:
+                    custom_atmosphere_label = self.subtitle_font.render("Enter Custom ΔT (K):", True, self.BLACK)
+                    custom_atmosphere_label_rect = custom_atmosphere_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 415))
+                    self.screen.blit(custom_atmosphere_label, custom_atmosphere_label_rect)
+                    
+                    custom_atmosphere_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 445, self.customization_panel_width - 100, 30)
+                    pygame.draw.rect(self.screen, self.WHITE, custom_atmosphere_input_rect, 2)
+                    pygame.draw.rect(self.screen, self.BLUE, custom_atmosphere_input_rect, 1)
+                    text_surface = self.subtitle_font.render(self.planet_atmosphere_input_text, True, self.BLACK)
+                    text_rect = text_surface.get_rect(midleft=(custom_atmosphere_input_rect.left + 5, custom_atmosphere_input_rect.centery))
+                    self.screen.blit(text_surface, text_rect)
+
                 # GRAVITY SECTION (only for planets)
                 gravity_label = self.subtitle_font.render("Surface Gravity (m/s²)", True, self.BLACK)
-                gravity_label_rect = gravity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 345))
+                gravity_label_rect = gravity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 405))
                 self.screen.blit(gravity_label, gravity_label_rect)
-                self.planet_gravity_dropdown_rect.y = 360
+                self.planet_gravity_dropdown_rect.y = 420
                 pygame.draw.rect(self.screen, self.WHITE, self.planet_gravity_dropdown_rect, 2)
                 pygame.draw.rect(self.screen, self.BLUE if self.planet_gravity_dropdown_active else self.GRAY, self.planet_gravity_dropdown_rect, 1)
                 dropdown_text = "Select Reference Planet"
@@ -4189,8 +4717,9 @@ class SolarSystemVisualizer:
                     self.screen.blit(text_surface, text_rect)
                 # Orbital Distance (AU) dropdown
                 orbital_distance_label = self.subtitle_font.render("Orbital Distance (AU)", True, self.BLACK)
-                orbital_distance_label_rect = orbital_distance_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 405))
+                orbital_distance_label_rect = orbital_distance_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 465))
                 self.screen.blit(orbital_distance_label, orbital_distance_label_rect)
+                self.planet_orbital_distance_dropdown_rect.y = 480
                 pygame.draw.rect(self.screen, self.WHITE, self.planet_orbital_distance_dropdown_rect, 2)
                 pygame.draw.rect(self.screen, self.BLUE if self.planet_orbital_distance_dropdown_active else self.GRAY, self.planet_orbital_distance_dropdown_rect, 1)
                 dropdown_text = "Select Orbital Distance"
@@ -4218,8 +4747,9 @@ class SolarSystemVisualizer:
                     self.screen.blit(text_surface, text_rect)
                 # Orbital Eccentricity dropdown
                 orbital_eccentricity_label = self.subtitle_font.render("Orbital Eccentricity", True, self.BLACK)
-                orbital_eccentricity_label_rect = orbital_eccentricity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 465))
+                orbital_eccentricity_label_rect = orbital_eccentricity_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 525))
                 self.screen.blit(orbital_eccentricity_label, orbital_eccentricity_label_rect)
+                self.planet_orbital_eccentricity_dropdown_rect.y = 540
                 pygame.draw.rect(self.screen, self.WHITE, self.planet_orbital_eccentricity_dropdown_rect, 2)
                 pygame.draw.rect(self.screen, self.BLUE if self.planet_orbital_eccentricity_dropdown_active else self.GRAY, self.planet_orbital_eccentricity_dropdown_rect, 1)
                 dropdown_text = "Select Orbital Eccentricity"
@@ -4247,8 +4777,9 @@ class SolarSystemVisualizer:
                     self.screen.blit(text_surface, text_rect)
                 # Orbital Period dropdown
                 orbital_period_label = self.subtitle_font.render("Orbital Period (days)", True, self.BLACK)
-                orbital_period_label_rect = orbital_period_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 525))
+                orbital_period_label_rect = orbital_period_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 585))
                 self.screen.blit(orbital_period_label, orbital_period_label_rect)
+                self.planet_orbital_period_dropdown_rect.y = 600
                 pygame.draw.rect(self.screen, self.WHITE, self.planet_orbital_period_dropdown_rect, 2)
                 pygame.draw.rect(self.screen, self.BLUE if self.planet_orbital_period_dropdown_active else self.GRAY, self.planet_orbital_period_dropdown_rect, 1)
                 dropdown_text = "Select Orbital Period"
@@ -4276,8 +4807,9 @@ class SolarSystemVisualizer:
                     self.screen.blit(text_surface, text_rect)
                 # Stellar Flux dropdown
                 stellar_flux_label = self.subtitle_font.render("Stellar Flux (Earth Units)", True, self.BLACK)
-                stellar_flux_label_rect = stellar_flux_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 585))
+                stellar_flux_label_rect = stellar_flux_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 645))
                 self.screen.blit(stellar_flux_label, stellar_flux_label_rect)
+                self.planet_stellar_flux_dropdown_rect.y = 660
                 pygame.draw.rect(self.screen, self.WHITE, self.planet_stellar_flux_dropdown_rect, 2)
                 pygame.draw.rect(self.screen, self.BLUE if self.planet_stellar_flux_dropdown_active else self.GRAY, self.planet_stellar_flux_dropdown_rect, 1)
                 dropdown_text = "Select Stellar Flux"
@@ -4295,9 +4827,9 @@ class SolarSystemVisualizer:
                 # Show custom stellar flux input if "Custom" is selected, just below dropdown
                 if self.show_custom_stellar_flux_input:
                     custom_flux_label = self.subtitle_font.render("Enter Custom Flux (EFU):", True, self.BLACK)
-                    custom_flux_label_rect = custom_flux_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 625))
+                    custom_flux_label_rect = custom_flux_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 685))
                     self.screen.blit(custom_flux_label, custom_flux_label_rect)
-                    custom_flux_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 655, self.customization_panel_width - 100, 30)
+                    custom_flux_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 715, self.customization_panel_width - 100, 30)
                     pygame.draw.rect(self.screen, self.WHITE, custom_flux_input_rect, 2)
                     pygame.draw.rect(self.screen, self.BLUE, custom_flux_input_rect, 1)
                     text_surface = self.subtitle_font.render(self.stellar_flux_input_text, True, self.BLACK)
@@ -4305,8 +4837,9 @@ class SolarSystemVisualizer:
                     self.screen.blit(text_surface, text_rect)
                 # Density dropdown (NEW)
                 density_label = self.subtitle_font.render("Density (g/cm³)", True, self.BLACK)
-                density_label_rect = density_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 645))
+                density_label_rect = density_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 705))
                 self.screen.blit(density_label, density_label_rect)
+                self.planet_density_dropdown_rect.y = 720
                 pygame.draw.rect(self.screen, self.WHITE, self.planet_density_dropdown_rect, 2)
                 pygame.draw.rect(self.screen, self.BLUE if self.planet_density_dropdown_active else self.GRAY, self.planet_density_dropdown_rect, 1)
                 dropdown_text = "Select Density"
@@ -4486,6 +5019,30 @@ class SolarSystemVisualizer:
                 # Draw a circle around the selected body
                 pygame.draw.circle(self.screen, self.RED, body["position"].astype(int), body["radius"] + 5, 2)
         
+        # Draw placement preview if active tab is selected
+        # Update preview position from mouse if not set or if mouse moved
+        if self.active_tab:
+            mouse_pos = pygame.mouse.get_pos()
+            space_area = pygame.Rect(0, self.tab_height + 2*self.tab_margin, 
+                                      self.width, 
+                                      self.height - (self.tab_height + 2*self.tab_margin))
+            if space_area.collidepoint(mouse_pos):
+                self.preview_position = mouse_pos
+                # Set preview radius based on object type if not already set
+                if self.preview_radius is None:
+                    if self.active_tab == "star":
+                        self.preview_radius = 20
+                    elif self.active_tab == "planet":
+                        self.preview_radius = 15
+                    else:  # moon
+                        self.preview_radius = 10
+            else:
+                self.preview_position = None
+                self.preview_radius = None
+        
+        if self.active_tab and self.preview_position and self.preview_radius:
+            self.draw_placement_preview()
+        
         # Draw instructions if a tab is active
         if self.active_tab:
             instruction_text = self.subtitle_font.render(f"Click in the space to place a {self.active_tab}", True, self.WHITE)
@@ -4519,9 +5076,10 @@ class SolarSystemVisualizer:
 
     def render(self, engine: SimulationEngine):
         """Main render function"""
-        if self.show_home_screen:
-            self.render_home_screen()
-        elif self.show_simulation_builder:
+        # Home screen removed - start directly in sandbox
+        # if self.show_home_screen:
+        #     self.render_home_screen()
+        if self.show_simulation_builder:
             self.render_simulation_builder()
         elif self.show_simulation:
             self.render_simulation(engine)
@@ -4556,6 +5114,31 @@ class SolarSystemVisualizer:
         tooltip_rect = tooltip_surface.get_rect(midleft=(rect.left + 5, rect.centery))
         self.screen.blit(tooltip_surface, tooltip_rect)
     
+    def _update_planet_scores(self):
+        """Update f_T (temperature score) and H (composite habitability score) for a planet."""
+        if not self.selected_body or self.selected_body.get('type') != 'planet':
+            return
+        
+        # Calculate f_T based on temperature (Earth-like temperature range is ideal)
+        # Using a simple model: f_T peaks at ~288K (Earth's average)
+        temp = self.selected_body.get('temperature', 288)
+        ideal_temp = 288.0  # Earth's average temperature
+        temp_range = 100.0  # Temperature range for habitability
+        
+        f_T = max(0.0, 1.0 - abs(temp - ideal_temp) / temp_range)
+        self.selected_body['f_T'] = f_T
+        
+        # Calculate composite habitability H (simple weighted average)
+        # This is a placeholder - adjust based on actual scoring formula
+        f_M = 1.0  # Mass factor (placeholder)
+        f_R = 1.0  # Radius factor (placeholder)
+        f_G = 1.0  # Gravity factor (placeholder)
+        
+        # Simple composite score
+        H = (f_T * 0.4 + f_M * 0.2 + f_R * 0.2 + f_G * 0.2)
+        self.selected_body['H'] = H
+        self.selected_body['habit_score'] = H * 100.0  # Convert to percentage
+        
     def _format_value(self, value, unit, allow_scientific=True, for_dropdown=True):
         if value is None:
             return "Custom"
@@ -4666,4 +5249,3 @@ class SolarSystemVisualizer:
     # or
     # dropdown_text = f"{name} (" + self._format_value(value, 'Earth masses') + ")"
     # etc.
-    #pre-refactor
