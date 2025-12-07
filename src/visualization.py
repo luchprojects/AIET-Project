@@ -4,12 +4,14 @@ import threading
 from typing import List, Tuple
 from simulation_engine import CelestialBody, SimulationEngine
 
-# Constants for AIET sandbox scaling (Earth–Sun system baseline)
-AU_TO_PX = 100        # 1 AU = 100 pixels (sets visual spacing)
-EARTH_RADIUS_PX = 10  # Earth's radius in sandbox pixels
-SUN_RADIUS_PX = 40    # Sun's radius
-MOON_ORBIT_PX = 30    # Moon's orbital distance in pixels (scaled up for visibility)
-TIME_SCALE = 0.001    # Orbital motion speed multiplier (lower = slower orbit)
+# Visual scaling constants (for sandbox view)
+AU_TO_PX = 160            # Slightly wider spacing
+SUN_RADIUS_PX = 32        # Sun smaller for cleaner layout
+EARTH_RADIUS_PX = 14      # Good
+MOON_RADIUS_PX = 6        # FIXED (scientific & UX approved)
+MOON_ORBIT_AU = 0.00257   # Scientifically correct
+MOON_ORBIT_PX = 40        # Great for UX
+TIME_SCALE = 0.3           # Smooth & readable orbit motion (increased for visible movement)
 
 class SolarSystemVisualizer:
     def __init__(self, width: int = 1200, height: int = 800):
@@ -663,7 +665,7 @@ class SolarSystemVisualizer:
             default_mass = 1.0  # Earth's Moon mass (1 lunar mass)
             default_age = 4.6  # Gyr
             default_name = params.get("name", "Moon")
-            default_radius = EARTH_RADIUS_PX * 0.27  # Moon is ~27% of Earth's radius
+            default_radius = MOON_RADIUS_PX  # Slightly enlarged for visibility
             
             # Calculate position based on semi_major_axis (relative to parent planet)
             semi_major_axis = params.get("semi_major_axis", 0.00257)  # Moon's distance in AU
@@ -795,6 +797,8 @@ class SolarSystemVisualizer:
         if len(stars) > 0 and len(planets) > 0:
             self.show_simulation_builder = False
             self.show_simulation = True
+            # Initialize all orbits when simulation starts
+            self.initialize_all_orbits()
     
     def auto_spawn_default_system(self):
         """Spawn default Sun–Earth–Moon using user-placement logic after init."""
@@ -2230,7 +2234,7 @@ class SolarSystemVisualizer:
                                 default_mass = 1.0  # Earth's Moon mass (1 lunar mass)
                                 default_age = 4.6  # Gyr
                                 default_name = "Moon"
-                                default_radius = EARTH_RADIUS_PX * 0.27  # Moon is ~27% of Earth's radius
+                                default_radius = MOON_RADIUS_PX  # Slightly enlarged for visibility
                             
                             body = {
                                 "type": self.active_tab,
@@ -2332,6 +2336,8 @@ class SolarSystemVisualizer:
                                 print(f"DEBUG: show_customization_panel before: {self.show_customization_panel}")
                                 self.show_simulation_builder = False
                                 self.show_simulation = True
+                                # Initialize all orbits when simulation starts
+                                self.initialize_all_orbits()
                                 print(f"DEBUG: show_customization_panel after: {self.show_customization_panel}")
                         else:
                             # Clicked empty space, deselect body
@@ -2712,22 +2718,26 @@ class SolarSystemVisualizer:
             body["orbit_angle"] = np.arctan2(dy, dx)
             
             # Calculate orbital speed for circular orbit
-            # v = sqrt(G * M / r) for circular orbit
+            # Angular speed: ω = sqrt(G * M / r^3) for circular orbit
             # For moons, use a faster orbital speed relative to their planet
-            if body["type"] == "moon":
-                # Moons orbit faster around planets
-                body["orbit_speed"] = np.sqrt(self.G * parent["mass"] / orbit_radius) / orbit_radius * 3.0
+            # Multiply by a factor to make motion more visible
+            if orbit_radius > 0:
+                base_speed = np.sqrt(self.G * parent["mass"] / (orbit_radius ** 3))
+                if body["type"] == "moon":
+                    # Moons orbit faster around planets - make them much faster for visibility
+                    body["orbit_speed"] = base_speed * 20.0  # Much faster for moons
+                else:
+                    body["orbit_speed"] = base_speed * 10.0  # Much faster for planets
             else:
-                body["orbit_speed"] = np.sqrt(self.G * parent["mass"] / orbit_radius) / orbit_radius
+                body["orbit_speed"] = 0.0
             
             # Set initial velocity for circular orbit
             # v_x = -v * sin(angle), v_y = v * cos(angle)
             v = body["orbit_speed"] * orbit_radius
             body["velocity"] = np.array([-v * np.sin(body["orbit_angle"]), v * np.cos(body["orbit_angle"])])
     
-    def update_physics(self):
-        """Update positions and velocities of all bodies"""
-        # First, establish parent-child relationships if not already set
+    def initialize_all_orbits(self):
+        """Initialize orbital relationships and velocities for all bodies when simulation starts"""
         for body in self.placed_bodies:
             if body["type"] == "planet" and not body["parent"]:
                 # Find nearest star
@@ -2743,6 +2753,37 @@ class SolarSystemVisualizer:
                     nearest_planet = min(planets, key=lambda p: np.linalg.norm(p["position"] - body["position"]))
                     body["parent"] = nearest_planet["name"]
                     self.generate_orbit_grid(body)
+            elif body["type"] != "star" and body["parent"]:
+                # Ensure bodies with parents have orbital velocities initialized
+                parent = next((b for b in self.placed_bodies if b["name"] == body["parent"]), None)
+                if parent and (body["orbit_speed"] == 0.0 or body["orbit_radius"] == 0.0):
+                    self.generate_orbit_grid(body)
+    
+    def update_physics(self):
+        """Update positions and velocities of all bodies"""
+        # First, establish parent-child relationships if not already set
+        for body in self.placed_bodies:
+            if body["type"] == "planet" and (not body.get("parent") or body["parent"] is None):
+                # Find nearest star
+                stars = [b for b in self.placed_bodies if b["type"] == "star"]
+                if stars:
+                    nearest_star = min(stars, key=lambda s: np.linalg.norm(s["position"] - body["position"]))
+                    body["parent"] = nearest_star["name"]
+                    self.generate_orbit_grid(body)
+            elif body["type"] == "moon" and (not body.get("parent") or body["parent"] is None):
+                # Find nearest planet
+                planets = [b for b in self.placed_bodies if b["type"] == "planet"]
+                if planets:
+                    nearest_planet = min(planets, key=lambda p: np.linalg.norm(p["position"] - body["position"]))
+                    body["parent"] = nearest_planet["name"]
+                    self.generate_orbit_grid(body)
+            
+            # Ensure bodies with parents have orbital velocities initialized
+            if body["type"] != "star" and body.get("parent") is not None:
+                parent = next((b for b in self.placed_bodies if b["name"] == body["parent"]), None)
+                if parent and (body.get("orbit_speed", 0.0) == 0.0 or body.get("orbit_radius", 0.0) == 0.0):
+                    # Regenerate orbit grid if orbital parameters aren't set
+                    self.generate_orbit_grid(body)
 
         # Update positions and velocities
         for body in self.placed_bodies:
@@ -2750,15 +2791,45 @@ class SolarSystemVisualizer:
                 # Stars remain stationary
                 continue
             
-            # Find parent body
-            parent = next((b for b in self.placed_bodies if b["name"] == body["parent"]), None)
+            # Find parent body - try to establish relationship if missing
+            parent = None
+            if body.get("parent") is not None:
+                parent = next((b for b in self.placed_bodies if b["name"] == body["parent"]), None)
+            
+            # If no parent found, try to find one now
+            if not parent:
+                if body["type"] == "planet":
+                    stars = [b for b in self.placed_bodies if b["type"] == "star"]
+                    if stars:
+                        parent = min(stars, key=lambda s: np.linalg.norm(s["position"] - body["position"]))
+                        body["parent"] = parent["name"]
+                        self.generate_orbit_grid(body)
+                elif body["type"] == "moon":
+                    planets = [b for b in self.placed_bodies if b["type"] == "planet"]
+                    if planets:
+                        parent = min(planets, key=lambda p: np.linalg.norm(p["position"] - body["position"]))
+                        body["parent"] = parent["name"]
+                        self.generate_orbit_grid(body)
+            
             if parent:
-                # Update orbit angle
-                body["orbit_angle"] += body["orbit_speed"] * self.time_step
+                # Ensure orbit_speed is set and non-zero
+                orbit_radius = body.get("orbit_radius", 0.0)
+                orbit_speed = body.get("orbit_speed", 0.0)
                 
-                # Calculate new position based on orbit angle
-                body["position"][0] = parent["position"][0] + body["orbit_radius"] * np.cos(body["orbit_angle"])
-                body["position"][1] = parent["position"][1] + body["orbit_radius"] * np.sin(body["orbit_angle"])
+                if orbit_speed == 0.0 or orbit_radius == 0.0:
+                    self.generate_orbit_grid(body)
+                    # Re-get values after regeneration
+                    orbit_radius = body.get("orbit_radius", 0.0)
+                    orbit_speed = body.get("orbit_speed", 0.0)
+                
+                # Update orbit angle if speed is non-zero
+                if orbit_speed != 0.0 and not np.isnan(orbit_speed):
+                    body["orbit_angle"] += orbit_speed * self.time_step
+                
+                # Always calculate new position based on orbit angle
+                if orbit_radius > 0.0 and not np.isnan(orbit_radius):
+                    body["position"][0] = parent["position"][0] + orbit_radius * np.cos(body["orbit_angle"])
+                    body["position"][1] = parent["position"][1] + orbit_radius * np.sin(body["orbit_angle"])
                 
                 # Update velocity for circular orbit
                 v = body["orbit_speed"] * body["orbit_radius"]
@@ -3310,8 +3381,8 @@ class SolarSystemVisualizer:
             title_rect = title_text.get_rect(center=(self.width - self.customization_panel_width//2, 50))
             self.screen.blit(title_text, title_rect)
             
-            # Draw habitability probability at the top center
-            if self.selected_body and self.selected_body.get('type') != 'star':
+            # Draw habitability probability at the top center (only for planets, not moons or stars)
+            if self.selected_body and self.selected_body.get('type') == 'planet':
                 # Shift right by 60 pixels
                 habitability_text = self.font.render(f"Habitability Probability: {self.selected_body.get('habit_score', 0.0):.2f}%", True, (0, 255, 0))  # Green color
                 habitability_rect = habitability_text.get_rect(center=(self.width//2 + 60, 30))
@@ -4993,6 +5064,18 @@ class SolarSystemVisualizer:
         
         # Draw spacetime grid in the space area
         self.draw_spacetime_grid()
+        
+        # Draw orbit grid lines first (so they appear behind the bodies)
+        for body in self.placed_bodies:
+            if body["type"] != "star" and body["name"] in self.orbit_grid_points:
+                grid_points = self.orbit_grid_points[body["name"]]
+                if len(grid_points) > 1:
+                    # Use different colors for different body types
+                    if body["type"] == "planet":
+                        color = self.LIGHT_GRAY
+                    else:  # moon
+                        color = (150, 150, 150)  # Slightly darker for moons
+                    pygame.draw.lines(self.screen, color, True, grid_points, 1)
         
         # Draw orbit lines and bodies
         for body in self.placed_bodies:
