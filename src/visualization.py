@@ -617,6 +617,25 @@ class SolarSystemVisualizer:
         # Initialize sandbox with auto-spawn (after all properties are initialized)
         self.initSandbox()
     
+    def calculate_hitbox_radius(self, obj_type: str, visual_radius: float) -> float:
+        """
+        Calculate hitbox radius for a celestial object based on its type and visual radius.
+        
+        Args:
+            obj_type: "star", "planet", or "moon"
+            visual_radius: The visual radius in pixels
+            
+        Returns:
+            Hitbox radius in pixels (visual_radius * scale_factor)
+        """
+        scale_factors = {
+            "star": 1.2,
+            "planet": 1.4,
+            "moon": 1.8
+        }
+        scale_factor = scale_factors.get(obj_type, 1.0)
+        return visual_radius * scale_factor
+    
     def place_object(self, obj_type: str, params: dict = None):
         """
         Place a celestial object using the same logic as user clicks.
@@ -683,6 +702,7 @@ class SolarSystemVisualizer:
             "position": position,
             "velocity": np.array([0.0, 0.0]),
             "radius": default_radius,
+            "hitbox_radius": self.calculate_hitbox_radius(obj_type, default_radius),  # Invisible click hitbox
             "name": default_name,
             "mass": default_mass * (1000.0 if obj_type == "star" else 1.0),  # Convert to Earth masses for stars
             "parent": None,
@@ -733,6 +753,7 @@ class SolarSystemVisualizer:
                 body.update({
                     "actual_radius": 1737.4,  # Actual radius in km (The Moon) - for dropdown logic
                     "radius": default_radius,  # Visual radius in pixels for display
+                    "hitbox_radius": self.calculate_hitbox_radius(obj_type, default_radius),  # Update hitbox to match radius
                     "orbit_radius": orbit_radius,  # Orbital distance in pixels (calculated from position)
                     "parent": parent_planet["name"],  # Set parent explicitly
                     "temperature": 220,  # Surface temperature in K (Earth's Moon)
@@ -743,6 +764,7 @@ class SolarSystemVisualizer:
                 body.update({
                     "actual_radius": 1737.4,
                     "radius": default_radius,
+                    "hitbox_radius": self.calculate_hitbox_radius(obj_type, default_radius),  # Update hitbox to match radius
                     "orbit_radius": MOON_ORBIT_PX,  # Fallback orbital distance
                     "temperature": 220,
                     "gravity": 1.62,
@@ -961,6 +983,8 @@ class SolarSystemVisualizer:
                                     else:
                                         # radius is in Earth radii, convert to pixels
                                         self.selected_body["radius"] = EARTH_RADIUS_PX * radius
+                                        # Update hitbox_radius to match new visual radius
+                                        self.selected_body["hitbox_radius"] = self.calculate_hitbox_radius(self.selected_body["type"], self.selected_body["radius"])
                                         self.show_custom_radius_input = False
                                     self.planet_radius_dropdown_selected = radius_name
                                     self.planet_radius_dropdown_visible = False
@@ -1564,6 +1588,8 @@ class SolarSystemVisualizer:
                                         # Scale the radius for visual display (convert km to appropriate pixel size)
                                         # Use a reasonable scale factor for moons
                                         self.selected_body["radius"] = max(5, min(20, radius / 100))  # Scale down and clamp
+                                        # Update hitbox_radius to match new visual radius
+                                        self.selected_body["hitbox_radius"] = self.calculate_hitbox_radius(self.selected_body["type"], self.selected_body["radius"])
                                         self.show_custom_moon_radius_input = False
                                     self.moon_radius_dropdown_selected = radius_name
                                     self.moon_radius_dropdown_visible = False
@@ -1977,6 +2003,8 @@ class SolarSystemVisualizer:
                                             # Scale the radius for visual display (convert km to appropriate pixel size)
                                             # Use a reasonable scale factor for moons
                                             self.selected_body["radius"] = max(5, min(20, value / 100))  # Scale down and clamp
+                                            # Update hitbox_radius to match new visual radius
+                                            self.selected_body["hitbox_radius"] = self.calculate_hitbox_radius(self.selected_body["type"], self.selected_body["radius"])
                                         else:
                                             self.show_custom_moon_radius_input = True
                                         self.moon_radius_dropdown_selected = name
@@ -2036,6 +2064,8 @@ class SolarSystemVisualizer:
                                         name, value = self.radius_dropdown_options[i]
                                         if value is not None:
                                             self.selected_body["radius"] = value
+                                            # Update hitbox_radius to match new visual radius
+                                            self.selected_body["hitbox_radius"] = self.calculate_hitbox_radius(self.selected_body["type"], self.selected_body["radius"])
                                         else:
                                             self.show_custom_radius_input = True
                                             self.radius_input_active = True
@@ -2135,12 +2165,13 @@ class SolarSystemVisualizer:
                                               self.width, 
                                               self.height - (self.tab_height + 2*self.tab_margin))
                         
-                        # Check if click is on a celestial body
+                        # Check if click is on a celestial body (using hitbox for easier selection)
                         clicked_body = None
                         for body in self.placed_bodies:
                             body_pos = body["position"].astype(int)
-                            body_radius = body["radius"]
-                            if (event.pos[0] - body_pos[0])**2 + (event.pos[1] - body_pos[1])**2 <= body_radius**2:
+                            # Use hitbox_radius if available, fallback to radius for backwards compatibility
+                            body_hitbox_radius = body.get("hitbox_radius", body["radius"])
+                            if (event.pos[0] - body_pos[0])**2 + (event.pos[1] - body_pos[1])**2 <= body_hitbox_radius**2:
                                 clicked_body = body
                                 break
                         
@@ -2241,6 +2272,7 @@ class SolarSystemVisualizer:
                                 "position": np.array([event.pos[0], event.pos[1]], dtype=float),
                                 "velocity": np.array([0.0, 0.0]),
                                 "radius": default_radius,
+                                "hitbox_radius": self.calculate_hitbox_radius(self.active_tab, default_radius),  # Invisible click hitbox
                                 "name": default_name,
                                 "mass": default_mass * (1000.0 if self.active_tab == "star" else 1.0),  # Convert to Earth masses for stars
                                 "parent": None,
@@ -2284,6 +2316,7 @@ class SolarSystemVisualizer:
                                 body.update({
                                     "actual_radius": 1737.4,  # Actual radius in km (The Moon) - for dropdown logic
                                     "radius": default_radius,  # Visual radius in pixels for display
+                                    "hitbox_radius": self.calculate_hitbox_radius(self.active_tab, default_radius),  # Update hitbox to match radius
                                     "orbit_radius": MOON_ORBIT_PX,  # Orbital distance in pixels
                                     "temperature": 220,  # Surface temperature in K (Earth's Moon)
                                     "gravity": 1.62,  # Surface gravity in m/s² (Earth's Moon)
@@ -2725,7 +2758,7 @@ class SolarSystemVisualizer:
                 base_speed = np.sqrt(self.G * parent["mass"] / (orbit_radius ** 3))
                 if body["type"] == "moon":
                     # Moons orbit faster around planets - make them much faster for visibility
-                    body["orbit_speed"] = base_speed * 20.0  # Much faster for moons
+                    body["orbit_speed"] = base_speed * 50.0  # Much faster for moons
                 else:
                     body["orbit_speed"] = base_speed * 10.0  # Much faster for planets
             else:
