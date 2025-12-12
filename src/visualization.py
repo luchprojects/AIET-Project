@@ -1,8 +1,102 @@
 import pygame
 import numpy as np
 import threading
+import time
+import traceback
+import math
 from typing import List, Tuple
 from simulation_engine import CelestialBody, SimulationEngine
+
+# ============================================================================
+# ORBIT DEBUG INSTRUMENTATION
+# ============================================================================
+DEBUG_ORBIT = True
+frame_trace = []  # Per-frame trace collector
+
+def orbit_log(msg):
+    """Debug logger for orbit diagnostics"""
+    if DEBUG_ORBIT:
+        print(f"[ORBIT_DBG] {time.time():.3f} | {msg}")
+
+def trace(msg):
+    """Add a trace message to the current frame"""
+    if DEBUG_ORBIT:
+        frame_trace.append(msg)
+
+def run_orbit_unit_test():
+    """Deterministic unit test for moon orbit mechanics"""
+    orbit_log("=" * 80)
+    orbit_log("STARTING ORBIT UNIT TEST")
+    orbit_log("=" * 80)
+    
+    # Create clean test objects
+    star_test = {
+        "position": np.array([0.0, 0.0], dtype=float),
+        "type": "star",
+        "name": "StarTest"
+    }
+    
+    planet_test = {
+        "orbit_radius": 100.0,
+        "orbit_angle": 0.0,
+        "orbit_speed": 0.02,
+        "type": "planet",
+        "name": "PlanetTest",
+        "parent_obj": star_test,
+        "position": np.array([100.0, 0.0], dtype=float)
+    }
+    
+    moon_test = {
+        "orbit_radius": 20.0,
+        "orbit_angle": 0.0,
+        "orbit_speed": 0.2,
+        "type": "moon",
+        "name": "MoonTest",
+        "parent_obj": planet_test,
+        "position": planet_test["position"] + np.array([20.0, 0.0], dtype=float)
+    }
+    
+    max_error = 0.0
+    error_frames = []
+    
+    # Run deterministic loop
+    for frame in range(1, 201):
+        # Update planet first
+        planet_test["orbit_angle"] += planet_test["orbit_speed"]
+        planet_test["position"][0] = star_test["position"][0] + planet_test["orbit_radius"] * math.cos(planet_test["orbit_angle"])
+        planet_test["position"][1] = star_test["position"][1] + planet_test["orbit_radius"] * math.sin(planet_test["orbit_angle"])
+        
+        # Then update moon
+        moon_test["orbit_angle"] += moon_test["orbit_speed"]
+        moon_test["position"][0] = planet_test["position"][0] + moon_test["orbit_radius"] * math.cos(moon_test["orbit_angle"])
+        moon_test["position"][1] = planet_test["position"][1] + moon_test["orbit_radius"] * math.sin(moon_test["orbit_angle"])
+        
+        # Compute expected position
+        expected = planet_test["position"] + np.array([
+            moon_test["orbit_radius"] * math.cos(moon_test["orbit_angle"]),
+            moon_test["orbit_radius"] * math.sin(moon_test["orbit_angle"])
+        ])
+        
+        # Calculate error
+        err = np.linalg.norm(moon_test["position"] - expected)
+        if err > max_error:
+            max_error = err
+        if err > 1e-6:
+            error_frames.append((frame, err))
+        
+        if frame <= 10 or frame % 50 == 0 or err > 1e-6:
+            print(f"[UNIT_TEST] frame={frame} planet_pos={planet_test['position']} moon_pos={moon_test['position']} expected={expected} err={err:.6e}")
+    
+    # Summary
+    orbit_log("=" * 80)
+    if max_error <= 1e-6:
+        orbit_log(f"UNIT TEST PASSED: max_error={max_error:.6e}")
+    else:
+        orbit_log(f"UNIT TEST FAILED: max_error={max_error:.6e}")
+        orbit_log(f"Error frames: {error_frames[:20]}")
+    orbit_log("=" * 80)
+    
+    return max_error <= 1e-6
 
 # Visual scaling constants (for sandbox view)
 AU_TO_PX = 160            # Slightly wider spacing
@@ -40,6 +134,10 @@ class SolarSystemVisualizer:
         
         # Log sandbox initialization
         print("AIET sandbox initialized.")
+        
+        # Run orbit unit test on startup
+        if DEBUG_ORBIT:
+            run_orbit_unit_test()
         
         # Colors
         self.BLACK = (0, 0, 0)
@@ -88,7 +186,26 @@ class SolarSystemVisualizer:
         
         # Physics parameters
         self.G = 0.5  # Gravitational constant (reduced for more stable orbits)
-        self.time_step = 0.05 * TIME_SCALE  # Simulation time step (reduced for smoother motion)
+        self.base_time_step = 0.05  # Base simulation time step
+        self.time_scale = TIME_SCALE  # Global time scale multiplier
+        self.paused = False  # Global pause state
+        self.time_slider_value = self._slider_from_scale(self.time_scale)  # Normalized slider position (0–1)
+        self.time_slider_dragging = False
+        
+        # Camera state
+        self.camera_zoom = 1.0
+        self.camera_offset = [0.0, 0.0]
+        self.camera_zoom_min = 0.3
+        self.camera_zoom_max = 5.0
+        self.is_panning = False
+        self.pan_start = None
+        self.last_zoom_for_orbits = 1.0
+        self.orbit_screen_cache = {}  # name -> (zoom, points)
+        self.orbit_grid_screen_cache = {}  # name -> (zoom, points)
+        self.last_middle_click_time = 0
+        
+        # Reset-view button (optional UX helper)
+        self.reset_view_button = pygame.Rect(self.width - 140, self.tab_margin, 110, 30)
         self.orbit_points = {}  # Store orbit points for visualization
         self.orbit_history = {}  # Store orbit history for trail effect
         self.orbit_grid_points = {}  # Store grid points for orbit visualization
@@ -349,6 +466,12 @@ class SolarSystemVisualizer:
         self.close_button_size = 20
         self.close_button = pygame.Rect(self.width - self.close_button_size - 10, 10, 
                                       self.close_button_size, self.close_button_size)
+        
+        # Orbit toggle UI elements (only for planets and moons)
+        # Position these near the bottom of the customization panel
+        self.orbit_toggle_y = 700  # Y position for orbit toggles
+        self.orbit_enabled_checkbox = pygame.Rect(self.width - self.customization_panel_width + 50, self.orbit_toggle_y, 20, 20)
+        self.last_revolution_checkbox = pygame.Rect(self.width - self.customization_panel_width + 50, self.orbit_toggle_y + 30, 20, 20)
         
         # Age input properties
         self.age_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 180, 
@@ -617,6 +740,332 @@ class SolarSystemVisualizer:
         # Initialize sandbox with auto-spawn (after all properties are initialized)
         self.initSandbox()
     
+    def _slider_from_scale(self, scale: float) -> float:
+        """Map a time scale (0–5) to a normalized slider position (0–1) using piecewise segments."""
+        scale = max(0.0, min(5.0, scale))
+        points = [
+            (0.0, 0.0),
+            (0.1, 0.1),
+            (0.25, 0.25),
+            (0.5, 1.0),
+            (0.75, 2.0),
+            (1.0, 5.0),
+        ]
+        for i in range(1, len(points)):
+            x0, y0 = points[i - 1]
+            x1, y1 = points[i]
+            if y0 <= scale <= y1:
+                if y1 == y0:
+                    return x0
+                t = (scale - y0) / (y1 - y0)
+                return x0 + t * (x1 - x0)
+        return 1.0
+    
+    def _scale_from_slider(self, slider_pos: float) -> float:
+        """Map a normalized slider position (0–1) to time scale (0–5) using piecewise segments."""
+        slider_pos = max(0.0, min(1.0, slider_pos))
+        points = [
+            (0.0, 0.0),
+            (0.1, 0.1),
+            (0.25, 0.25),
+            (0.5, 1.0),
+            (0.75, 2.0),
+            (1.0, 5.0),
+        ]
+        for i in range(1, len(points)):
+            x0, y0 = points[i - 1]
+            x1, y1 = points[i]
+            if x0 <= slider_pos <= x1:
+                if x1 == x0:
+                    return y0
+                t = (slider_pos - x0) / (x1 - x0)
+                return y0 + t * (y1 - y0)
+        return 5.0
+    
+    def _get_time_controls_layout(self):
+        """Compute rects and positions for the time control bar and its elements."""
+        bar_width = int(self.width * 0.6)
+        bar_height = 90
+        bar_x = (self.width - bar_width) // 2
+        bar_y = self.height - bar_height - 15  # 10–20 px above bottom edge
+        bar_rect = pygame.Rect(bar_x, bar_y, bar_width, bar_height)
+        
+        btn_size = 40
+        gap = 12
+        left_padding = 20
+        pause_rect = pygame.Rect(bar_x + left_padding, bar_y + (bar_height - btn_size) // 2, btn_size, btn_size)
+        play_rect = pygame.Rect(pause_rect.right + gap, pause_rect.top, btn_size, btn_size)
+        
+        slider_width = 300
+        slider_height = 6
+        slider_x = play_rect.right + 24
+        slider_y = bar_y + bar_height // 2
+        slider_rect = pygame.Rect(slider_x, slider_y - slider_height // 2, slider_width, slider_height)
+        
+        knob_radius = 8
+        knob_x = slider_rect.left + int(self.time_slider_value * slider_width)
+        knob_center = (knob_x, slider_rect.centery)
+        
+        return {
+            "bar_rect": bar_rect,
+            "pause_rect": pause_rect,
+            "play_rect": play_rect,
+            "slider_rect": slider_rect,
+            "knob_center": knob_center,
+            "knob_radius": knob_radius,
+            "bar_height": bar_height,
+        }
+    
+    def world_to_screen(self, pos):
+        """Convert world coordinates to screen coordinates using camera."""
+        return [
+            pos[0] * self.camera_zoom + self.camera_offset[0],
+            pos[1] * self.camera_zoom + self.camera_offset[1],
+        ]
+    
+    def screen_to_world(self, pos):
+        # Instrumentation: Coordinate transform
+        if DEBUG_ORBIT:
+            trace(f"COORD_TRANSFORM screen_to_world pos={pos}")
+        """Convert screen coordinates to world coordinates using camera."""
+        return [
+            (pos[0] - self.camera_offset[0]) / self.camera_zoom,
+            (pos[1] - self.camera_offset[1]) / self.camera_zoom,
+        ]
+    
+    def reset_camera(self):
+        """Reset camera to default view (zoom=1.0, offset=[0,0]). Does not affect physics or object positions."""
+        self.camera_zoom = 1.0
+        self.camera_offset = [0.0, 0.0]
+        # Clear orbit caches so they recalculate at new zoom
+        self.orbit_screen_cache.clear()
+        self.orbit_grid_screen_cache.clear()
+        self.last_zoom_for_orbits = self.camera_zoom
+    
+    def _cached_screen_points(self, name, points, cache_dict):
+        """Transform a list of world-space points to screen-space with zoom caching."""
+        if not points:
+            return []
+        cached = cache_dict.get(name)
+        if cached:
+            prev_zoom, cached_pts = cached
+            if abs(self.camera_zoom - prev_zoom) / max(prev_zoom, 1e-6) <= 0.02:
+                return cached_pts
+        screen_pts = [np.array(self.world_to_screen(p)) for p in points]
+        cache_dict[name] = (self.camera_zoom, screen_pts)
+        return screen_pts
+    
+    def _any_dropdown_active(self) -> bool:
+        """Return True if any dropdown overlay is active/visible."""
+        return (
+            self.planet_dropdown_visible
+            or self.moon_dropdown_visible
+            or self.star_mass_dropdown_visible
+            or self.luminosity_dropdown_visible
+            or self.planet_age_dropdown_visible
+            or self.star_age_dropdown_visible
+            or self.moon_age_dropdown_visible
+            or self.moon_radius_dropdown_visible
+            or self.moon_orbital_distance_dropdown_visible
+            or self.moon_orbital_period_dropdown_visible
+            or self.moon_temperature_dropdown_visible
+            or self.moon_gravity_dropdown_visible
+            or self.spectral_class_dropdown_visible
+            or self.radius_dropdown_visible
+            or self.activity_dropdown_visible
+            or self.metallicity_dropdown_visible
+            or self.planet_radius_dropdown_visible
+            or self.planet_temperature_dropdown_visible
+            or self.planet_atmosphere_dropdown_visible
+            or self.planet_gravity_dropdown_visible
+            or self.planet_orbital_distance_dropdown_visible
+            or self.planet_orbital_eccentricity_dropdown_visible
+            or self.planet_orbital_period_dropdown_visible
+            or self.planet_stellar_flux_dropdown_visible
+            or self.planet_density_dropdown_visible
+        )
+    
+    def _update_slider_from_pos(self, mouse_x: int, layout: dict):
+        """Update time scale based on mouse x within the slider track."""
+        slider_rect = layout["slider_rect"]
+        slider_width = slider_rect.width
+        clamped_x = max(slider_rect.left, min(mouse_x, slider_rect.right))
+        slider_value = (clamped_x - slider_rect.left) / slider_width
+        self.time_slider_value = slider_value
+        self.time_scale = self._scale_from_slider(slider_value)
+        # Slider far-left acts as pause
+        self.paused = self.time_scale == 0.0
+    
+    def handle_time_controls_input(self, event, mouse_pos) -> bool:
+        """Handle mouse input for time controls. Returns True if the event was consumed."""
+        # Ignore when dropdown overlays are active to prevent interference
+        if self._any_dropdown_active():
+            return False
+        
+        layout = self._get_time_controls_layout()
+        pause_rect = layout["pause_rect"]
+        play_rect = layout["play_rect"]
+        slider_rect = layout["slider_rect"]
+        knob_center = layout["knob_center"]
+        knob_radius = layout["knob_radius"]
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            # Check knob first for dragging
+            if (mouse_pos[0] - knob_center[0]) ** 2 + (mouse_pos[1] - knob_center[1]) ** 2 <= (knob_radius + 3) ** 2:
+                self.time_slider_dragging = True
+                self._update_slider_from_pos(mouse_pos[0], layout)
+                # Unpause if moving off zero
+                if self.time_scale > 0:
+                    self.paused = False
+                return True
+            
+            # Pause button
+            if pause_rect.collidepoint(mouse_pos):
+                self.paused = True
+                return True
+            
+            # Play button
+            if play_rect.collidepoint(mouse_pos):
+                # If scale is zero, restore to normal speed
+                if self.time_scale == 0.0:
+                    self.time_scale = 1.0
+                    self.time_slider_value = self._slider_from_scale(self.time_scale)
+                self.paused = False
+                return True
+            
+            # Slider bar click
+            if slider_rect.collidepoint(mouse_pos):
+                self.time_slider_dragging = True
+                self._update_slider_from_pos(mouse_pos[0], layout)
+                if self.time_scale > 0:
+                    self.paused = False
+                return True
+        
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            if self.time_slider_dragging:
+                self._update_slider_from_pos(mouse_pos[0], layout)
+                self.time_slider_dragging = False
+                if self.time_scale > 0:
+                    self.paused = False
+                return True
+        
+        elif event.type == pygame.MOUSEMOTION:
+            if self.time_slider_dragging:
+                self._update_slider_from_pos(mouse_pos[0], layout)
+                if self.time_scale > 0:
+                    self.paused = False
+                return True
+        
+        return False
+    
+    def draw_time_controls(self, surface):
+        """Draw the time control bar and its interactive elements."""
+        layout = self._get_time_controls_layout()
+        bar_rect = layout["bar_rect"]
+        pause_rect = layout["pause_rect"]
+        play_rect = layout["play_rect"]
+        slider_rect = layout["slider_rect"]
+        knob_center = layout["knob_center"]
+        knob_radius = layout["knob_radius"]
+        
+        # Create bar surface
+        bar_surface = pygame.Surface((bar_rect.width, bar_rect.height), pygame.SRCALPHA)
+        bar_surface.fill((20, 20, 20, 150))
+        
+        # Colors
+        base_btn_color = (200, 200, 200)
+        active_btn_color = (0, 180, 255)
+        pause_color = active_btn_color if self.paused or self.time_scale == 0.0 else base_btn_color
+        play_color = active_btn_color if (not self.paused and self.time_scale > 0.0) else base_btn_color
+        
+        # Draw pause button (two bars)
+        pygame.draw.rect(bar_surface, pause_color, pause_rect.move(-bar_rect.left, -bar_rect.top), border_radius=6)
+        bar_inner_offset = 10
+        bar_width = 6
+        bar_height = pause_rect.height - 14
+        py = pause_rect.top - bar_rect.top + 7
+        px = pause_rect.left - bar_rect.left + bar_inner_offset
+        pygame.draw.rect(bar_surface, (40, 40, 40), pygame.Rect(px, py, bar_width, bar_height))
+        pygame.draw.rect(bar_surface, (40, 40, 40), pygame.Rect(px + 14, py, bar_width, bar_height))
+        
+        # Draw play button (triangle)
+        pygame.draw.rect(bar_surface, play_color, play_rect.move(-bar_rect.left, -bar_rect.top), border_radius=6)
+        triangle_margin = 10
+        triangle = [
+            (play_rect.left - bar_rect.left + triangle_margin, play_rect.top - bar_rect.top + triangle_margin),
+            (play_rect.left - bar_rect.left + triangle_margin, play_rect.bottom - bar_rect.top - triangle_margin),
+            (play_rect.right - bar_rect.left - triangle_margin, play_rect.centery - bar_rect.top),
+        ]
+        pygame.draw.polygon(bar_surface, (40, 40, 40), triangle)
+        
+        # Draw slider track
+        pygame.draw.rect(bar_surface, (160, 160, 160), slider_rect.move(-bar_rect.left, -bar_rect.top), border_radius=3)
+        # Draw knob
+        pygame.draw.circle(bar_surface, (240, 240, 240), (knob_center[0] - bar_rect.left, knob_center[1] - bar_rect.top), knob_radius)
+        
+        # Labels
+        label_text = self.subtitle_font.render("Time Scale", True, self.WHITE)
+        label_rect = label_text.get_rect(midbottom=(slider_rect.centerx - bar_rect.left, slider_rect.top - bar_rect.top - 6))
+        bar_surface.blit(label_text, label_rect)
+        
+        scale_text = self.subtitle_font.render(f"x{self.time_scale:.2f}", True, self.WHITE)
+        scale_rect = scale_text.get_rect(midtop=(slider_rect.centerx - bar_rect.left, slider_rect.bottom - bar_rect.top + 6))
+        bar_surface.blit(scale_text, scale_rect)
+        
+        # Blit bar
+        surface.blit(bar_surface, bar_rect.topleft)
+        
+        # Tooltips
+        tooltip_text = None
+        mouse_pos = pygame.mouse.get_pos()
+        if pause_rect.collidepoint(mouse_pos):
+            tooltip_text = "Pause Simulation"
+        elif play_rect.collidepoint(mouse_pos):
+            tooltip_text = "Resume Simulation"
+        else:
+            # Check knob or slider
+            if (mouse_pos[0] - knob_center[0]) ** 2 + (mouse_pos[1] - knob_center[1]) ** 2 <= (knob_radius + 3) ** 2 or slider_rect.collidepoint(mouse_pos):
+                tooltip_text = "Drag to change orbital speed"
+        
+        if tooltip_text:
+            tooltip_surface = self.subtitle_font.render(tooltip_text, True, self.WHITE)
+            padding = 6
+            bg_rect = tooltip_surface.get_rect()
+            bg_rect.inflate_ip(padding * 2, padding * 2)
+            bg_rect.topleft = (mouse_pos[0] + 12, mouse_pos[1] - bg_rect.height // 2)
+            # Ensure tooltip stays on screen
+            if bg_rect.right > self.width:
+                bg_rect.right = self.width - 5
+            if bg_rect.bottom > self.height:
+                bg_rect.bottom = self.height - 5
+            tooltip_bg = pygame.Surface(bg_rect.size, pygame.SRCALPHA)
+            tooltip_bg.fill((0, 0, 0, 180))
+            surface.blit(tooltip_bg, bg_rect.topleft)
+            surface.blit(tooltip_surface, (bg_rect.left + padding, bg_rect.top + padding))
+    
+    def draw_reset_button(self):
+        """Draw the Reset View button in screen space (not affected by camera)."""
+        mouse_pos = pygame.mouse.get_pos()
+        is_hovering = self.reset_view_button.collidepoint(mouse_pos)
+        
+        # Button background color (brighter on hover)
+        if is_hovering:
+            bg_color = (230, 230, 230, 200)
+        else:
+            bg_color = (200, 200, 200, 180)
+        
+        # Draw button background
+        button_surface = pygame.Surface((self.reset_view_button.width, self.reset_view_button.height), pygame.SRCALPHA)
+        button_surface.fill(bg_color)
+        self.screen.blit(button_surface, self.reset_view_button.topleft)
+        
+        # Draw white border
+        pygame.draw.rect(self.screen, (255, 255, 255), self.reset_view_button, 2, border_radius=6)
+        
+        # Draw button text
+        label = self.subtitle_font.render("Reset View", True, (255, 255, 255))
+        text_rect = label.get_rect(center=self.reset_view_button.center)
+        self.screen.blit(label, text_rect)
+    
     def calculate_hitbox_radius(self, obj_type: str, visual_radius: float) -> float:
         """
         Calculate hitbox radius for a celestial object based on its type and visual radius.
@@ -699,13 +1148,14 @@ class SolarSystemVisualizer:
         
         body = {
             "type": obj_type,
-            "position": position,
+            "position": np.array(position, dtype=float),  # Ensure position is float array
             "velocity": np.array([0.0, 0.0]),
             "radius": default_radius,
             "hitbox_radius": self.calculate_hitbox_radius(obj_type, default_radius),  # Invisible click hitbox
             "name": default_name,
             "mass": default_mass * (1000.0 if obj_type == "star" else 1.0),  # Convert to Earth masses for stars
             "parent": None,
+            "parent_obj": None,  # Permanent parent reference for faster lookups
             "orbit_radius": 0.0,  # Distance from parent
             "orbit_angle": 0.0,   # Current angle in orbit
             "orbit_speed": 0.0,   # Angular speed
@@ -713,6 +1163,9 @@ class SolarSystemVisualizer:
             "rotation_speed": self.rotation_speed * (1.0 if obj_type == "planet" else 2.0 if obj_type == "moon" else 0.0), # Rotation speed
             "age": default_age,  # Set default age
             "habit_score": 0.0,  # Added habitability score attribute
+            "orbit_points": [],  # Persistent orbit curve points
+            "max_orbit_points": 2000,  # Full history (~1-2 revolutions depending on timestep)
+            "orbit_enabled": True,  # Toggle for showing orbit lines
         }
         
         # Add planet-specific attributes
@@ -741,6 +1194,8 @@ class SolarSystemVisualizer:
                 "star_temperature": 5778,  # Sun's temperature in Kelvin
                 "star_color": (255, 255, 0),  # Yellow color for G-type star
             })
+            # Create habitable zone for the star
+            body["hz_surface"] = self.create_habitable_zone(body)
         
         # Add moon-specific attributes
         if obj_type == "moon":
@@ -750,11 +1205,40 @@ class SolarSystemVisualizer:
             if parent_planet:
                 # Calculate orbit radius from parent planet's position
                 orbit_radius = np.linalg.norm(position - parent_planet["position"])
+                # Ensure minimum orbit radius
+                if orbit_radius < MOON_ORBIT_PX:
+                    orbit_radius = MOON_ORBIT_PX
+                
+                # Calculate initial orbit angle from position
+                dx = position[0] - parent_planet["position"][0]
+                dy = position[1] - parent_planet["position"][1]
+                orbit_angle = np.arctan2(dy, dx)
+                
+                # Calculate orbital speed for circular orbit
+                base_speed = np.sqrt(self.G * parent_planet["mass"] / (orbit_radius ** 3))
+                # Moons need faster orbital speed for visible motion
+                MOON_SPEED_FACTOR = 5.0
+                orbit_speed = base_speed * MOON_SPEED_FACTOR
+                
+                # CRITICAL: Immediately recalculate moon position from planet + orbit offset
+                # This ensures the moon starts at the correct position relative to the planet
+                moon_offset_x = orbit_radius * np.cos(orbit_angle)
+                moon_offset_y = orbit_radius * np.sin(orbit_angle)
+                position[0] = parent_planet["position"][0] + moon_offset_x
+                position[1] = parent_planet["position"][1] + moon_offset_y
+                
+                # Set initial velocity for circular orbit
+                v = orbit_speed * orbit_radius
+                velocity = np.array([-v * np.sin(orbit_angle), v * np.cos(orbit_angle)])
+                
                 body.update({
                     "actual_radius": 1737.4,  # Actual radius in km (The Moon) - for dropdown logic
                     "radius": default_radius,  # Visual radius in pixels for display
                     "hitbox_radius": self.calculate_hitbox_radius(obj_type, default_radius),  # Update hitbox to match radius
                     "orbit_radius": orbit_radius,  # Orbital distance in pixels (calculated from position)
+                    "orbit_angle": orbit_angle,  # Initial orbit angle
+                    "orbit_speed": orbit_speed,  # Orbital speed
+                    "velocity": velocity,  # Initial velocity
                     "parent": parent_planet["name"],  # Set parent explicitly
                     "temperature": 220,  # Surface temperature in K (Earth's Moon)
                     "gravity": 1.62,  # Surface gravity in m/s² (Earth's Moon)
@@ -772,8 +1256,8 @@ class SolarSystemVisualizer:
                 })
         
         self.placed_bodies.append(body)
-        self.orbit_points[body["name"]] = []
-        self.orbit_history[body["name"]] = []
+        # Note: orbit_points is now stored in the body dict itself, not in self.orbit_points
+        # Keeping self.orbit_points for backward compatibility during transition, but it will be removed
         
         # Set dropdown selections to match defaults
         if obj_type == "star":
@@ -809,8 +1293,19 @@ class SolarSystemVisualizer:
         if obj_type == "planet":
             self.generate_orbit_grid(body)
         elif obj_type == "moon" and body.get("parent"):
-            # Moon's parent is already set, generate orbit grid
-            self.generate_orbit_grid(body)
+            # Moon's parent is already set, generate orbit grid for visualization
+            # But preserve orbital parameters we just set
+            parent_planet = next((b for b in self.placed_bodies if b["name"] == body["parent"]), None)
+            if parent_planet:
+                # Generate grid points for visualization (preserve orbital parameters)
+                orbit_radius = body.get("orbit_radius", MOON_ORBIT_PX)
+                grid_points = []
+                for i in range(100):  # 100 points for a smooth circle
+                    angle = i * 2 * np.pi / 100
+                    x = parent_planet["position"][0] + orbit_radius * np.cos(angle)
+                    y = parent_planet["position"][1] + orbit_radius * np.sin(angle)
+                    grid_points.append(np.array([x, y]))
+                self.orbit_grid_points[body["name"]] = grid_points
         
         # Automatically start simulation when at least one star and one planet are placed
         stars = [b for b in self.placed_bodies if b["type"] == "star"]
@@ -819,6 +1314,12 @@ class SolarSystemVisualizer:
         if len(stars) > 0 and len(planets) > 0:
             self.show_simulation_builder = False
             self.show_simulation = True
+            # Clear any selected body and active tab when simulation starts for better UX
+            self.selected_body = None
+            self.show_customization_panel = False
+            self.active_tab = None
+            self.preview_position = None
+            self.preview_radius = None
             # Initialize all orbits when simulation starts
             self.initialize_all_orbits()
     
@@ -841,7 +1342,92 @@ class SolarSystemVisualizer:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return False
-            elif event.type == pygame.MOUSEBUTTONDOWN:
+            
+            # Handle Reset View button click (UI only, screen space) - check before other handlers
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if self.reset_view_button.collidepoint(event.pos):
+                    self.reset_camera()
+                    continue  # Consume event to prevent other handlers
+            
+            # Time control interactions (pause/play/slider) – handle before other UI (simulation only)
+            handled_tc = False
+            if (
+                self.show_simulation
+                and event.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP, pygame.MOUSEMOTION)
+                and hasattr(event, "pos")
+            ):
+                layout = self._get_time_controls_layout()
+                pause_rect = layout["pause_rect"]
+                play_rect = layout["play_rect"]
+                slider_rect = layout["slider_rect"]
+                knob_center = layout["knob_center"]
+                knob_radius = layout["knob_radius"]
+                # Consider interactions only if on controls or currently dragging
+                on_controls = (
+                    pause_rect.collidepoint(event.pos)
+                    or play_rect.collidepoint(event.pos)
+                    or slider_rect.inflate(12, 12).collidepoint(event.pos)
+                    or ((event.pos[0] - knob_center[0]) ** 2 + (event.pos[1] - knob_center[1]) ** 2 <= (knob_radius + 6) ** 2)
+                )
+                # Always clear dragging on mouse up
+                if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                    self.time_slider_dragging = False
+                # Only consume if dragging or actually on the controls
+                if self.time_slider_dragging or on_controls:
+                    if self.handle_time_controls_input(event, event.pos):
+                        handled_tc = True
+            if handled_tc:
+                continue
+            
+            # Camera controls (pan/zoom)
+            if event.type == pygame.MOUSEWHEEL:
+                mouse_x, mouse_y = pygame.mouse.get_pos()
+                world_before = self.screen_to_world((mouse_x, mouse_y))
+                if event.y > 0:
+                    self.camera_zoom *= 1.1
+                elif event.y < 0:
+                    self.camera_zoom /= 1.1
+                self.camera_zoom = max(self.camera_zoom_min, min(self.camera_zoom_max, self.camera_zoom))
+                # Adjust offset so zoom is centered on cursor
+                self.camera_offset[0] = mouse_x - world_before[0] * self.camera_zoom
+                self.camera_offset[1] = mouse_y - world_before[1] * self.camera_zoom
+                # Invalidate orbit screen caches when zoom changes significantly (>2%)
+                if abs(self.camera_zoom - self.last_zoom_for_orbits) / max(self.last_zoom_for_orbits, 1e-6) > 0.02:
+                    self.orbit_screen_cache.clear()
+                    self.orbit_grid_screen_cache.clear()
+                    self.last_zoom_for_orbits = self.camera_zoom
+                continue
+            
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
+                # Right-click start pan
+                self.is_panning = True
+                self.pan_start = event.pos
+                continue
+            if event.type == pygame.MOUSEBUTTONUP and event.button == 3:
+                self.is_panning = False
+                self.pan_start = None
+                continue
+            if event.type == pygame.MOUSEMOTION and self.is_panning and self.pan_start:
+                dx = event.pos[0] - self.pan_start[0]
+                dy = event.pos[1] - self.pan_start[1]
+                self.camera_offset[0] += dx
+                self.camera_offset[1] += dy
+                self.pan_start = event.pos
+                continue
+            
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 2:
+                now = pygame.time.get_ticks()
+                if now - self.last_middle_click_time < 300:
+                    # Double middle-click: reset view
+                    self.camera_zoom = 1.0
+                    self.camera_offset = [0.0, 0.0]
+                    self.orbit_screen_cache.clear()
+                    self.orbit_grid_screen_cache.clear()
+                    self.last_zoom_for_orbits = self.camera_zoom
+                self.last_middle_click_time = now
+                continue
+
+            if event.type == pygame.MOUSEBUTTONDOWN:
                 # Home screen removed - start directly in sandbox
                 # if self.show_home_screen:
                 #     # Check if click is within the create button area
@@ -871,13 +1457,41 @@ class SolarSystemVisualizer:
                             self.planet_dropdown_active = False
                             self.planet_dropdown_visible = False
                             self.luminosity_input_active = False
-                        # Handle planet dropdown (only for planets)
-                        elif (self.selected_body and self.selected_body.get('type') == 'planet' and 
+                        # Handle planet dropdown FIRST (only for planets) - check before checkboxes
+                        if (self.selected_body and self.selected_body.get('type') == 'planet' and 
                               self.planet_dropdown_rect.collidepoint(event.pos)):
+                            print(f'DEBUG: Planet dropdown clicked at {event.pos}')
                             self.planet_dropdown_active = True
                             self.mass_input_active = False
                             self.planet_dropdown_visible = True
                             self.create_dropdown_surface()
+                        # Handle moon dropdown (only for moons) - check before checkboxes
+                        elif (self.selected_body and self.selected_body.get('type') == 'moon' and 
+                              self.moon_dropdown_rect.collidepoint(event.pos)):
+                            print(f'DEBUG: Moon dropdown clicked at {event.pos}')
+                            self.moon_dropdown_active = True
+                            self.mass_input_active = False
+                            self.moon_dropdown_visible = True
+                            self.create_dropdown_surface()
+                        # Handle orbit toggle checkboxes (only for planets and moons) - after dropdowns
+                        # Only check if click is actually on a checkbox, not just any planet/moon click
+                        elif (self.selected_body and self.selected_body.get('type') in ['planet', 'moon'] and
+                              (self.orbit_enabled_checkbox.collidepoint(event.pos) or 
+                               self.last_revolution_checkbox.collidepoint(event.pos))):
+                            if self.orbit_enabled_checkbox.collidepoint(event.pos):
+                                # Toggle orbit enabled
+                                self.selected_body["orbit_enabled"] = not self.selected_body.get("orbit_enabled", True)
+                            elif self.last_revolution_checkbox.collidepoint(event.pos):
+                                # Toggle last revolution only
+                                current_max = self.selected_body.get("max_orbit_points", 2000)
+                                if current_max < 1000:
+                                    # Switch to full history
+                                    self.selected_body["max_orbit_points"] = 2000
+                                else:
+                                    # Switch to last revolution only (~600 points)
+                                    self.selected_body["max_orbit_points"] = 600
+                                # Clear existing points when switching modes
+                                self.clear_orbit_points(self.selected_body)
                         # Check if clicked on a planet option (only for planets)
                         elif (self.selected_body and self.selected_body.get('type') == 'planet' and 
                               self.planet_dropdown_visible):
@@ -899,6 +1513,8 @@ class SolarSystemVisualizer:
                                         self.show_custom_mass_input = False
                                         if self.selected_body["type"] != "star":
                                             self.generate_orbit_grid(self.selected_body)
+                                            # generate_orbit_grid already clears orbit_points, but ensure it's cleared
+                                            self.clear_orbit_points(self.selected_body)
                                     self.planet_dropdown_selected = planet_name
                                     self.planet_age_dropdown_selected = "4.5 Gyr (Earth’s age)"
                                     self.planet_gravity_dropdown_selected = "Earth"
@@ -985,6 +1601,8 @@ class SolarSystemVisualizer:
                                         self.selected_body["radius"] = EARTH_RADIUS_PX * radius
                                         # Update hitbox_radius to match new visual radius
                                         self.selected_body["hitbox_radius"] = self.calculate_hitbox_radius(self.selected_body["type"], self.selected_body["radius"])
+                                        # Clear orbit points when radius changes
+                                        self.clear_orbit_points(self.selected_body)
                                         self.show_custom_radius_input = False
                                     self.planet_radius_dropdown_selected = radius_name
                                     self.planet_radius_dropdown_visible = False
@@ -1230,8 +1848,10 @@ class SolarSystemVisualizer:
                                         parent_star = next((b for b in self.placed_bodies if b["name"] == self.selected_body.get("parent")), None)
                                         if parent_star:
                                             # Position planet at the right of the star based on AU_TO_PX
+                                            trace(f"PRE_WRITE {self.selected_body['name']} pos={self.selected_body['position'].copy()} source=handle_events_planet_distance")
                                             self.selected_body["position"][0] = parent_star["position"][0] + AU_TO_PX * dist
                                             self.selected_body["position"][1] = parent_star["position"][1]
+                                            trace(f"POST_WRITE {self.selected_body['name']} pos={self.selected_body['position'].copy()} source=handle_events_planet_distance")
                                         self.generate_orbit_grid(self.selected_body)
                                         self.show_custom_orbital_distance_input = False
                                     self.planet_orbital_distance_dropdown_selected = dist_name
@@ -1624,6 +2244,10 @@ class SolarSystemVisualizer:
                                     else:
                                         # Scale the orbital distance for visual display
                                         self.selected_body["orbit_radius"] = max(50, min(200, distance / 1000))  # Scale down and clamp
+                                        # Clear orbit points when orbit radius changes
+                                        self.clear_orbit_points(self.selected_body)
+                                        # Regenerate orbit grid with new radius
+                                        self.generate_orbit_grid(self.selected_body)
                                         self.show_custom_moon_orbital_distance_input = False
                                         # Update the text input to show the actual value, preserving scientific notation
                                         if distance is not None:
@@ -1777,6 +2401,8 @@ class SolarSystemVisualizer:
                                         self.luminosity_input_text = self._format_value(self.selected_body.get('luminosity', 1.0), '', for_dropdown=False)
                                     else:
                                         self.selected_body["luminosity"] = luminosity
+                                        # Update habitable zone when luminosity changes
+                                        self.selected_body["hz_surface"] = self.create_habitable_zone(self.selected_body)
                                         self.show_custom_luminosity_input = False
                                     self.luminosity_dropdown_selected = luminosity_name
                                     self.luminosity_dropdown_visible = False
@@ -2005,6 +2631,8 @@ class SolarSystemVisualizer:
                                             self.selected_body["radius"] = max(5, min(20, value / 100))  # Scale down and clamp
                                             # Update hitbox_radius to match new visual radius
                                             self.selected_body["hitbox_radius"] = self.calculate_hitbox_radius(self.selected_body["type"], self.selected_body["radius"])
+                                            # Clear orbit points when radius changes
+                                            self.clear_orbit_points(self.selected_body)
                                         else:
                                             self.show_custom_moon_radius_input = True
                                         self.moon_radius_dropdown_selected = name
@@ -2015,6 +2643,10 @@ class SolarSystemVisualizer:
                                         if value is not None:
                                             # Scale the orbital distance for visual display
                                             self.selected_body["orbit_radius"] = max(50, min(200, value / 1000))  # Scale down and clamp
+                                            # Clear orbit points when orbit radius changes
+                                            self.clear_orbit_points(self.selected_body)
+                                            # Regenerate orbit grid with new radius
+                                            self.generate_orbit_grid(self.selected_body)
                                         else:
                                             self.show_custom_moon_orbital_distance_input = True
                                         self.moon_orbital_distance_dropdown_selected = name
@@ -2034,6 +2666,8 @@ class SolarSystemVisualizer:
                                         name, value = self.luminosity_dropdown_options[i]
                                         if value is not None:
                                             self.selected_body["luminosity"] = value
+                                            # Update habitable zone when luminosity changes
+                                            self.selected_body["hz_surface"] = self.create_habitable_zone(self.selected_body)
                                         else:
                                             self.show_custom_luminosity_input = True
                                             self.luminosity_input_active = True
@@ -2165,13 +2799,17 @@ class SolarSystemVisualizer:
                                               self.width, 
                                               self.height - (self.tab_height + 2*self.tab_margin))
                         
+                        # Skip selection while panning
+                        if self.is_panning:
+                            continue
+                        
                         # Check if click is on a celestial body (using hitbox for easier selection)
                         clicked_body = None
                         for body in self.placed_bodies:
-                            body_pos = body["position"].astype(int)
+                            body_screen = self.world_to_screen(body["position"])
                             # Use hitbox_radius if available, fallback to radius for backwards compatibility
-                            body_hitbox_radius = body.get("hitbox_radius", body["radius"])
-                            if (event.pos[0] - body_pos[0])**2 + (event.pos[1] - body_pos[1])**2 <= body_hitbox_radius**2:
+                            body_hitbox_radius = body.get("hitbox_radius", body["radius"]) * self.camera_zoom
+                            if (event.pos[0] - body_screen[0])**2 + (event.pos[1] - body_screen[1])**2 <= body_hitbox_radius**2:
                                 clicked_body = body
                                 break
                         
@@ -2267,15 +2905,18 @@ class SolarSystemVisualizer:
                                 default_name = "Moon"
                                 default_radius = MOON_RADIUS_PX  # Slightly enlarged for visibility
                             
+                            world_click = self.screen_to_world(event.pos)
+                            
                             body = {
                                 "type": self.active_tab,
-                                "position": np.array([event.pos[0], event.pos[1]], dtype=float),
+                                "position": np.array(world_click, dtype=float),
                                 "velocity": np.array([0.0, 0.0]),
                                 "radius": default_radius,
                                 "hitbox_radius": self.calculate_hitbox_radius(self.active_tab, default_radius),  # Invisible click hitbox
                                 "name": default_name,
                                 "mass": default_mass * (1000.0 if self.active_tab == "star" else 1.0),  # Convert to Earth masses for stars
                                 "parent": None,
+                                "parent_obj": None,  # Permanent parent reference for faster lookups
                                 "orbit_radius": 0.0,  # Distance from parent
                                 "orbit_angle": 0.0,   # Current angle in orbit
                                 "orbit_speed": 0.0,   # Angular speed
@@ -2283,6 +2924,9 @@ class SolarSystemVisualizer:
                                 "rotation_speed": self.rotation_speed * (1.0 if self.active_tab == "planet" else 2.0 if self.active_tab == "moon" else 0.0), # Rotation speed
                                 "age": default_age,  # Set default age
                                 "habit_score": 0.0,  # Added habitability score attribute
+                                "orbit_points": [],  # Persistent orbit curve points
+                                "max_orbit_points": 2000,  # Full history (~1-2 revolutions depending on timestep)
+                                "orbit_enabled": True,  # Toggle for showing orbit lines
                             }
                             
                             # Add planet-specific attributes
@@ -2310,6 +2954,8 @@ class SolarSystemVisualizer:
                                     "star_temperature": 5778,  # Sun's temperature in Kelvin
                                     "star_color": (255, 255, 0),  # Yellow color for G-type star
                                 })
+                                # Create habitable zone for the star
+                                body["hz_surface"] = self.create_habitable_zone(body)
                             
                             # Add moon-specific attributes
                             if self.active_tab == "moon":
@@ -2317,15 +2963,78 @@ class SolarSystemVisualizer:
                                     "actual_radius": 1737.4,  # Actual radius in km (The Moon) - for dropdown logic
                                     "radius": default_radius,  # Visual radius in pixels for display
                                     "hitbox_radius": self.calculate_hitbox_radius(self.active_tab, default_radius),  # Update hitbox to match radius
-                                    "orbit_radius": MOON_ORBIT_PX,  # Orbital distance in pixels
                                     "temperature": 220,  # Surface temperature in K (Earth's Moon)
                                     "gravity": 1.62,  # Surface gravity in m/s² (Earth's Moon)
                                     "orbital_period": 27.3,  # Orbital period in days (Earth's Moon)
                                 })
                             
                             self.placed_bodies.append(body)
-                            self.orbit_points[body["name"]] = []
-                            self.orbit_history[body["name"]] = []
+                            
+                            # For moons, immediately find nearest planet and set up orbit
+                            if self.active_tab == "moon":
+                                planets = [b for b in self.placed_bodies if b["type"] == "planet"]
+                                if planets:
+                                    # Find nearest planet to the moon's cursor position
+                                    nearest_planet = min(planets, key=lambda p: np.linalg.norm(p["position"] - body["position"]))
+                                    # Calculate orbit radius from cursor position
+                                    orbit_radius = np.linalg.norm(nearest_planet["position"] - body["position"])
+                                    # Ensure minimum orbit radius
+                                    if orbit_radius < MOON_ORBIT_PX:
+                                        orbit_radius = MOON_ORBIT_PX
+                                    
+                                    # Set parent and orbit radius
+                                    body["parent"] = nearest_planet["name"]
+                                    body["parent_obj"] = nearest_planet  # Set permanent parent reference
+                                    body["orbit_radius"] = orbit_radius
+                                    
+                                    # Calculate initial orbit angle from cursor position
+                                    dx = body["position"][0] - nearest_planet["position"][0]
+                                    dy = body["position"][1] - nearest_planet["position"][1]
+                                    body["orbit_angle"] = np.arctan2(dy, dx)
+                                    
+                                    # Calculate orbital speed for circular orbit
+                                    base_speed = np.sqrt(self.G * nearest_planet["mass"] / (orbit_radius ** 3))
+                                    # Moons need faster orbital speed for visible motion
+                                    MOON_SPEED_FACTOR = 5.0
+                                    body["orbit_speed"] = base_speed * MOON_SPEED_FACTOR
+                                    
+                                    # CRITICAL: Immediately recalculate moon position from planet + orbit offset
+                                    # This ensures the moon starts at the correct position relative to the planet
+                                    moon_offset_x = orbit_radius * np.cos(body["orbit_angle"])
+                                    moon_offset_y = orbit_radius * np.sin(body["orbit_angle"])
+                                    # Instrumentation: Pre-write
+                                    trace(f"PRE_WRITE {body['name']} pos={body['position'].copy()} source=handle_events_moon_placement")
+                                    body["position"][0] = nearest_planet["position"][0] + moon_offset_x
+                                    body["position"][1] = nearest_planet["position"][1] + moon_offset_y
+                                    # Ensure position is float array
+                                    body["position"] = np.array(body["position"], dtype=float)
+                                    # Instrumentation: Post-write
+                                    trace(f"POST_WRITE {body['name']} pos={body['position'].copy()} source=handle_events_moon_placement")
+                                    
+                                    # Debug output
+                                    print(f"DEBUG: Moon {body['name']} placed:")
+                                    print(f"  parent={nearest_planet['name']}, orbit_radius={orbit_radius:.2f}")
+                                    print(f"  orbit_angle={body['orbit_angle']:.4f}, orbit_speed={body['orbit_speed']:.6f}")
+                                    print(f"  planet_pos=({nearest_planet['position'][0]:.2f}, {nearest_planet['position'][1]:.2f})")
+                                    print(f"  moon_pos=({body['position'][0]:.2f}, {body['position'][1]:.2f})")
+                                    
+                                    # Set initial velocity for circular orbit
+                                    v = body["orbit_speed"] * body["orbit_radius"]
+                                    body["velocity"] = np.array([-v * np.sin(body["orbit_angle"]), v * np.cos(body["orbit_angle"])])
+                                    
+                                    # Generate orbit grid for visualization (but preserve orbital parameters)
+                                    # Only generate the grid visualization, don't recalculate orbital parameters
+                                    grid_points = []
+                                    for i in range(100):  # 100 points for a smooth circle
+                                        angle = i * 2 * np.pi / 100
+                                        x = nearest_planet["position"][0] + orbit_radius * np.cos(angle)
+                                        y = nearest_planet["position"][1] + orbit_radius * np.sin(angle)
+                                        grid_points.append(np.array([x, y]))
+                                    self.orbit_grid_points[body["name"]] = grid_points
+                                else:
+                                    # No planets available yet, moon will be set up later in update_physics
+                                    pass
+                            # Note: orbit_points is now stored in the body dict itself, not in self.orbit_points
                             
                             # Set dropdown selections to match defaults
                             if self.active_tab == "star":
@@ -2369,6 +3078,12 @@ class SolarSystemVisualizer:
                                 print(f"DEBUG: show_customization_panel before: {self.show_customization_panel}")
                                 self.show_simulation_builder = False
                                 self.show_simulation = True
+                                # Clear any selected body and active tab when simulation starts for better UX
+                                self.selected_body = None
+                                self.show_customization_panel = False
+                                self.active_tab = None
+                                self.preview_position = None
+                                self.preview_radius = None
                                 # Initialize all orbits when simulation starts
                                 self.initialize_all_orbits()
                                 print(f"DEBUG: show_customization_panel after: {self.show_customization_panel}")
@@ -2467,6 +3182,8 @@ class SolarSystemVisualizer:
                         new_luminosity = self._parse_input_value(self.luminosity_input_text)
                         if new_luminosity is not None and self.luminosity_min <= new_luminosity <= self.luminosity_max:
                             self.selected_body["luminosity"] = new_luminosity
+                            # Update habitable zone when luminosity changes
+                            self.selected_body["hz_surface"] = self.create_habitable_zone(self.selected_body)
                             self.luminosity_input_active = False
                         else:
                             # Invalid input, keep current value
@@ -2576,6 +3293,10 @@ class SolarSystemVisualizer:
                         if distance is not None and 1000 <= distance <= 10000000:  # Reasonable orbital distance range for moons (km)
                             # Scale the orbital distance for visual display
                             self.selected_body["orbit_radius"] = max(50, min(200, distance / 1000))
+                            # Clear orbit points when orbit radius changes
+                            self.clear_orbit_points(self.selected_body)
+                            # Regenerate orbit grid with new radius
+                            self.generate_orbit_grid(self.selected_body)
                             self.orbital_distance_input_text = ""
                             self.show_custom_moon_orbital_distance_input = False
                     elif event.key == pygame.K_BACKSPACE:
@@ -2711,6 +3432,37 @@ class SolarSystemVisualizer:
             self.color_change_counter = 0
             self.current_color_index = (self.current_color_index + 1) % len(self.ambient_colors)
     
+    def clear_orbit_points(self, body):
+        """Clear orbit points for a body when parameters change"""
+        if "orbit_points" in body:
+            body["orbit_points"].clear()
+    
+    def draw_orbit(self, body):
+        """Draw orbit curve for a body using persistent orbit_points"""
+        if not body.get("orbit_enabled", True):
+            return
+        if "orbit_points" not in body or len(body["orbit_points"]) < 2:
+            return
+        
+        # For moons, orbit points are stored relative to planet
+        # For planets, orbit points are stored in absolute world coordinates
+        if body["type"] == "moon" and body.get("parent_obj") is not None:
+            # Moon: convert relative points to world coordinates by adding planet position
+            planet = body["parent_obj"]
+            pts = [self.world_to_screen(planet["position"] + p) for p in body["orbit_points"]]
+        else:
+            # Planet: convert absolute world coordinates to screen coordinates
+            pts = [self.world_to_screen(p) for p in body["orbit_points"]]
+        
+        # Choose color based on body type
+        if body["type"] == "planet":
+            color = self.GRAY
+        else:  # moon
+            color = (100, 100, 100)  # Slightly darker for moons
+        
+        # Draw the orbit line
+        pygame.draw.lines(self.screen, color, False, pts, max(1, int(2 * self.camera_zoom)))
+    
     def generate_orbit_grid(self, body):
         """Generate a circular grid for the orbit path"""
         if body["type"] == "star":
@@ -2730,12 +3482,65 @@ class SolarSystemVisualizer:
                 parent = min(planets, key=lambda p: np.linalg.norm(p["position"] - body["position"]))
                 
         if parent:
-            # Calculate orbit radius
-            orbit_radius = np.linalg.norm(parent["position"] - body["position"])
-            body["orbit_radius"] = orbit_radius
-            body["parent"] = parent["name"]
+            # Set permanent parent reference
+            body["parent_obj"] = parent
             
-            # Generate grid points for a perfect circle
+            # Check if orbital parameters are already set (e.g., for newly placed moons)
+            # If orbit_radius and orbit_speed are already set, preserve them
+            # For moons, we check if parameters are set regardless of parent match (parent might be set after)
+            has_orbit_radius = body.get("orbit_radius", 0.0) > 0.0
+            has_orbit_speed = body.get("orbit_speed", 0.0) > 0.0
+            has_parent_match = body.get("parent") == parent["name"] if body.get("parent") else False
+            
+            # Preserve parameters if they're set AND (parent matches OR parent not set yet)
+            preserve_params = has_orbit_radius and has_orbit_speed and (has_parent_match or not body.get("parent"))
+            
+            # Debug output for moons
+            if body["type"] == "moon":
+                print(f"DEBUG generate_orbit_grid for moon {body.get('name', 'unknown')}:")
+                print(f"  has_orbit_radius={has_orbit_radius}, has_orbit_speed={has_orbit_speed}")
+                print(f"  body parent={body.get('parent')}, parent name={parent['name']}, has_parent_match={has_parent_match}")
+                print(f"  preserve_params={preserve_params}")
+            
+            if not preserve_params:
+                # Calculate orbit radius from current position
+                orbit_radius = np.linalg.norm(parent["position"] - body["position"])
+                body["orbit_radius"] = orbit_radius
+                body["parent"] = parent["name"]
+                
+                # Set initial orbit angle
+                dx = body["position"][0] - parent["position"][0]
+                dy = body["position"][1] - parent["position"][1]
+                body["orbit_angle"] = np.arctan2(dy, dx)
+                
+                # Calculate orbital speed for circular orbit
+                # Angular speed: ω = sqrt(G * M / r^3) for circular orbit
+                # Moons need faster orbital speed for visible motion
+                if orbit_radius > 0:
+                    base_speed = np.sqrt(self.G * parent["mass"] / (orbit_radius ** 3))
+                    if body["type"] == "moon":
+                        # Moons use faster speed factor for visible circular orbits
+                        # Factor of 5.0 makes moon complete ~5 orbits per planet orbit
+                        MOON_SPEED_FACTOR = 5.0
+                        body["orbit_speed"] = base_speed * MOON_SPEED_FACTOR
+                    else:
+                        body["orbit_speed"] = base_speed * 10.0  # Planets still use 10.0
+                else:
+                    body["orbit_speed"] = 0.0
+                
+                # Set initial velocity for circular orbit
+                # v_x = -v * sin(angle), v_y = v * cos(angle)
+                v = body["orbit_speed"] * orbit_radius
+                body["velocity"] = np.array([-v * np.sin(body["orbit_angle"]), v * np.cos(body["orbit_angle"])])
+                
+                # Clear orbit points when orbital parameters change
+                self.clear_orbit_points(body)
+            else:
+                # Parameters already set, just ensure parent is set
+                body["parent"] = parent["name"]
+            
+            # Always generate grid points for visualization (using current orbit_radius)
+            orbit_radius = body.get("orbit_radius", 0.0)
             grid_points = []
             for i in range(100):  # 100 points for a smooth circle
                 angle = i * 2 * np.pi / 100
@@ -2744,30 +3549,6 @@ class SolarSystemVisualizer:
                 grid_points.append(np.array([x, y]))
             
             self.orbit_grid_points[body["name"]] = grid_points
-            
-            # Set initial orbit angle
-            dx = body["position"][0] - parent["position"][0]
-            dy = body["position"][1] - parent["position"][1]
-            body["orbit_angle"] = np.arctan2(dy, dx)
-            
-            # Calculate orbital speed for circular orbit
-            # Angular speed: ω = sqrt(G * M / r^3) for circular orbit
-            # For moons, use a faster orbital speed relative to their planet
-            # Multiply by a factor to make motion more visible
-            if orbit_radius > 0:
-                base_speed = np.sqrt(self.G * parent["mass"] / (orbit_radius ** 3))
-                if body["type"] == "moon":
-                    # Moons orbit faster around planets - make them much faster for visibility
-                    body["orbit_speed"] = base_speed * 50.0  # Much faster for moons
-                else:
-                    body["orbit_speed"] = base_speed * 10.0  # Much faster for planets
-            else:
-                body["orbit_speed"] = 0.0
-            
-            # Set initial velocity for circular orbit
-            # v_x = -v * sin(angle), v_y = v * cos(angle)
-            v = body["orbit_speed"] * orbit_radius
-            body["velocity"] = np.array([-v * np.sin(body["orbit_angle"]), v * np.cos(body["orbit_angle"])])
     
     def initialize_all_orbits(self):
         """Initialize orbital relationships and velocities for all bodies when simulation starts"""
@@ -2779,21 +3560,53 @@ class SolarSystemVisualizer:
                     nearest_star = min(stars, key=lambda s: np.linalg.norm(s["position"] - body["position"]))
                     body["parent"] = nearest_star["name"]
                     self.generate_orbit_grid(body)
-            elif body["type"] == "moon" and not body["parent"]:
-                # Find nearest planet
-                planets = [b for b in self.placed_bodies if b["type"] == "planet"]
-                if planets:
-                    nearest_planet = min(planets, key=lambda p: np.linalg.norm(p["position"] - body["position"]))
-                    body["parent"] = nearest_planet["name"]
-                    self.generate_orbit_grid(body)
+            elif body["type"] == "moon":
+                # For moons, check if they already have orbital parameters set
+                if not body["parent"]:
+                    # Find nearest planet
+                    planets = [b for b in self.placed_bodies if b["type"] == "planet"]
+                    if planets:
+                        nearest_planet = min(planets, key=lambda p: np.linalg.norm(p["position"] - body["position"]))
+                        # Only set up orbit if parameters aren't already set
+                        if body.get("orbit_speed", 0.0) == 0.0 or body.get("orbit_radius", 0.0) == 0.0:
+                            body["parent"] = nearest_planet["name"]
+                            self.generate_orbit_grid(body)
+                        else:
+                            # Parameters already set, just set parent
+                            body["parent"] = nearest_planet["name"]
+                elif body["parent"]:
+                    # Moon has parent, check if orbital parameters need initialization
+                    parent = next((b for b in self.placed_bodies if b["name"] == body["parent"]), None)
+                    if parent and (body.get("orbit_speed", 0.0) == 0.0 or body.get("orbit_radius", 0.0) == 0.0):
+                        # Only regenerate if parameters aren't set
+                        self.generate_orbit_grid(body)
             elif body["type"] != "star" and body["parent"]:
                 # Ensure bodies with parents have orbital velocities initialized
                 parent = next((b for b in self.placed_bodies if b["name"] == body["parent"]), None)
-                if parent and (body["orbit_speed"] == 0.0 or body["orbit_radius"] == 0.0):
+                if parent and (body.get("orbit_speed", 0.0) == 0.0 or body.get("orbit_radius", 0.0) == 0.0):
                     self.generate_orbit_grid(body)
     
     def update_physics(self):
         """Update positions and velocities of all bodies"""
+        trace("BEGIN_FRAME")
+        
+        # Check for aliasing and duplicate names
+        ids = [id(b) for b in self.placed_bodies]
+        if len(ids) != len(set(ids)):
+            orbit_log("ALIASING DETECTED: two bodies share same object reference")
+            trace("ALIASING_DETECTED")
+        names = [b['name'] for b in self.placed_bodies]
+        if len(names) != len(set(names)):
+            duplicates = [n for n in names if names.count(n) > 1]
+            orbit_log(f"DUPLICATE NAMES DETECTED: {duplicates}")
+            trace(f"DUPLICATE_NAMES: {duplicates}")
+        
+        # Determine effective time step based on pause state and time scale
+        if self.paused or self.time_scale <= 0.0:
+            effective_dt = 0.0
+        else:
+            effective_dt = self.base_time_step * self.time_scale
+        
         # First, establish parent-child relationships if not already set
         for body in self.placed_bodies:
             if body["type"] == "planet" and (not body.get("parent") or body["parent"] is None):
@@ -2808,8 +3621,13 @@ class SolarSystemVisualizer:
                 planets = [b for b in self.placed_bodies if b["type"] == "planet"]
                 if planets:
                     nearest_planet = min(planets, key=lambda p: np.linalg.norm(p["position"] - body["position"]))
-                    body["parent"] = nearest_planet["name"]
-                    self.generate_orbit_grid(body)
+                    # Only set up orbit if parameters aren't already set
+                    if body.get("orbit_speed", 0.0) == 0.0 or body.get("orbit_radius", 0.0) == 0.0:
+                        body["parent"] = nearest_planet["name"]
+                        self.generate_orbit_grid(body)
+                    else:
+                        # Parameters already set, just set parent
+                        body["parent"] = nearest_planet["name"]
             
             # Ensure bodies with parents have orbital velocities initialized
             if body["type"] != "star" and body.get("parent") is not None:
@@ -2819,32 +3637,45 @@ class SolarSystemVisualizer:
                     self.generate_orbit_grid(body)
 
         # Update positions and velocities
-        for body in self.placed_bodies:
-            if body["type"] == "star":
-                # Stars remain stationary
-                continue
+        # IMPORTANT: Enforce deterministic update order: stars -> planets -> moons
+        # Separate bodies by type to ensure correct update order
+        stars = [b for b in self.placed_bodies if b["type"] == "star"]
+        planets = [b for b in self.placed_bodies if b["type"] == "planet"]
+        moons = [b for b in self.placed_bodies if b["type"] == "moon"]
+        
+        # Create ordered list for deterministic processing
+        ordered_bodies = stars + planets + moons
+        
+        # Process planets first (they orbit stars)
+        for body in planets:
+            # Get parent using parent_obj reference (faster and more reliable)
+            parent = body.get("parent_obj")
+            if parent is None:
+                # Fallback to name-based lookup if parent_obj not set
+                if body.get("parent") is not None:
+                    parent_candidate = next((b for b in self.placed_bodies if b["name"] == body["parent"]), None)
+                    # Validate parent is a star
+                    if parent_candidate and parent_candidate["type"] == "star":
+                        parent = parent_candidate
+                        body["parent_obj"] = parent
+                    else:
+                        # Invalid parent, clear it
+                        body["parent"] = None
             
-            # Find parent body - try to establish relationship if missing
-            parent = None
-            if body.get("parent") is not None:
-                parent = next((b for b in self.placed_bodies if b["name"] == body["parent"]), None)
-            
-            # If no parent found, try to find one now
+            # If no valid parent found, find nearest star
             if not parent:
-                if body["type"] == "planet":
-                    stars = [b for b in self.placed_bodies if b["type"] == "star"]
-                    if stars:
-                        parent = min(stars, key=lambda s: np.linalg.norm(s["position"] - body["position"]))
-                        body["parent"] = parent["name"]
-                        self.generate_orbit_grid(body)
-                elif body["type"] == "moon":
-                    planets = [b for b in self.placed_bodies if b["type"] == "planet"]
-                    if planets:
-                        parent = min(planets, key=lambda p: np.linalg.norm(p["position"] - body["position"]))
-                        body["parent"] = parent["name"]
-                        self.generate_orbit_grid(body)
+                stars_list = [b for b in self.placed_bodies if b["type"] == "star"]
+                if stars_list:
+                    parent = min(stars_list, key=lambda s: np.linalg.norm(s["position"] - body["position"]))
+                    body["parent"] = parent["name"]
+                    body["parent_obj"] = parent
+                    self.generate_orbit_grid(body)
             
-            if parent:
+            if parent and parent["type"] == "star":
+                # CRITICAL: Ensure parent_obj is always set when we have a valid parent
+                if body.get("parent_obj") is None or body["parent_obj"] != parent:
+                    body["parent_obj"] = parent
+                
                 # Ensure orbit_speed is set and non-zero
                 orbit_radius = body.get("orbit_radius", 0.0)
                 orbit_speed = body.get("orbit_speed", 0.0)
@@ -2855,36 +3686,340 @@ class SolarSystemVisualizer:
                     orbit_radius = body.get("orbit_radius", 0.0)
                     orbit_speed = body.get("orbit_speed", 0.0)
                 
-                # Update orbit angle if speed is non-zero
-                if orbit_speed != 0.0 and not np.isnan(orbit_speed):
-                    body["orbit_angle"] += orbit_speed * self.time_step
+                # Get parent_obj reference (guaranteed to be set above)
+                p = body["parent_obj"]
+                if p is None:
+                    p = parent  # Fallback to validated parent
+                    body["parent_obj"] = p
                 
-                # Always calculate new position based on orbit angle
-                if orbit_radius > 0.0 and not np.isnan(orbit_radius):
-                    body["position"][0] = parent["position"][0] + orbit_radius * np.cos(body["orbit_angle"])
-                    body["position"][1] = parent["position"][1] + orbit_radius * np.sin(body["orbit_angle"])
+                # PURE KINEMATIC CIRCULAR ORBIT - no gravity, no velocity accumulation
+                # Update orbit angle (only when time progresses)
+                if effective_dt > 0.0 and orbit_speed != 0.0 and not np.isnan(orbit_speed):
+                    old_angle = body["orbit_angle"]
+                    body["orbit_angle"] += orbit_speed * effective_dt
+                    trace(f"ORBIT_ANGLE_UPDATE {body['name']} old={old_angle:.6f} new={body['orbit_angle']:.6f} source=update_physics_planet")
+                    # Keep orbit angle in [0, 2π) range for clean circular orbits
+                    while body["orbit_angle"] >= 2 * np.pi:
+                        body["orbit_angle"] -= 2 * np.pi
+                    while body["orbit_angle"] < 0:
+                        body["orbit_angle"] += 2 * np.pi
                 
-                # Update velocity for circular orbit
+                # CRITICAL: Always recalculate position from parent EVERY FRAME
+                # Calculate orbital offset from parent (in parent's coordinate frame)
+                if orbit_radius > 0.0 and not np.isnan(orbit_radius) and p is not None:
+                    planet_offset_x = orbit_radius * np.cos(body["orbit_angle"])
+                    planet_offset_y = orbit_radius * np.sin(body["orbit_angle"])
+                    # Set position RELATIVE to parent (hierarchical orbit)
+                    # Use parent_obj for direct reference - ensures we use the actual parent object
+                    trace(f"PRE_WRITE {body['name']} pos={body['position'].copy()} source=update_physics_planet parent_pos={p['position'].copy()}")
+                    body["position"][0] = p["position"][0] + planet_offset_x
+                    body["position"][1] = p["position"][1] + planet_offset_y
+                    # Ensure position is float array
+                    body["position"] = np.array(body["position"], dtype=float)
+                    trace(f"POST_WRITE {body['name']} pos={body['position'].copy()} source=update_physics_planet")
+                
+                # Skip remaining updates if paused
+                if effective_dt == 0.0:
+                    continue
+                
+                # Update velocity for circular orbit (relative to parent's frame)
                 v = body["orbit_speed"] * body["orbit_radius"]
                 body["velocity"] = np.array([-v * np.sin(body["orbit_angle"]), v * np.cos(body["orbit_angle"])])
                 
                 # Update rotation angle
-                body["rotation_angle"] += body["rotation_speed"] * self.time_step
+                body["rotation_angle"] += body["rotation_speed"] * effective_dt
                 if body["rotation_angle"] >= 2 * np.pi:
                     body["rotation_angle"] -= 2 * np.pi
                 
-                # Store orbit points
-                self.orbit_points[body["name"]].append(body["position"].copy())
-                if len(self.orbit_points[body["name"]]) > 100:  # Limit number of points
-                    self.orbit_points[body["name"]].pop(0)
+                # Store orbit points only when time progresses and orbit is enabled
+                if effective_dt > 0.0 and body.get("orbit_enabled", True):
+                    if "orbit_points" not in body:
+                        body["orbit_points"] = []
+                    if "max_orbit_points" not in body:
+                        body["max_orbit_points"] = 2000
+                    
+                    body["orbit_points"].append(body["position"].copy())
+                    
+                    # Trim to max_orbit_points if exceeded
+                    if len(body["orbit_points"]) > body["max_orbit_points"]:
+                        body["orbit_points"].pop(0)
+        
+        # Process moons AFTER planets (so they use updated planet positions)
+        for body in moons:
+            # Get parent using parent_obj reference (faster and more reliable)
+            parent = body.get("parent_obj")
+            # Instrumentation: Parent lookup
+            trace(f"PARENT_LOOKUP {body['name']} parent_name={body.get('parent')} parent_obj_exists={'parent_obj' in body}")
+            if parent is None:
+                # Fallback to name-based lookup if parent_obj not set
+                if body.get("parent") is not None:
+                    parent_candidate = next((b for b in self.placed_bodies if b["name"] == body["parent"]), None)
+                    # Validate parent is a planet (moons cannot orbit stars directly)
+                    if parent_candidate and parent_candidate["type"] == "planet":
+                        parent = parent_candidate
+                        body["parent_obj"] = parent
+                    else:
+                        # Invalid parent, clear it
+                        body["parent"] = None
+            
+            # If no valid parent found, find nearest planet
+            if not parent:
+                planets_list = [b for b in self.placed_bodies if b["type"] == "planet"]
+                if planets_list:
+                    parent = min(planets_list, key=lambda p: np.linalg.norm(p["position"] - body["position"]))
+                    # Only set up orbit if parameters aren't already set
+                    if body.get("orbit_speed", 0.0) == 0.0 or body.get("orbit_radius", 0.0) == 0.0:
+                        body["parent"] = parent["name"]
+                        body["parent_obj"] = parent
+                        self.generate_orbit_grid(body)
+                    else:
+                        # Parameters already set, just set parent
+                        body["parent"] = parent["name"]
+                        body["parent_obj"] = parent
+            
+            if parent and parent["type"] == "planet":
+                # CRITICAL: Ensure parent_obj is always set when we have a valid parent
+                if body.get("parent_obj") is None or body["parent_obj"] != parent:
+                    body["parent_obj"] = parent
+                
+                # Ensure orbit_speed is set and non-zero
+                orbit_radius = body.get("orbit_radius", 0.0)
+                orbit_speed = body.get("orbit_speed", 0.0)
+                
+                if orbit_speed == 0.0 or orbit_radius == 0.0:
+                    self.generate_orbit_grid(body)
+                    # Re-get values after regeneration
+                    orbit_radius = body.get("orbit_radius", 0.0)
+                    orbit_speed = body.get("orbit_speed", 0.0)
                 
                 # Update orbit grid points for moons to follow their parent planet
-                if body["type"] == "moon" and body["name"] in self.orbit_grid_points:
+                # Always update/create the orbit grid for moons so the orbit line is visible
+                # Update EVERY FRAME (even when paused) so the orbit line follows the planet
+                if body["type"] == "moon" and parent:
                     self.update_moon_orbit_grid(body, parent)
+                    # Clear cache to force redraw with new planet position
+                    if body["name"] in self.orbit_grid_screen_cache:
+                        del self.orbit_grid_screen_cache[body["name"]]
+                
+                # Get parent_obj reference (guaranteed to be set above)
+                p = body["parent_obj"]
+                if p is None:
+                    p = parent  # Fallback to validated parent
+                    body["parent_obj"] = p
+                
+                # CRITICAL: Moon orbit update - MUST happen every frame
+                # Step 1: Update orbit angle (only when time progresses)
+                if effective_dt > 0.0 and orbit_speed != 0.0 and not np.isnan(orbit_speed):
+                    old_angle = body["orbit_angle"]
+                    body["orbit_angle"] += orbit_speed * effective_dt
+                    trace(f"ORBIT_ANGLE_UPDATE {body['name']} old={old_angle:.6f} new={body['orbit_angle']:.6f} source=update_physics_moon")
+                    # Keep orbit angle in [0, 2π) range for clean circular orbits
+                    while body["orbit_angle"] >= 2 * np.pi:
+                        body["orbit_angle"] -= 2 * np.pi
+                    while body["orbit_angle"] < 0:
+                        body["orbit_angle"] += 2 * np.pi
+                
+                # Step 2: ALWAYS recalculate position from parent EVERY FRAME (even when paused)
+                # Formula: moon.position = planet.position + [r * cos(angle), r * sin(angle)]
+                # This ensures moon stays locked to planet's current position
+                # CRITICAL: This MUST happen every frame, BEFORE any rendering
+                if orbit_radius > 0.0 and not np.isnan(orbit_radius) and p is not None:
+                    # Calculate orbital offset from parent (in parent's coordinate frame)
+                    moon_offset_x = orbit_radius * math.cos(body["orbit_angle"])
+                    moon_offset_y = orbit_radius * math.sin(body["orbit_angle"])
+                    
+                    # Set position RELATIVE to parent (hierarchical orbit)
+                    # Use parent_obj for direct reference - ensures we use the actual parent object
+                    trace(f"PRE_WRITE {body['name']} pos={body['position'].copy()} source=update_physics_moon parent_pos={p['position'].copy()}")
+                    body["position"][0] = p["position"][0] + moon_offset_x
+                    body["position"][1] = p["position"][1] + moon_offset_y
+                    # Ensure position is float array
+                    body["position"] = np.array(body["position"], dtype=float)
+                    trace(f"POST_WRITE {body['name']} pos={body['position'].copy()} source=update_physics_moon")
+                    
+                    # Verification: Log moon position relative to planet (every 60 frames to avoid spam)
+                    actual_distance = np.linalg.norm(body["position"] - p["position"])
+                    if not hasattr(self, '_moon_log_counter'):
+                        self._moon_log_counter = 0
+                    self._moon_log_counter += 1
+                    
+                    if abs(actual_distance - orbit_radius) > 0.1:  # Allow small floating point error
+                        orbit_log(f"MOON {body['name']} pos={body['position']} PLANET {p['name']} pos={p['position']} distance={actual_distance:.2f} expected_radius={orbit_radius:.2f}")
+                    elif self._moon_log_counter % 60 == 0:  # Log every 60 frames when correct
+                        print(f"MOON {body['name']} pos={body['position']} PLANET {p['name']} pos={p['position']} distance={actual_distance:.2f} radius={orbit_radius:.2f}")
+                    
+                    # Verification: Log moon position relative to planet
+                    actual_distance = np.linalg.norm(body["position"] - p["position"])
+                    if abs(actual_distance - orbit_radius) > 0.1:  # Allow small floating point error
+                        orbit_log(f"MOON {body['name']} pos={body['position']} PLANET {p['name']} pos={p['position']} distance={actual_distance:.2f} expected_radius={orbit_radius:.2f}")
+                    else:
+                        # Only log occasionally to avoid spam
+                        if hasattr(self, '_moon_log_counter'):
+                            self._moon_log_counter += 1
+                        else:
+                            self._moon_log_counter = 0
+                        if self._moon_log_counter % 60 == 0:  # Log every 60 frames
+                            orbit_log(f"MOON {body['name']} pos={body['position']} PLANET {p['name']} pos={p['position']} distance={actual_distance:.2f} radius={orbit_radius:.2f}")
+                else:
+                    # Debug output for moons with issues
+                    if body["type"] == "moon":
+                        if orbit_speed == 0.0:
+                            print(f"WARNING: Moon {body.get('name', 'unknown')} has orbit_speed=0.0")
+                            print(f"  parent={body.get('parent')}, orbit_radius={orbit_radius}")
+                        if orbit_radius == 0.0:
+                            print(f"WARNING: Moon {body.get('name', 'unknown')} has orbit_radius=0.0")
+                        if p is None:
+                            print(f"WARNING: Moon {body.get('name', 'unknown')} has parent_obj=None")
+                
+                # Skip remaining updates if paused (but position was already recalculated above)
+                if effective_dt == 0.0:
+                    continue
+                
+                # Update velocity for circular orbit (relative to parent's frame)
+                v = body["orbit_speed"] * body["orbit_radius"]
+                body["velocity"] = np.array([-v * np.sin(body["orbit_angle"]), v * np.cos(body["orbit_angle"])])
+                
+                # Update rotation angle
+                body["rotation_angle"] += body["rotation_speed"] * effective_dt
+                if body["rotation_angle"] >= 2 * np.pi:
+                    body["rotation_angle"] -= 2 * np.pi
+                
+                # Store orbit points only when time progresses and orbit is enabled
+                # For moons, store points RELATIVE to planet (not absolute world position)
+                if effective_dt > 0.0 and body.get("orbit_enabled", True):
+                    if "orbit_points" not in body:
+                        body["orbit_points"] = []
+                    if "max_orbit_points" not in body:
+                        body["max_orbit_points"] = 2000
+                    
+                    # For moons, store offset from planet (relative position)
+                    # For planets, store absolute world position
+                    if body["type"] == "moon" and p is not None:
+                        # Store relative offset from planet
+                        relative_offset = body["position"] - p["position"]
+                        body["orbit_points"].append(relative_offset.copy())
+                    else:
+                        # Planets store absolute position
+                        body["orbit_points"].append(body["position"].copy())
+                    
+                    # Trim to max_orbit_points if exceeded
+                    if len(body["orbit_points"]) > body["max_orbit_points"]:
+                        body["orbit_points"].pop(0)
+        
+        # Automated assertions at end of frame
+        trace("END_FRAME_ASSERTIONS")
+        for body in moons:
+            if body.get("parent_obj") is not None:
+                p = body["parent_obj"]
+                orbit_radius = body.get("orbit_radius", 0.0)
+                orbit_angle = body.get("orbit_angle", 0.0)
+                if orbit_radius > 0.0:
+                    expected_pos = p["position"] + np.array([
+                        orbit_radius * math.cos(orbit_angle),
+                        orbit_radius * math.sin(orbit_angle)
+                    ])
+                    err = np.linalg.norm(body["position"] - expected_pos)
+                    if err > 1e-3:
+                        orbit_log(f"ASSERT FAIL: {body['name']} position mismatch err={err:.6e}")
+                        orbit_log(f"  moon_pos={body['position']} expected={expected_pos}")
+                        orbit_log(f"  parent_pos={p['position']} orbit_radius={orbit_radius} orbit_angle={orbit_angle}")
+                        # Print last 50 trace lines
+                        orbit_log("LAST 50 TRACE LINES:")
+                        for line in frame_trace[-50:]:
+                            print(line)
+                        trace(f"ASSERT_FAIL {body['name']} err={err:.6e}")
+        
+        # Per-frame dump (first 300 lines)
+        if len(frame_trace) > 0:
+            orbit_log("FRAME TRACE START")
+            for line in frame_trace[:300]:
+                print(line)
+            orbit_log("FRAME TRACE END")
+            frame_trace.clear()
 
+    def run_orbit_unit_test(self):
+        """Deterministic unit test for moon orbit mechanics"""
+        orbit_log("=" * 80)
+        orbit_log("STARTING ORBIT UNIT TEST")
+        orbit_log("=" * 80)
+        
+        # Create clean test objects (do NOT modify existing placed_bodies)
+        star_test = {
+            "position": np.array([0.0, 0.0], dtype=float),
+            "type": "star",
+            "name": "StarTest"
+        }
+        
+        planet_test = {
+            "orbit_radius": 100.0,  # px
+            "orbit_angle": 0.0,
+            "orbit_speed": 0.02,  # rad / frame
+            "type": "planet",
+            "name": "PlanetTest",
+            "parent_obj": star_test,
+            "position": np.array([100.0, 0.0], dtype=float)
+        }
+        
+        moon_test = {
+            "orbit_radius": 20.0,
+            "orbit_angle": 0.0,
+            "orbit_speed": 0.2,  # rad / frame
+            "type": "moon",
+            "name": "MoonTest",
+            "parent_obj": planet_test,
+            "position": planet_test["position"] + np.array([20.0, 0.0], dtype=float)
+        }
+        
+        max_err = 0.0
+        failures = []
+        
+        # Run deterministic loop for 200 frames
+        for frame in range(1, 201):
+            # Update planet first (simulate planet update code)
+            planet_test["orbit_angle"] += planet_test["orbit_speed"]
+            planet_test["position"][0] = star_test["position"][0] + planet_test["orbit_radius"] * math.cos(planet_test["orbit_angle"])
+            planet_test["position"][1] = star_test["position"][1] + planet_test["orbit_radius"] * math.sin(planet_test["orbit_angle"])
+            
+            # Then update moon
+            moon_test["orbit_angle"] += moon_test["orbit_speed"]
+            moon_test["position"][0] = planet_test["position"][0] + moon_test["orbit_radius"] * math.cos(moon_test["orbit_angle"])
+            moon_test["position"][1] = planet_test["position"][1] + moon_test["orbit_radius"] * math.sin(moon_test["orbit_angle"])
+            
+            # After update compute expected vector
+            expected = planet_test["position"] + np.array([
+                moon_test["orbit_radius"] * math.cos(moon_test["orbit_angle"]),
+                moon_test["orbit_radius"] * math.sin(moon_test["orbit_angle"])
+            ])
+            
+            # Record error between moon position and expected position
+            err = np.linalg.norm(moon_test["position"] - expected)
+            max_err = max(max_err, err)
+            
+            if frame <= 10 or frame % 20 == 0 or err > 1e-6:
+                print(f"[UNIT_TEST] frame={frame} planet_pos={planet_test['position']} moon_pos={moon_test['position']} expected={expected} err={err:.6e}")
+            
+            if err > 1e-6:
+                failures.append((frame, err, moon_test["position"].copy(), expected.copy()))
+        
+        # Print summary
+        orbit_log("=" * 80)
+        orbit_log(f"UNIT TEST SUMMARY: max_err={max_err:.6e}")
+        if max_err > 1e-6:
+            orbit_log(f"FAIL: {len(failures)} frames with error > 1e-6")
+            for frame, err, moon_pos, exp_pos in failures[:10]:  # Show first 10 failures
+                orbit_log(f"  frame={frame} err={err:.6e} moon={moon_pos} expected={exp_pos}")
+        else:
+            orbit_log("PASS: All frames within tolerance (err < 1e-6)")
+        orbit_log("=" * 80)
+        
+        return max_err <= 1e-6
+    
     def update_moon_orbit_grid(self, moon, planet):
         """Update the moon's orbit grid points to follow its parent planet"""
-        orbit_radius = moon["orbit_radius"]
+        orbit_radius = moon.get("orbit_radius", MOON_ORBIT_PX)
+        if orbit_radius <= 0:
+            orbit_radius = MOON_ORBIT_PX
+        
         grid_points = []
         
         # Generate grid points for a perfect circle around the planet's current position
@@ -4217,42 +5352,45 @@ class SolarSystemVisualizer:
             if body["type"] != "star" and body["name"] in self.orbit_grid_points:
                 grid_points = self.orbit_grid_points[body["name"]]
                 if len(grid_points) > 1:
-                    # Use different colors for different body types
+                    # For moons, don't cache since grid moves with planet every frame
+                    # For planets, use cache since grid is static relative to star
+                    if body["type"] == "moon":
+                        # Convert directly without caching (planet position changes every frame)
+                        screen_points = [np.array(self.world_to_screen(p)) for p in grid_points]
+                    else:
+                        # Planets can use cache (static relative to star)
+                        screen_points = self._cached_screen_points(body["name"], grid_points, self.orbit_grid_screen_cache)
                     if body["type"] == "planet":
                         color = self.LIGHT_GRAY
                     else:  # moon
                         color = (150, 150, 150)  # Slightly darker for moons
-                    pygame.draw.lines(self.screen, color, True, grid_points, 1)
+                    pygame.draw.lines(self.screen, color, True, screen_points, max(1, int(2 * self.camera_zoom)))
+        
+        # Draw habitable zones for all stars (before drawing bodies, after orbit grids)
+        # DISABLED: Habitable zone visualization removed per user request
+        # for body in self.placed_bodies:
+        #     if body.get("type") == "star":
+        #         self.draw_habitable_zone(self.screen, body)
         
         # Draw orbit lines and bodies
         for body in self.placed_bodies:
-            # Draw orbit line
-            if body["type"] != "star" and body["name"] in self.orbit_points:
-                points = self.orbit_points[body["name"]]
-                if len(points) > 1:
-                    # Use different colors for different body types
-                    if body["type"] == "planet":
-                        color = self.GRAY
-                    else:  # moon
-                        color = (100, 100, 100)  # Slightly darker for moons
-                    pygame.draw.lines(self.screen, color, False, points, 1)
+            # Draw orbit line using persistent orbit_points
+            if body["type"] != "star":
+                self.draw_orbit(body)
             
             # Draw body
             if body["type"] == "star":
-                # Stars don't rotate
                 color = self.YELLOW
-                pygame.draw.circle(self.screen, color, body["position"].astype(int), body["radius"])
+                pos = self.world_to_screen(body["position"])
+                pygame.draw.circle(self.screen, color, (int(pos[0]), int(pos[1])), max(1, int(body["radius"] * self.camera_zoom)))
             else:
-                # Planets and moons rotate
                 color = self.BLUE if body["type"] == "planet" else self.WHITE
-                
-                # Draw the rotating body
                 self.draw_rotating_body(body, color)
             
             # Highlight selected body
             if self.selected_body and body["name"] == self.selected_body["name"]:
-                # Draw a circle around the selected body
-                pygame.draw.circle(self.screen, self.RED, body["position"].astype(int), body["radius"] + 5, 2)
+                pos = self.world_to_screen(body["position"])
+                pygame.draw.circle(self.screen, self.RED, (int(pos[0]), int(pos[1])), max(1, int((body["radius"] + 5) * self.camera_zoom)), 2)
         
         # Draw placement preview if active tab is selected
         if self.active_tab and self.preview_position and self.preview_radius:
@@ -4265,6 +5403,12 @@ class SolarSystemVisualizer:
             instruction_text = self.subtitle_font.render("Select a tab to place celestial bodies", True, self.WHITE)
         instruction_rect = instruction_text.get_rect(center=(self.width//2, self.height - 30))
         self.screen.blit(instruction_text, instruction_rect)
+        
+        # Draw time control bar on top of scene elements
+        self.draw_time_controls(self.screen)
+        
+        # Draw Reset View button (UI layer, screen space)
+        self.draw_reset_button()
         
         # Render dropdown menu last, so it appears on top of everything
         self.render_dropdown()
@@ -4326,10 +5470,110 @@ class SolarSystemVisualizer:
         self.screen.blit(tooltip_bg_surface, tooltip_bg_rect)
         self.screen.blit(tooltip_surface, tooltip_rect)
     
+    def create_habitable_zone(self, star):
+        """
+        Create a habitable zone (HZ) annulus surface for a star.
+        Uses Kopparapu-style approximation:
+        - inner_HZ_AU = sqrt(L / 1.1)
+        - outer_HZ_AU = sqrt(L / 0.53)
+        
+        Args:
+            star: Star object with 'luminosity' attribute
+            
+        Returns:
+            pygame.Surface with SRCALPHA containing the HZ annulus, or None if invalid
+        """
+        if star.get("type") != "star":
+            return None
+        
+        luminosity = star.get("luminosity", 1.0)
+        if luminosity <= 0:
+            return None
+        
+        # Calculate HZ boundaries in AU
+        inner_HZ_AU = np.sqrt(luminosity / 1.1)
+        outer_HZ_AU = np.sqrt(luminosity / 0.53)
+        
+        # Convert to pixels
+        inner_HZ_px = int(inner_HZ_AU * AU_TO_PX)
+        outer_HZ_px = int(outer_HZ_AU * AU_TO_PX)
+        
+        if outer_HZ_px <= 0:
+            return None
+        
+        # Create surface large enough for the outer radius
+        # Add some padding to ensure the ring is fully visible
+        surface_size = (outer_HZ_px * 2 + 10, outer_HZ_px * 2 + 10)
+        hz_surface = pygame.Surface(surface_size, pygame.SRCALPHA)
+        
+        center = (surface_size[0] // 2, surface_size[1] // 2)
+        
+        # Draw the annulus by drawing the outer circle and then "cutting out" the inner circle
+        # Method: Draw outer filled circle, then use a mask to make inner area transparent
+        pygame.draw.circle(hz_surface, (0, 255, 0, 60), center, outer_HZ_px)
+        
+        # Cut out the inner circle by setting alpha to 0 for pixels within inner radius
+        if inner_HZ_px > 0:
+            # Only iterate over pixels within the outer circle for efficiency
+            cx, cy = center
+            for x in range(max(0, cx - outer_HZ_px), min(surface_size[0], cx + outer_HZ_px + 1)):
+                for y in range(max(0, cy - outer_HZ_px), min(surface_size[1], cy + outer_HZ_px + 1)):
+                    # Calculate distance from center
+                    dx = x - cx
+                    dy = y - cy
+                    dist_sq = dx * dx + dy * dy
+                    # If within inner radius, make transparent
+                    if dist_sq <= inner_HZ_px * inner_HZ_px:
+                        hz_surface.set_at((x, y), (0, 0, 0, 0))
+        
+        # Store HZ parameters in star for later use
+        star["hz_inner_px"] = inner_HZ_px
+        star["hz_outer_px"] = outer_HZ_px
+        star["hz_center_offset"] = (surface_size[0] // 2, surface_size[1] // 2)
+        
+        return hz_surface
+    
+    def draw_habitable_zone(self, screen, star):
+        """
+        Draw the habitable zone ring for a star on the screen.
+        
+        Args:
+            screen: pygame.Surface to draw on
+            star: Star object with HZ surface stored in 'hz_surface'
+        """
+        if star.get("type") != "star":
+            return
+        
+        # Get or create HZ surface
+        hz_surface = star.get("hz_surface")
+        if hz_surface is None:
+            hz_surface = self.create_habitable_zone(star)
+            if hz_surface is None:
+                return
+            star["hz_surface"] = hz_surface
+        
+        # Get star position (screen space)
+        star_pos = self.world_to_screen(star["position"])
+        
+        # Scale surface based on camera zoom
+        if self.camera_zoom != 1.0:
+            scaled_size = (
+                max(1, int(hz_surface.get_width() * self.camera_zoom)),
+                max(1, int(hz_surface.get_height() * self.camera_zoom)),
+            )
+            hz_surface_scaled = pygame.transform.smoothscale(hz_surface, scaled_size)
+            center_offset = (hz_surface_scaled.get_width() // 2, hz_surface_scaled.get_height() // 2)
+            blit_pos = (star_pos[0] - center_offset[0], star_pos[1] - center_offset[1])
+            screen.blit(hz_surface_scaled, blit_pos)
+        else:
+            center_offset = star.get("hz_center_offset", (hz_surface.get_width() // 2, hz_surface.get_height() // 2))
+            blit_pos = (star_pos[0] - center_offset[0], star_pos[1] - center_offset[1])
+            screen.blit(hz_surface, blit_pos)
+    
     def draw_rotating_body(self, body, color):
         """Draw a celestial body with rotation"""
         # Create a surface for the body
-        radius = body["radius"]
+        radius = max(1, int(body["radius"] * self.camera_zoom))
         surface_size = radius * 2 + 4  # Add some padding
         surface = pygame.Surface((surface_size, surface_size), pygame.SRCALPHA)
         
@@ -4342,8 +5586,9 @@ class SolarSystemVisualizer:
         end_y = radius + 2 + radius * 0.8 * np.sin(rotation_angle)
         pygame.draw.line(surface, self.WHITE, (radius + 2, radius + 2), (end_x, end_y), 2)
         
-        # Blit the surface onto the screen
-        self.screen.blit(surface, (body["position"][0] - radius - 2, body["position"][1] - radius - 2))
+        # Blit the surface onto the screen (apply camera)
+        pos = self.world_to_screen(body["position"])
+        self.screen.blit(surface, (pos[0] - radius - 2, pos[1] - radius - 2))
     
     def render_simulation_builder(self):
         """Render the simulation builder screen with tabs and space area"""
@@ -4417,38 +5662,43 @@ class SolarSystemVisualizer:
                     pygame.draw.rect(self.screen, self.WHITE, self.mass_input_rect, 2)
                     pygame.draw.rect(self.screen, self.BLUE if self.mass_input_active else self.GRAY, 
                                    self.mass_input_rect, 1)
-                    if self.selected_body.get('type') == 'moon':
-                        # For moons, mass is already in Lunar masses
-                        lunar_mass = self.selected_body.get('mass', 1.0)
-                        if self.mass_input_active:
-                            text_surface = self.subtitle_font.render(self.mass_input_text, True, self.BLACK)
-                        else:
-                            text_surface = self.subtitle_font.render(self._format_value(lunar_mass, '', for_dropdown=False), True, self.BLACK)
-                    else:
-                        if self.mass_input_active:
-                            text_surface = self.subtitle_font.render(self.mass_input_text, True, self.BLACK)
-                        else:
-                            text_surface = self.subtitle_font.render(self._format_value(self.selected_body.get('mass', 1.0), '', for_dropdown=False), True, self.BLACK)
-                    text_rect = text_surface.get_rect(midleft=(self.mass_input_rect.left + 5, 
-                                                             self.mass_input_rect.centery))
-                    self.screen.blit(text_surface, text_rect)
-            else:
-                # For non-planets, show the mass input box
-                pygame.draw.rect(self.screen, self.WHITE, self.mass_input_rect, 2)
-                pygame.draw.rect(self.screen, self.BLUE if self.mass_input_active else self.GRAY, 
-                               self.mass_input_rect, 1)
-                if self.selected_body.get('type') == 'moon':
-                    # For moons, mass is already in Lunar masses
-                    lunar_mass = self.selected_body.get('mass', 1.0)
-                    if self.mass_input_active:
-                        text_surface = self.subtitle_font.render(self.mass_input_text, True, self.BLACK)
-                    else:
-                        text_surface = self.subtitle_font.render(self._format_value(lunar_mass, '', for_dropdown=False), True, self.BLACK)
-                else:
                     if self.mass_input_active:
                         text_surface = self.subtitle_font.render(self.mass_input_text, True, self.BLACK)
                     else:
                         text_surface = self.subtitle_font.render(self._format_value(self.selected_body.get('mass', 1.0), '', for_dropdown=False), True, self.BLACK)
+                    text_rect = text_surface.get_rect(midleft=(self.mass_input_rect.left + 5, 
+                                                             self.mass_input_rect.centery))
+                    self.screen.blit(text_surface, text_rect)
+            elif self.selected_body.get('type') == 'moon':
+                # For moons, show the moon dropdown (same as in render_simulation)
+                pygame.draw.rect(self.screen, self.WHITE, self.moon_dropdown_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.moon_dropdown_active else self.GRAY, 
+                               self.moon_dropdown_rect, 1)
+                dropdown_text = "Select Reference Moon"
+                if self.moon_dropdown_selected:
+                    # Find the selected option's value
+                    selected = next((option_data
+                        for option_data in self.moon_dropdown_options
+                        if isinstance(option_data, tuple) and len(option_data) >= 2 and option_data[0] == self.moon_dropdown_selected), None)
+                    if selected:
+                        name, value = selected[:2]
+                        if value is not None:
+                            dropdown_text = f"{name} (" + self._format_value(value, 'M🌕') + ")"
+                        else:
+                            dropdown_text = name  # Custom
+                text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
+                text_rect = text_surface.get_rect(midleft=(self.moon_dropdown_rect.left + 5, 
+                                                         self.moon_dropdown_rect.centery))
+                self.screen.blit(text_surface, text_rect)
+            else:
+                # For non-planets/non-moons (stars), show the mass input box
+                pygame.draw.rect(self.screen, self.WHITE, self.mass_input_rect, 2)
+                pygame.draw.rect(self.screen, self.BLUE if self.mass_input_active else self.GRAY, 
+                               self.mass_input_rect, 1)
+                if self.mass_input_active:
+                    text_surface = self.subtitle_font.render(self.mass_input_text, True, self.BLACK)
+                else:
+                    text_surface = self.subtitle_font.render(self._format_value(self.selected_body.get('mass', 1.0), '', for_dropdown=False), True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.mass_input_rect.left + 5, self.mass_input_rect.centery))
                 self.screen.blit(text_surface, text_rect)
             
@@ -5091,6 +6341,46 @@ class SolarSystemVisualizer:
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.metallicity_dropdown_rect.left + 5, self.metallicity_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
+            
+            # Draw orbit toggles (only for planets and moons)
+            if self.selected_body.get('type') in ['planet', 'moon']:
+                # Ensure orbit attributes exist
+                if "orbit_enabled" not in self.selected_body:
+                    self.selected_body["orbit_enabled"] = True
+                if "max_orbit_points" not in self.selected_body:
+                    self.selected_body["max_orbit_points"] = 2000
+                
+                # Draw "Show Orbit" checkbox
+                orbit_enabled = self.selected_body.get("orbit_enabled", True)
+                pygame.draw.rect(self.screen, self.BLACK, self.orbit_enabled_checkbox, 2)
+                if orbit_enabled:
+                    # Draw checkmark
+                    pygame.draw.line(self.screen, self.BLACK,
+                                   (self.orbit_enabled_checkbox.left + 4, self.orbit_enabled_checkbox.centery),
+                                   (self.orbit_enabled_checkbox.left + 8, self.orbit_enabled_checkbox.bottom - 4), 2)
+                    pygame.draw.line(self.screen, self.BLACK,
+                                   (self.orbit_enabled_checkbox.left + 8, self.orbit_enabled_checkbox.bottom - 4),
+                                   (self.orbit_enabled_checkbox.right - 4, self.orbit_enabled_checkbox.top + 4), 2)
+                
+                orbit_label = self.subtitle_font.render("Show Orbit", True, self.BLACK)
+                orbit_label_rect = orbit_label.get_rect(midleft=(self.orbit_enabled_checkbox.right + 10, self.orbit_enabled_checkbox.centery))
+                self.screen.blit(orbit_label, orbit_label_rect)
+                
+                # Draw "Last Revolution Only" checkbox
+                is_last_revolution = self.selected_body.get("max_orbit_points", 2000) < 1000
+                pygame.draw.rect(self.screen, self.BLACK, self.last_revolution_checkbox, 2)
+                if is_last_revolution:
+                    # Draw checkmark
+                    pygame.draw.line(self.screen, self.BLACK,
+                                   (self.last_revolution_checkbox.left + 4, self.last_revolution_checkbox.centery),
+                                   (self.last_revolution_checkbox.left + 8, self.last_revolution_checkbox.bottom - 4), 2)
+                    pygame.draw.line(self.screen, self.BLACK,
+                                   (self.last_revolution_checkbox.left + 8, self.last_revolution_checkbox.bottom - 4),
+                                   (self.last_revolution_checkbox.right - 4, self.last_revolution_checkbox.top + 4), 2)
+                
+                last_rev_label = self.subtitle_font.render("Last Revolution Only", True, self.BLACK)
+                last_rev_label_rect = last_rev_label.get_rect(midleft=(self.last_revolution_checkbox.right + 10, self.last_revolution_checkbox.centery))
+                self.screen.blit(last_rev_label, last_rev_label_rect)
 
                 # Draw spacetime grid
                 self.draw_spacetime_grid()
@@ -5103,28 +6393,32 @@ class SolarSystemVisualizer:
             if body["type"] != "star" and body["name"] in self.orbit_grid_points:
                 grid_points = self.orbit_grid_points[body["name"]]
                 if len(grid_points) > 1:
-                    # Use different colors for different body types
+                    # For moons, don't cache since grid moves with planet every frame
+                    # For planets, use cache since grid is static relative to star
+                    if body["type"] == "moon":
+                        # Convert directly without caching (planet position changes every frame)
+                        screen_points = [np.array(self.world_to_screen(p)) for p in grid_points]
+                    else:
+                        # Planets can use cache (static relative to star)
+                        screen_points = self._cached_screen_points(body["name"], grid_points, self.orbit_grid_screen_cache)
                     if body["type"] == "planet":
                         color = self.LIGHT_GRAY
                     else:  # moon
                         color = (150, 150, 150)  # Slightly darker for moons
-                    pygame.draw.lines(self.screen, color, True, grid_points, 1)
+                    pygame.draw.lines(self.screen, color, True, screen_points, max(1, int(2 * self.camera_zoom)))
         
         # Draw orbit lines and bodies
         for body in self.placed_bodies:
-            # Draw orbit line
-            if body["type"] != "star" and body["name"] in self.orbit_points:
-                points = self.orbit_points[body["name"]]
-                if len(points) > 1:
-                    pygame.draw.lines(self.screen, self.GRAY, False, points, 1)
+            # Draw orbit line using persistent orbit_points
+            if body["type"] != "star":
+                self.draw_orbit(body)
             
             # Draw body
             if body["type"] == "star":
-                # Stars don't rotate
                 color = self.YELLOW
-                pygame.draw.circle(self.screen, color, body["position"].astype(int), body["radius"])
+                pos = self.world_to_screen(body["position"])
+                pygame.draw.circle(self.screen, color, (int(pos[0]), int(pos[1])), max(1, int(body["radius"] * self.camera_zoom)))
             else:
-                # Planets and moons rotate
                 color = self.BLUE if body["type"] == "planet" else self.WHITE
                 
                 # Draw the rotating body
@@ -5132,8 +6426,8 @@ class SolarSystemVisualizer:
             
             # Highlight selected body
             if self.selected_body and body["name"] == self.selected_body["name"]:
-                # Draw a circle around the selected body
-                pygame.draw.circle(self.screen, self.RED, body["position"].astype(int), body["radius"] + 5, 2)
+                pos = self.world_to_screen(body["position"])
+                pygame.draw.circle(self.screen, self.RED, (int(pos[0]), int(pos[1])), max(1, int((body["radius"] + 5) * self.camera_zoom)), 2)
         
         # Draw placement preview if active tab is selected
         # Update preview position from mouse if not set or if mouse moved
@@ -5184,6 +6478,9 @@ class SolarSystemVisualizer:
             instruction_text = self.subtitle_font.render(instruction, True, self.WHITE)
             instruction_rect = instruction_text.get_rect(center=(self.width//2, self.height - 30))
             self.screen.blit(instruction_text, instruction_rect)
+        
+        # Draw Reset View button (UI layer, screen space)
+        self.draw_reset_button()
         
         # Render dropdown menu last, so it appears on top of everything
         self.render_dropdown()

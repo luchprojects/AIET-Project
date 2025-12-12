@@ -53,6 +53,10 @@ def main():
     engine = create_solar_system()
     visualizer = SolarSystemVisualizer()
     
+    # Run orbit unit test on startup
+    if hasattr(visualizer, 'run_orbit_unit_test'):
+        visualizer.run_orbit_unit_test()
+    
     # Main simulation loop
     running = True
     while running:
