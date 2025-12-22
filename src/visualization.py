@@ -4,7 +4,9 @@ import threading
 import time
 import traceback
 import math
+import random
 from typing import List, Tuple
+from uuid import uuid4
 from simulation_engine import CelestialBody, SimulationEngine
 
 # ============================================================================
@@ -107,6 +109,144 @@ MOON_ORBIT_AU = 0.00257   # Scientifically correct
 MOON_ORBIT_PX = 40        # Great for UX
 TIME_SCALE = 0.3           # Smooth & readable orbit motion (increased for visible movement)
 
+# Helper function to convert hex color string to RGB tuple
+def hex_to_rgb(hex_string: str) -> Tuple[int, int, int]:
+    """Convert hex color string (e.g., '#FDB813') to RGB tuple (e.g., (253, 184, 19))"""
+    hex_string = hex_string.lstrip('#')
+    return tuple(int(hex_string[i:i+2], 16) for i in (0, 2, 4))
+
+# Celestial body base colors (scientifically motivated, UX-friendly)
+# Colors represent dominant surface or atmospheric class, not literal imagery
+CELESTIAL_BODY_COLORS = {
+    "Sun": "#FDB813",
+    "Mercury": "#9E9E9E",
+    "Venus": "#E6C17C",
+    "Earth": "#2E7FFF",
+    "Mars": "#C1440E",
+    "Jupiter": "#D2B48C",
+    "Saturn": "#E8D8A8",
+    "Uranus": "#7FDBFF",
+    "Neptune": "#4169E1",
+    "Moon": "#B0B0B0",
+}
+
+# Solar System Planet Presets (ordered by semi-major axis)
+# All values are scientifically grounded and used as starting presets
+SOLAR_SYSTEM_PLANET_PRESETS = {
+    "Mercury": {
+        "mass": 0.055,  # Earth masses
+        "radius": 0.383,  # Earth radii (R⊕)
+        "semiMajorAxis": 0.39,  # AU
+        "greenhouse_offset": 0.0,  # No atmosphere
+        "temperature": 440.0,  # K (equilibrium temperature, no greenhouse)
+        "equilibrium_temperature": 440.0,  # K
+        "gravity": 3.7,  # m/s²
+        "eccentricity": 0.205,
+        "orbital_period": 88.0,  # days
+        "stellarFlux": 6.67,  # Earth flux units
+        "density": 5.43,  # g/cm³
+        "base_color": "#9E9E9E",  # Gray (rocky surface)
+    },
+    "Venus": {
+        "mass": 0.815,
+        "radius": 0.949,
+        "semiMajorAxis": 0.72,
+        "greenhouse_offset": 500.0,  # Dense CO₂ (Runaway Greenhouse)
+        "temperature": 737.0,  # K (T_eq + greenhouse)
+        "equilibrium_temperature": 237.0,  # K
+        "gravity": 8.87,
+        "eccentricity": 0.007,
+        "orbital_period": 225.0,
+        "stellarFlux": 1.91,
+        "density": 5.24,
+        "base_color": "#E6C17C",  # Golden yellow (sulfuric acid clouds)
+    },
+    "Earth": {
+        "mass": 1.0,
+        "radius": 1.0,
+        "semiMajorAxis": 1.0,
+        "greenhouse_offset": 33.0,  # Earth-like (N₂–O₂ + H₂O + CO₂)
+        "temperature": 288.0,  # K
+        "equilibrium_temperature": 255.0,  # K
+        "gravity": 9.81,
+        "eccentricity": 0.017,
+        "orbital_period": 365.25,
+        "stellarFlux": 1.0,
+        "density": 5.51,
+        "base_color": "#2E7FFF",  # Blue (oceans and atmosphere)
+    },
+    "Mars": {
+        "mass": 0.107,
+        "radius": 0.532,
+        "semiMajorAxis": 1.52,
+        "greenhouse_offset": 10.0,  # Thin CO₂ / N₂
+        "temperature": 210.0,  # K
+        "equilibrium_temperature": 200.0,  # K
+        "gravity": 3.7,
+        "eccentricity": 0.093,
+        "orbital_period": 687.0,
+        "stellarFlux": 0.43,
+        "density": 3.93,
+        "base_color": "#C1440E",  # Red-orange (iron oxide surface)
+    },
+    "Jupiter": {
+        "mass": 317.8,
+        "radius": 11.2,
+        "semiMajorAxis": 5.2,
+        "greenhouse_offset": 70.0,  # H₂-rich
+        "temperature": 165.0,  # K
+        "equilibrium_temperature": 95.0,  # K
+        "gravity": 24.79,
+        "eccentricity": 0.048,
+        "orbital_period": 4333.0,
+        "stellarFlux": 0.037,
+        "density": 1.33,
+        "base_color": "#D2B48C",  # Tan (ammonia clouds)
+    },
+    "Saturn": {
+        "mass": 95.2,
+        "radius": 9.5,
+        "semiMajorAxis": 9.58,
+        "greenhouse_offset": 70.0,  # H₂-rich
+        "temperature": 134.0,  # K
+        "equilibrium_temperature": 64.0,  # K
+        "gravity": 10.44,
+        "eccentricity": 0.056,
+        "orbital_period": 10759.0,
+        "stellarFlux": 0.011,
+        "density": 0.69,
+        "base_color": "#E8D8A8",  # Pale yellow (ammonia ice clouds)
+    },
+    "Uranus": {
+        "mass": 14.5,
+        "radius": 4.0,
+        "semiMajorAxis": 19.2,
+        "greenhouse_offset": 70.0,  # H₂-rich
+        "temperature": 76.0,  # K
+        "equilibrium_temperature": 6.0,  # K
+        "gravity": 8.69,
+        "eccentricity": 0.046,
+        "orbital_period": 30687.0,
+        "stellarFlux": 0.0029,
+        "density": 1.27,
+        "base_color": "#7FDBFF",  # Cyan (methane atmosphere)
+    },
+    "Neptune": {
+        "mass": 17.1,
+        "radius": 3.9,
+        "semiMajorAxis": 30.1,
+        "greenhouse_offset": 70.0,  # H₂-rich
+        "temperature": 72.0,  # K
+        "equilibrium_temperature": 2.0,  # K
+        "gravity": 11.15,
+        "eccentricity": 0.009,
+        "orbital_period": 60190.0,
+        "stellarFlux": 0.0015,
+        "density": 1.64,
+        "base_color": "#4169E1",  # Royal blue (methane atmosphere)
+    },
+}
+
 class SolarSystemVisualizer:
     def __init__(self, width: int = 1200, height: int = 800):
         pygame.init()
@@ -176,12 +316,25 @@ class SolarSystemVisualizer:
         self.space_area = pygame.Rect(0, self.tab_height + 2*self.tab_margin, 
                                     self.width, self.height - (self.tab_height + 2*self.tab_margin))
         
+        # Planet preset selector (small dropdown arrow in bottom-right of Planet tab)
+        self.planet_preset_arrow_size = 12
+        self.planet_preset_arrow_rect = None  # Will be calculated based on Planet tab position
+        self.planet_preset_dropdown_visible = False
+        self.planet_preset_dropdown_rect = None  # Will be calculated when opened
+        self.planet_preset_options = list(SOLAR_SYSTEM_PLANET_PRESETS.keys())  # Ordered by semi-major axis
+        
+        # Orbital correction animation system
+        self.orbital_corrections = {}  # {body_id: {"target_radius_px": float, "start_time": float, "duration": float, "start_pos": np.array, "target_pos": np.array}}
+        self.correction_animation_duration = 0.8  # seconds
+        
         # Preview state for placement
         self.preview_position = None  # Mouse position for preview
         self.preview_radius = None  # Preview radius based on object type
+        self.placement_mode_active = False  # Track if we're in placement mode
         
         # Track placed celestial bodies
         self.placed_bodies = []
+        self.bodies_by_id = {}  # ID-based registry: {body_id: body_dict} for guaranteed unique lookups
         self.body_counter = {"moon": 0, "planet": 0, "star": 0}
         
         # Physics parameters
@@ -217,7 +370,8 @@ class SolarSystemVisualizer:
         self.rotation_speed = 0.1  # Base rotation speed
         
         # Customization panel
-        self.selected_body = None
+        self.selected_body = None  # Direct reference to selected body (for backward compatibility)
+        self.selected_body_id = None  # ID of selected body (for guaranteed correct lookup)
         self.customization_panel_width = 400  # Increased from 300 to 400 for more space
         self.customization_panel = pygame.Rect(self.width - self.customization_panel_width, 0, 
                                              self.customization_panel_width, self.height)
@@ -243,7 +397,7 @@ class SolarSystemVisualizer:
             ("Neptune", 17.1),
             ("Custom", None)  # Added custom mass option
         ]
-        self.planet_dropdown_selected = "Earth"
+        self.planet_dropdown_selected = None  # No planet preselected - user must choose
         self.planet_dropdown_visible = False
         self.show_custom_mass_input = False
         
@@ -280,6 +434,8 @@ class SolarSystemVisualizer:
         self.planet_radius_dropdown_selected = "Earth"
         self.planet_radius_dropdown_visible = False
         self.show_custom_radius_input = False
+        self.radius_input_active = False
+        self.radius_input_text = ""
         
         # Planet temperature dropdown properties
         self.planet_temperature_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 300,
@@ -1085,6 +1241,672 @@ class SolarSystemVisualizer:
         scale_factor = scale_factors.get(obj_type, 1.0)
         return visual_radius * scale_factor
     
+    def apply_planet_preset(self, preset_name: str):
+        """
+        Apply a Solar System planet preset to the currently selected planet.
+        Uses update_selected_body_property to ensure per-object updates with no shared state.
+        
+        Args:
+            preset_name: Name of the preset (e.g., "Mercury", "Earth", "Mars")
+        """
+        if not self.selected_body_id or self.selected_body_id not in self.bodies_by_id:
+            print(f"ERROR: Cannot apply preset - no planet selected")
+            return False
+        
+        if preset_name not in SOLAR_SYSTEM_PLANET_PRESETS:
+            print(f"ERROR: Unknown preset name: {preset_name}")
+            return False
+        
+        # Get canonical body from registry
+        body = self.bodies_by_id[self.selected_body_id]
+        
+        if body.get("type") != "planet":
+            print(f"ERROR: Preset can only be applied to planets")
+            return False
+        
+        # Get preset data (deep copy to avoid shared references)
+        preset = SOLAR_SYSTEM_PLANET_PRESETS[preset_name]
+        
+        # Apply all preset parameters using update_selected_body_property
+        # This ensures per-object updates with no shared state
+        self.update_selected_body_property("mass", preset["mass"], "mass")
+        self.update_selected_body_property("radius", preset["radius"], "radius")
+        self.update_selected_body_property("semiMajorAxis", preset["semiMajorAxis"], "semiMajorAxis")
+        self.update_selected_body_property("greenhouse_offset", preset["greenhouse_offset"], "greenhouse_offset")
+        self.update_selected_body_property("equilibrium_temperature", preset["equilibrium_temperature"], "equilibrium_temperature")
+        self.update_selected_body_property("temperature", preset["temperature"], "temperature")
+        self.update_selected_body_property("gravity", preset["gravity"], "gravity")
+        self.update_selected_body_property("eccentricity", preset["eccentricity"], "eccentricity")
+        self.update_selected_body_property("orbital_period", preset["orbital_period"], "orbital_period")
+        self.update_selected_body_property("stellarFlux", preset["stellarFlux"], "stellarFlux")
+        if "density" in preset:
+            self.update_selected_body_property("density", preset["density"], "density")
+        if "base_color" in preset:
+            self.update_selected_body_property("base_color", preset["base_color"], "base_color")
+        
+        # CRITICAL: Update position using centralized function
+        parent_star = body.get("parent_obj")
+        if parent_star is None and body.get("parent"):
+            parent_star = next((b for b in self.placed_bodies if b["name"] == body.get("parent")), None)
+        if parent_star:
+            self.compute_planet_position(body, parent_star)
+        
+        # Regenerate orbit grid for visualization
+        self.generate_orbit_grid(body)
+        self.clear_orbit_points(body)
+        
+        # Sync all UI dropdowns to reflect new values
+        # This ensures UI controls are in sync with the planet's actual values
+        if self.selected_body.get('type') == 'planet':
+            # Sync mass dropdown
+            body_mass = body.get('mass', 1.0)
+            if hasattr(body_mass, 'item'):
+                body_mass = float(body_mass.item())
+            else:
+                body_mass = float(body_mass)
+            matching_option = None
+            for name, value in self.planet_dropdown_options:
+                if value is not None and abs(float(value) - body_mass) < 0.01:
+                    matching_option = name
+                    break
+            if matching_option:
+                body["planet_dropdown_selected"] = matching_option
+            else:
+                body["planet_dropdown_selected"] = "Custom"
+            
+            # Sync radius dropdown
+            radius_earth = body.get('radius', 1.0)
+            if hasattr(radius_earth, 'item'):
+                radius_earth = float(radius_earth.item())
+            else:
+                radius_earth = float(radius_earth)
+            found = False
+            for name, preset_radius in self.planet_radius_dropdown_options:
+                if preset_radius is not None and abs(preset_radius - radius_earth) < 0.01:
+                    self.planet_radius_dropdown_selected = name
+                    found = True
+                    break
+            if not found:
+                self.planet_radius_dropdown_selected = "Custom"
+            
+            # Sync temperature dropdown
+            temperature = body.get('temperature', 288)
+            if hasattr(temperature, 'item'):
+                temperature = float(temperature.item())
+            else:
+                temperature = float(temperature)
+            found = False
+            for name, preset_temp in self.planet_temperature_dropdown_options:
+                if preset_temp is not None and abs(preset_temp - temperature) < 1:
+                    self.planet_temperature_dropdown_selected = name
+                    found = True
+                    break
+            if not found:
+                self.planet_temperature_dropdown_selected = "Custom"
+            
+            # Sync atmosphere dropdown
+            greenhouse_offset = body.get('greenhouse_offset', 33.0)
+            if hasattr(greenhouse_offset, 'item'):
+                greenhouse_offset = float(greenhouse_offset.item())
+            else:
+                greenhouse_offset = float(greenhouse_offset)
+            found = False
+            for name, preset_offset in self.planet_atmosphere_dropdown_options:
+                if preset_offset is not None and abs(preset_offset - greenhouse_offset) < 0.1:
+                    self.planet_atmosphere_dropdown_selected = name
+                    found = True
+                    break
+            if not found:
+                self.planet_atmosphere_dropdown_selected = "Custom"
+            
+            # Sync gravity dropdown
+            gravity = body.get('gravity', 9.81)
+            if hasattr(gravity, 'item'):
+                gravity = float(gravity.item())
+            else:
+                gravity = float(gravity)
+            found = False
+            for name, preset_gravity in self.planet_gravity_dropdown_options:
+                if preset_gravity is not None and abs(preset_gravity - gravity) < 0.01:
+                    self.planet_gravity_dropdown_selected = name
+                    found = True
+                    break
+            if not found:
+                self.planet_gravity_dropdown_selected = "Custom"
+            
+            # Sync semi-major axis dropdown
+            semi_major_axis = body.get('semiMajorAxis', 1.0)
+            if hasattr(semi_major_axis, 'item'):
+                semi_major_axis = float(semi_major_axis.item())
+            else:
+                semi_major_axis = float(semi_major_axis)
+            found = False
+            for name, preset_distance in self.planet_orbital_distance_dropdown_options:
+                if preset_distance is not None and abs(preset_distance - semi_major_axis) < 0.01:
+                    self.planet_orbital_distance_dropdown_selected = name
+                    found = True
+                    break
+            if not found:
+                self.planet_orbital_distance_dropdown_selected = "Custom"
+            
+            # Sync eccentricity dropdown
+            eccentricity = body.get('eccentricity', 0.017)
+            if hasattr(eccentricity, 'item'):
+                eccentricity = float(eccentricity.item())
+            else:
+                eccentricity = float(eccentricity)
+            found = False
+            for name, preset_ecc in self.planet_orbital_eccentricity_dropdown_options:
+                if preset_ecc is not None and abs(preset_ecc - eccentricity) < 0.001:
+                    self.planet_orbital_eccentricity_dropdown_selected = name
+                    found = True
+                    break
+            if not found:
+                self.planet_orbital_eccentricity_dropdown_selected = "Custom"
+            
+            # Sync orbital period dropdown
+            orbital_period = body.get('orbital_period', 365.25)
+            if hasattr(orbital_period, 'item'):
+                orbital_period = float(orbital_period.item())
+            else:
+                orbital_period = float(orbital_period)
+            found = False
+            for name, preset_period in self.planet_orbital_period_dropdown_options:
+                if preset_period is not None and abs(preset_period - orbital_period) < 0.1:
+                    self.planet_orbital_period_dropdown_selected = name
+                    found = True
+                    break
+            if not found:
+                self.planet_orbital_period_dropdown_selected = "Custom"
+            
+            # Sync stellar flux dropdown
+            stellar_flux = body.get('stellarFlux', 1.0)
+            if hasattr(stellar_flux, 'item'):
+                stellar_flux = float(stellar_flux.item())
+            else:
+                stellar_flux = float(stellar_flux)
+            found = False
+            for name, preset_flux in self.planet_stellar_flux_dropdown_options:
+                if preset_flux is not None and abs(preset_flux - stellar_flux) < 0.001:
+                    self.planet_stellar_flux_dropdown_selected = name
+                    found = True
+                    break
+            if not found:
+                self.planet_stellar_flux_dropdown_selected = "Custom"
+            
+            # Sync density dropdown
+            density = body.get('density', 5.51)
+            if hasattr(density, 'item'):
+                density = float(density.item())
+            else:
+                density = float(density)
+            found = False
+            for name, preset_density in self.planet_density_dropdown_options:
+                if preset_density is not None and abs(preset_density - density) < 0.01:
+                    self.planet_density_dropdown_selected = name
+                    found = True
+                    break
+            if not found:
+                self.planet_density_dropdown_selected = "Custom"
+        
+        # Update planet scores
+        self._update_planet_scores()
+        
+        print(f"Applied preset '{preset_name}' to planet {body.get('name')}")
+        return True
+    
+    def get_selected_body(self):
+        """
+        Get the selected body from the ID registry to ensure we're working with the correct object.
+        This prevents shared-state bugs by always using the canonical registry entry.
+        """
+        if self.selected_body_id and self.selected_body_id in self.bodies_by_id:
+            body = self.bodies_by_id[self.selected_body_id]
+            # Update selected_body reference to match registry
+            self.selected_body = body
+            return body
+        return None
+    
+    def update_selected_body_property(self, key, value, debug_name=""):
+        """
+        Update a property on the selected body using the ID registry.
+        This ensures we're always updating the correct object and prevents shared-state bugs.
+        Automatically triggers orbit recalculation for physics-affecting parameters.
+        """
+        # ALWAYS print when this function is called for mass updates - FORCE FLUSH
+        if key == "mass":
+            import sys
+            print(f"\n{'='*80}", flush=True)
+            print(f"update_selected_body_property CALLED for mass update", flush=True)
+            print(f"  selected_body_id: {self.selected_body_id}", flush=True)
+            print(f"  value: {value}", flush=True)
+            print(f"  debug_name: {debug_name}", flush=True)
+            print(f"{'='*80}\n", flush=True)
+            sys.stdout.flush()
+        
+        if not self.selected_body_id:
+            print(f"ERROR: Cannot update {key} - no body selected")
+            return False
+            
+        # CRITICAL: Get body ONLY from registry, never use self.selected_body directly
+        if self.selected_body_id not in self.bodies_by_id:
+            print(f"ERROR: Selected body id {self.selected_body_id} not found in registry")
+            return False
+            
+        body = self.bodies_by_id[self.selected_body_id]
+        
+        # CRITICAL: Verify this body is unique - no other body shares the same dict
+        body_dict_id = id(body)
+        shared_with = []
+        for other_body in self.placed_bodies:
+            other_id = other_body.get("id")
+            other_dict_id = id(other_body)
+            if other_id != self.selected_body_id and other_dict_id == body_dict_id:
+                shared_with.append((other_id, other_body.get("name")))
+                print(f"CRITICAL ERROR: Body {self.selected_body_id[:8]} shares dict with body {other_id[:8]} ({other_body.get('name')})! dict_id={body_dict_id}")
+        
+        if shared_with:
+            error_msg = f"SHARED_DICT_DETECTED: Selected body {self.selected_body_id} shares dict with: {shared_with}"
+            print(error_msg)
+            raise AssertionError(error_msg)
+        
+        # CRITICAL: Verify the body in registry matches the body in placed_bodies
+        body_in_list = next((b for b in self.placed_bodies if b.get("id") == self.selected_body_id), None)
+        if body_in_list is None:
+            raise AssertionError(f"CRITICAL: Selected body {self.selected_body_id} not found in placed_bodies!")
+        if id(body_in_list) != body_dict_id:
+            print(f"WARNING: Body {self.selected_body_id} in registry has different dict_id than in placed_bodies!")
+            print(f"  Registry dict_id: {body_dict_id}")
+            print(f"  List dict_id: {id(body_in_list)}")
+            # Use the one from placed_bodies to be safe
+            body = body_in_list
+            body_dict_id = id(body)
+        
+        # CRITICAL: Before update, store all body values to detect cross-body mutations
+        old_masses = {}
+        if key == "mass":
+            print(f"\n{'='*60}")
+            print(f"MASS UPDATE REQUESTED")
+            print(f"  Selected body_id: {self.selected_body_id}")
+            print(f"  Body from registry dict_id: {body_dict_id}")
+            print(f"  Body name: {body.get('name', 'unknown')}")
+            print(f"  Body current mass: {body.get('mass', 0.0):.6f}")
+            print(f"  New mass value: {value:.6f}")
+            print(f"\n=== ALL PLANETS BEFORE UPDATE ===")
+            for b in self.placed_bodies:
+                if b.get("type") == "planet":
+                    body_id = b.get("id", "no-id")
+                    old_mass = b.get("mass", 0.0)
+                    old_masses[body_id] = old_mass
+                    b_dict_id = id(b)
+                    is_selected = (body_id == self.selected_body_id)
+                    marker = " <-- SELECTED" if is_selected else ""
+                    print(f"  Body {body_id[:8]} name={b.get('name')} mass={old_mass:.6f} dict_id={b_dict_id}{marker}")
+                    if b_dict_id == body_dict_id and body_id != self.selected_body_id:
+                        raise AssertionError(f"CRITICAL: Found duplicate dict_id! Body {body_id} has same dict as selected body {self.selected_body_id}")
+            print(f"{'='*60}\n")
+        
+        if body:
+            # Convert value to float if it's numeric to prevent numpy array issues
+            if isinstance(value, (int, float)) or (hasattr(value, 'item') and not isinstance(value, str)):
+                if hasattr(value, 'item'):
+                    value = float(value.item())
+                else:
+                    value = float(value)
+            
+            # CRITICAL: Update ONLY this specific body dict
+            old_value = body.get(key)
+            
+            # CRITICAL: Double-check we're updating the right body before mutation
+            if body.get("id") != self.selected_body_id:
+                raise AssertionError(f"CRITICAL: Body dict id mismatch! Expected {self.selected_body_id}, got {body.get('id')}")
+            
+            # Verify body dict is still unique before updating
+            body_dict_id_before = id(body)
+            for other_body in self.placed_bodies:
+                if other_body.get("id") != self.selected_body_id and id(other_body) == body_dict_id_before:
+                    raise AssertionError(f"CRITICAL: About to update shared dict! Body {self.selected_body_id} shares dict with {other_body.get('id')}")
+            
+            # NOW update the value
+            body[key] = value
+            
+            # Verify the update only affected this body
+            body_dict_id_after = id(body)
+            if body_dict_id_before != body_dict_id_after:
+                raise AssertionError(f"CRITICAL: Body dict id changed during update! {body_dict_id_before} -> {body_dict_id_after}")
+            
+            # CRITICAL: Verify the update only affected the intended body
+            if key == "mass" and debug_name:
+                print(f"\n=== AFTER MASS UPDATE ===")
+                print(f"  Updated body_id={self.selected_body_id[:8]} dict_id={body_dict_id} old_mass={old_value:.6f} new_mass={value:.6f}")
+                changed_bodies = []
+                for b in self.placed_bodies:
+                    if b.get("type") == "planet":
+                        body_id = b.get("id", "no-id")
+                        current_mass = b.get("mass", 0.0)
+                        old_mass = old_masses.get(body_id, current_mass)
+                        print(f"  Body {body_id[:8]} name={b.get('name')} old_mass={old_mass:.6f} new_mass={current_mass:.6f} dict_id={id(b)}")
+                        # Check if this body's mass changed when it shouldn't have
+                        if body_id != self.selected_body_id:
+                            if abs(current_mass - old_mass) > 1e-6:
+                                changed_bodies.append((body_id, b.get("name"), id(b), old_mass, current_mass))
+                                print(f"  *** ERROR: Body {b.get('name')} mass changed from {old_mass:.6f} to {current_mass:.6f} but was NOT selected!")
+                
+                if changed_bodies:
+                    print(f"\n*** CRITICAL ERROR: {len(changed_bodies)} other bodies changed mass!")
+                    for other_id, other_name, other_dict_id, old_m, new_m in changed_bodies:
+                        print(f"  - Body {other_id[:8]} ({other_name}) dict_id={other_dict_id} {old_m:.6f} -> {new_m:.6f}")
+                        if other_dict_id == body_dict_id:
+                            raise AssertionError(f"SHARED_STATE DETECTED: Body {other_id} shares dict with selected body {self.selected_body_id}! dict_id={body_dict_id}")
+                    raise AssertionError(f"MASS_UPDATE_BUG: {len(changed_bodies)} non-selected bodies had their mass changed!")
+            
+            if debug_name:
+                print(f"DEBUG: Updated {debug_name} for body id={self.selected_body_id}, {key}={value}, position_id={id(body['position'])}, body_id={id(body)}")
+            
+            # Update selected_body reference to match registry (for backward compatibility)
+            self.selected_body = body
+            
+            # CRITICAL: Recompute orbit parameters when physics-affecting parameters change
+            # This ensures each body has independent physics calculations
+            # CRITICAL: radius is NOT a physics-affecting key
+            # Radius affects visual size only, never physics (orbit, mass, AU, etc.)
+            physics_affecting_keys = ["mass", "semiMajorAxis", "orbit_radius", "eccentricity"]
+            if key in physics_affecting_keys:
+                # CRITICAL: For planets, if semiMajorAxis changes, immediately update position
+                if key == "semiMajorAxis" and body["type"] == "planet":
+                    parent_star = body.get("parent_obj")
+                    if parent_star is None and body.get("parent"):
+                        parent_star = next((b for b in self.placed_bodies if b["name"] == body.get("parent")), None)
+                    if parent_star:
+                        # Calculate new target position based on updated AU
+                        new_au = float(value)
+                        new_orbit_radius_px = new_au * AU_TO_PX
+                        current_angle = body.get("orbit_angle", 0.0)
+                        new_target_pos = np.array([
+                            parent_star["position"][0] + new_orbit_radius_px * math.cos(current_angle),
+                            parent_star["position"][1] + new_orbit_radius_px * math.sin(current_angle)
+                        ], dtype=float)
+                        
+                        # Start orbital correction animation
+                        import time
+                        body_id = body.get("id")
+                        if body_id:
+                            body["is_correcting_orbit"] = True
+                            body["target_position"] = new_target_pos.copy()
+                            body["orbit_radius_au"] = float(new_au)
+                            self.orbital_corrections[body_id] = {
+                                "target_radius_px": new_orbit_radius_px,
+                                "start_time": time.time(),
+                                "duration": self.correction_animation_duration,
+                                "start_pos": body["position"].copy(),
+                                "target_pos": new_target_pos.copy(),
+                                "parent_star_pos": parent_star["position"].copy(),
+                            }
+                
+                self.recompute_orbit_parameters(body, force_recompute=True)
+                # Regenerate orbit grid for visualization
+                if body["type"] != "star":
+                    self.generate_orbit_grid(body)
+                    self.clear_orbit_points(body)
+            
+            # CRITICAL: Assert no shared state after parameter update
+            self._assert_no_shared_state()
+            
+            # After every parameter write, verify that no bodies share parameter containers
+            self.debug_verify_body_references(source=f"update_selected_body_property:{debug_name or key}")
+            return True
+        return False
+
+    def debug_verify_body_references(self, source: str = ""):
+        """
+        Debug helper: print memory ids for each body's core containers to detect shared references.
+        This is a direct implementation of the 'no shared state' verification requirement.
+        """
+        if not self.placed_bodies:
+            return
+
+        print("DEBUG_REF_CHECK", source or "unknown")
+        seen_body_ids = set()
+        seen_position_ids = set()
+        seen_orbit_points_ids = set()
+
+        for body in self.placed_bodies:
+            bid = body.get("id", "<no-id>")
+            body_id_obj = id(body)
+            pos_id = id(body.get("position"))
+            orbit_points_id = id(body.get("orbit_points"))
+
+            print(
+                "BODY_REF",
+                bid,
+                "body_id", body_id_obj,
+                "position_id", pos_id,
+                "orbit_points_id", orbit_points_id,
+            )
+
+            # Simple duplicate detection to surface any accidental sharing
+            if body_id_obj in seen_body_ids:
+                print("WARNING: Duplicate body dict reference detected", bid)
+            if pos_id in seen_position_ids:
+                print("WARNING: Shared position reference detected", bid)
+            if orbit_points_id in seen_orbit_points_ids:
+                print("WARNING: Shared orbit_points reference detected", bid)
+
+            seen_body_ids.add(body_id_obj)
+            seen_position_ids.add(pos_id)
+            seen_orbit_points_ids.add(orbit_points_id)
+    
+    def create_planet_from_preset(self, preset_name: str, spawn_position: np.ndarray, body_id: str = None) -> dict:
+        """
+        Create a planet from a preset with all parameters deep-copied at creation.
+        This is the authoritative planet creation function - all preset values are applied here.
+        
+        Args:
+            preset_name: Name of the preset (e.g., "Mars", "Earth")
+            spawn_position: Initial visual position (will be corrected to orbit radius)
+            body_id: Optional body ID (will be generated if None)
+        
+        Returns:
+            Complete planet body dictionary with all preset parameters
+        """
+        if preset_name not in SOLAR_SYSTEM_PLANET_PRESETS:
+            raise ValueError(f"Unknown preset: {preset_name}")
+        
+        if body_id is None:
+            body_id = str(uuid4())
+        
+        # Deep copy preset data
+        preset = SOLAR_SYSTEM_PLANET_PRESETS[preset_name]
+        
+        # Get parent star for orbit calculation
+        stars = [b for b in self.placed_bodies if b["type"] == "star"]
+        parent_star = None
+        if stars:
+            parent_star = min(stars, key=lambda s: np.linalg.norm(s["position"] - spawn_position))
+        
+        # Calculate correct orbital position from AU
+        orbit_radius_au = preset.get("semiMajorAxis", 1.0)
+        orbit_radius_px = orbit_radius_au * AU_TO_PX
+        orbit_angle = float(random.uniform(0, 2 * np.pi))
+        
+        # Target position based on physics (AU)
+        if parent_star:
+            target_position = np.array([
+                parent_star["position"][0] + orbit_radius_px * np.cos(orbit_angle),
+                parent_star["position"][1] + orbit_radius_px * np.sin(orbit_angle)
+            ], dtype=float)
+        else:
+            # No star yet, use spawn position as target
+            target_position = np.array(spawn_position, dtype=float)
+        
+        # Create body with preset values - start at spawn position (will animate)
+        body = self._create_new_body_dict(
+            obj_type="planet",
+            body_id=body_id,
+            position=np.array(spawn_position, dtype=float),  # Start at click position (will animate to target)
+            default_name=preset_name,
+            default_mass=preset["mass"],
+            default_age=4.5,  # Default age
+            default_radius=preset["radius"]  # In Earth radii (R⊕)
+        )
+        
+        # Add all preset parameters (deep copied)
+        body.update({
+            "gravity": float(preset.get("gravity", 9.81)),
+            "semiMajorAxis": float(orbit_radius_au),  # Authoritative AU value
+            "orbit_radius_au": float(orbit_radius_au),  # Store AU explicitly
+            "eccentricity": float(preset.get("eccentricity", 0.017)),
+            "orbital_period": float(preset.get("orbital_period", 365.25)),
+            "stellarFlux": float(preset.get("stellarFlux", 1.0)),
+            "temperature": float(preset.get("temperature", 288.0)),
+            "equilibrium_temperature": float(preset.get("equilibrium_temperature", 255.0)),
+            "greenhouse_offset": float(preset.get("greenhouse_offset", 33.0)),
+            "density": float(preset.get("density", 5.51)),
+            "base_color": str(preset.get("base_color", CELESTIAL_BODY_COLORS.get(preset_name, "#2E7FFF"))),  # Per-object color from preset
+            "planet_dropdown_selected": preset_name,
+            "orbit_angle": float(orbit_angle),
+            "visual_position": np.array(spawn_position, dtype=float).copy(),  # Temporary visual position
+            "target_position": target_position.copy(),  # Physics-determined position
+            "is_correcting_orbit": True,  # Flag to trigger animation
+        })
+        
+        # Set parent if star exists
+        if parent_star:
+            body["parent"] = parent_star["name"]
+            body["parent_id"] = parent_star["id"]
+            body["parent_obj"] = parent_star
+        
+        # Initialize orbit correction animation
+        import time
+        self.orbital_corrections[body_id] = {
+            "target_radius_px": orbit_radius_px,
+            "start_time": time.time(),
+            "duration": self.correction_animation_duration,
+            "start_pos": np.array(spawn_position, dtype=float).copy(),
+            "target_pos": target_position.copy(),
+            "parent_star_pos": parent_star["position"].copy() if parent_star else None,
+        }
+        
+        # Log creation
+        print(f"SPAWN_PLANET | id={body_id[:8]} | preset={preset_name} | mass={preset['mass']} | AU={orbit_radius_au} | radius={preset['radius']} R⊕")
+        
+        return body
+    
+    def _create_new_body_dict(self, obj_type: str, body_id: str, position: np.ndarray,
+                              default_name: str, default_mass: float, default_age: float,
+                              default_radius: float) -> dict:
+        """
+        Factory function that creates a completely new body dictionary with no shared references.
+        Every nested structure (lists, dicts, arrays) is a new instance.
+        
+        This is CRITICAL to prevent shared state bugs where changing one body affects others.
+        """
+        # CRITICAL: For planets, radius is stored in Earth radii (R⊕), not pixels
+        # For stars and moons, radius is stored in pixels (legacy)
+        if obj_type == "planet":
+            # Store in Earth radii: default_radius is already in R⊕ (1.0 = Earth's radius)
+            body_radius = float(default_radius) if default_radius > 0 else 1.0
+        else:
+            # Stars and moons: store in pixels (legacy behavior)
+            body_radius = float(default_radius)
+        
+        # Determine default base_color based on type and name
+        default_base_color = None
+        if obj_type == "star":
+            # Stars default to Sun color
+            default_base_color = CELESTIAL_BODY_COLORS.get("Sun", "#FDB813")
+        elif obj_type == "moon":
+            # Moons default to Moon color
+            default_base_color = CELESTIAL_BODY_COLORS.get("Moon", "#B0B0B0")
+        elif obj_type == "planet":
+            # Planets: try to match by name, otherwise default to Earth color
+            default_base_color = CELESTIAL_BODY_COLORS.get(default_name, CELESTIAL_BODY_COLORS.get("Earth", "#2E7FFF"))
+        
+        # Create new body dict with all primitive values
+        body = {
+            "id": str(body_id),  # Unique identifier
+            "type": str(obj_type),  # Ensure string, not shared reference
+            "position": np.array(position, dtype=float).copy(),  # NEW array instance
+            "velocity": np.array([0.0, 0.0], dtype=float).copy(),  # NEW array instance
+            "radius": body_radius,  # Scalar: R⊕ for planets, pixels for stars/moons
+            # Hitbox will be computed from visual radius on render
+            "hitbox_radius": 0.0,  # Will be computed when needed
+            "name": str(default_name),  # NEW string instance
+            "mass": float(default_mass * (1000.0 if obj_type == "star" else 1.0)),  # Scalar
+            "base_color": str(default_base_color),  # Hex color string (per-object, no shared state)
+            "parent": None,  # Will be set later
+            "parent_id": None,  # Will be set later
+            "parent_obj": None,  # Will be set later
+            "orbit_radius": 0.0,  # Scalar
+            "orbit_angle": float(random.uniform(0, 2 * np.pi)) if obj_type != "star" else 0.0,  # Random phase for planets/moons
+            "orbit_speed": 0.0,  # Scalar
+            "rotation_angle": 0.0,  # Scalar
+            "rotation_speed": float(self.rotation_speed * (1.0 if obj_type == "planet" else 2.0 if obj_type == "moon" else 0.0)),  # Scalar
+            "age": float(default_age),  # Scalar
+            "habit_score": 0.0,  # Scalar
+            "orbit_points": [],  # NEW list instance - CRITICAL: must be new list
+            "max_orbit_points": 2000,  # Scalar
+            "orbit_enabled": True,  # Scalar
+        }
+        
+        # Verify all nested structures are new instances
+        assert isinstance(body["position"], np.ndarray), "position must be numpy array"
+        assert isinstance(body["velocity"], np.ndarray), "velocity must be numpy array"
+        assert isinstance(body["orbit_points"], list), "orbit_points must be list"
+        
+        # CRITICAL: Verify this body dict is completely unique
+        body_dict_id = id(body)
+        for existing_body in self.placed_bodies:
+            existing_dict_id = id(existing_body)
+            if existing_dict_id == body_dict_id:
+                raise AssertionError(f"FACTORY_ERROR: New body {body_id} shares dict with existing body {existing_body.get('id')}! dict_id={body_dict_id}")
+        
+        # Verify orbit_points list is unique
+        orbit_points_id = id(body["orbit_points"])
+        for existing_body in self.placed_bodies:
+            if "orbit_points" in existing_body:
+                existing_orbit_points_id = id(existing_body["orbit_points"])
+                if existing_orbit_points_id == orbit_points_id:
+                    raise AssertionError(f"FACTORY_ERROR: New body {body_id} shares orbit_points list with existing body {existing_body.get('id')}!")
+        
+        return body
+    
+    def _assert_no_shared_state(self):
+        """
+        Hard assertion to detect shared state between bodies.
+        Raises AssertionError if any bodies share memory references.
+        """
+        if len(self.placed_bodies) < 2:
+            return
+        
+        # Assert all body dicts are unique
+        body_ids = [id(b) for b in self.placed_bodies]
+        assert len(body_ids) == len(set(body_ids)), \
+            f"SHARED_STATE_DETECTED: {len(body_ids) - len(set(body_ids))} bodies share dict references"
+        
+        # Assert all position arrays are unique
+        position_ids = [id(b.get("position")) for b in self.placed_bodies if "position" in b]
+        assert len(position_ids) == len(set(position_ids)), \
+            f"SHARED_STATE_DETECTED: {len(position_ids) - len(set(position_ids))} bodies share position arrays"
+        
+        # Assert all velocity arrays are unique
+        velocity_ids = [id(b.get("velocity")) for b in self.placed_bodies if "velocity" in b]
+        assert len(velocity_ids) == len(set(velocity_ids)), \
+            f"SHARED_STATE_DETECTED: {len(velocity_ids) - len(set(velocity_ids))} bodies share velocity arrays"
+        
+        # Assert all orbit_points lists are unique
+        orbit_points_ids = [id(b.get("orbit_points")) for b in self.placed_bodies if "orbit_points" in b]
+        assert len(orbit_points_ids) == len(set(orbit_points_ids)), \
+            f"SHARED_STATE_DETECTED: {len(orbit_points_ids) - len(set(orbit_points_ids))} bodies share orbit_points lists"
+        
+        # Assert all hz_surface objects are unique (if they exist)
+        hz_surface_ids = [id(b.get("hz_surface")) for b in self.placed_bodies if "hz_surface" in b and b.get("hz_surface") is not None]
+        if len(hz_surface_ids) > 1:
+            assert len(hz_surface_ids) == len(set(hz_surface_ids)), \
+                f"SHARED_STATE_DETECTED: {len(hz_surface_ids) - len(set(hz_surface_ids))} bodies share hz_surface objects"
+        
+        print(f"ASSERTION_PASSED: All {len(self.placed_bodies)} bodies have unique memory references")
+    
     def place_object(self, obj_type: str, params: dict = None):
         """
         Place a celestial object using the same logic as user clicks.
@@ -1123,7 +1945,8 @@ class SolarSystemVisualizer:
             default_mass = 1.0  # Earth masses
             default_age = 4.5  # Gyr
             default_name = params.get("name", "Earth")
-            default_radius = EARTH_RADIUS_PX
+            # For planets, default_radius is in Earth radii (R⊕), not pixels
+            default_radius = 1.0  # 1.0 R⊕ = Earth's radius
             
             # Calculate position based on semi_major_axis
             semi_major_axis = params.get("semi_major_axis", 1.0)
@@ -1146,27 +1969,19 @@ class SolarSystemVisualizer:
                 # Fallback: position relative to center
                 position = np.array([self.width/2 + MOON_ORBIT_PX, self.height/2], dtype=float)
         
-        body = {
-            "type": obj_type,
-            "position": np.array(position, dtype=float),  # Ensure position is float array
-            "velocity": np.array([0.0, 0.0]),
-            "radius": default_radius,
-            "hitbox_radius": self.calculate_hitbox_radius(obj_type, default_radius),  # Invisible click hitbox
-            "name": default_name,
-            "mass": default_mass * (1000.0 if obj_type == "star" else 1.0),  # Convert to Earth masses for stars
-            "parent": None,
-            "parent_obj": None,  # Permanent parent reference for faster lookups
-            "orbit_radius": 0.0,  # Distance from parent
-            "orbit_angle": 0.0,   # Current angle in orbit
-            "orbit_speed": 0.0,   # Angular speed
-            "rotation_angle": 0.0, # Current rotation angle
-            "rotation_speed": self.rotation_speed * (1.0 if obj_type == "planet" else 2.0 if obj_type == "moon" else 0.0), # Rotation speed
-            "age": default_age,  # Set default age
-            "habit_score": 0.0,  # Added habitability score attribute
-            "orbit_points": [],  # Persistent orbit curve points
-            "max_orbit_points": 2000,  # Full history (~1-2 revolutions depending on timestep)
-            "orbit_enabled": True,  # Toggle for showing orbit lines
-        }
+        # Create unique ID for this body to ensure independence
+        body_id = str(uuid4())
+        
+        # CRITICAL: Use factory function to create body with NO shared references
+        body = self._create_new_body_dict(
+            obj_type=obj_type,
+            body_id=body_id,
+            position=position,
+            default_name=default_name,
+            default_mass=default_mass,
+            default_age=default_age,
+            default_radius=default_radius
+        )
         
         # Add planet-specific attributes
         if obj_type == "planet":
@@ -1176,23 +1991,30 @@ class SolarSystemVisualizer:
             default_greenhouse_offset = 33.0
             default_T_surface = default_T_eq + default_greenhouse_offset  # 288K
             semi_major_axis = params.get("semi_major_axis", 1.0)
+            
+            # CRITICAL: Initialize orbit_angle randomly to ensure independent orbital phase
+            # This prevents planets from stacking at the same phase
+            body["orbit_angle"] = float(random.uniform(0, 2 * np.pi))
+            
             body.update({
-                "gravity": 9.81,  # Earth's gravity in m/s²
-                "semiMajorAxis": semi_major_axis,  # Orbital distance (AU)
-                "eccentricity": 0.017,  # Default orbital eccentricity (Earth-like)
-                "orbital_period": 365,  # Default orbital period (days)
-                "stellarFlux": 1.0,  # Default stellar flux (Earth units)
-                "temperature": default_T_surface,  # Surface temperature with greenhouse effect
-                "equilibrium_temperature": default_T_eq,  # Equilibrium temperature
-                "greenhouse_offset": default_greenhouse_offset,  # Greenhouse offset
+                "gravity": float(9.81),  # Earth's gravity in m/s²
+                "semiMajorAxis": float(semi_major_axis),  # Orbital distance (AU)
+                "eccentricity": float(0.017),  # Default orbital eccentricity (Earth-like)
+                "orbital_period": float(365.25),  # Default orbital period (days) - Earth's value
+                "stellarFlux": float(1.0),  # Default stellar flux (Earth units)
+                "temperature": float(default_T_surface),  # Surface temperature with greenhouse effect
+                "equilibrium_temperature": float(default_T_eq),  # Equilibrium temperature
+                "greenhouse_offset": float(default_greenhouse_offset),  # Greenhouse offset
+                "planet_dropdown_selected": "Earth",  # CRITICAL: Per-body dropdown state, not global
             })
         
         # Add star-specific attributes
         if obj_type == "star":
             body.update({
-                "luminosity": default_luminosity,
-                "star_temperature": 5778,  # Sun's temperature in Kelvin
-                "star_color": (255, 255, 0),  # Yellow color for G-type star
+                "luminosity": float(default_luminosity),
+                "star_temperature": float(5778),  # Sun's temperature in Kelvin
+                "star_color": (253, 184, 19),  # Yellow color for G-type star (tuple, immutable) - matches base_color
+                "base_color": str(CELESTIAL_BODY_COLORS.get(default_name, CELESTIAL_BODY_COLORS.get("Sun", "#FDB813"))),  # Ensure base_color is set
             })
             # Create habitable zone for the star
             body["hz_surface"] = self.create_habitable_zone(body)
@@ -1232,30 +2054,42 @@ class SolarSystemVisualizer:
                 velocity = np.array([-v * np.sin(orbit_angle), v * np.cos(orbit_angle)])
                 
                 body.update({
-                    "actual_radius": 1737.4,  # Actual radius in km (The Moon) - for dropdown logic
-                    "radius": default_radius,  # Visual radius in pixels for display
-                    "hitbox_radius": self.calculate_hitbox_radius(obj_type, default_radius),  # Update hitbox to match radius
-                    "orbit_radius": orbit_radius,  # Orbital distance in pixels (calculated from position)
-                    "orbit_angle": orbit_angle,  # Initial orbit angle
-                    "orbit_speed": orbit_speed,  # Orbital speed
-                    "velocity": velocity,  # Initial velocity
+                    "actual_radius": float(1737.4),  # Actual radius in km (The Moon) - for dropdown logic
+                    "radius": float(default_radius),  # Visual radius in pixels for display
+                    "hitbox_radius": float(self.calculate_hitbox_radius(obj_type, default_radius)),  # Update hitbox to match radius
+                    "orbit_radius": float(orbit_radius),  # Orbital distance in pixels (calculated from position)
+                    "orbit_angle": float(orbit_angle),  # Initial orbit angle
+                    "orbit_speed": float(orbit_speed),  # Orbital speed
+                    "velocity": velocity.copy(),  # Initial velocity - ensure independent copy
                     "parent": parent_planet["name"],  # Set parent explicitly
-                    "temperature": 220,  # Surface temperature in K (Earth's Moon)
-                    "gravity": 1.62,  # Surface gravity in m/s² (Earth's Moon)
-                    "orbital_period": 27.3,  # Orbital period in days (Earth's Moon)
+                    "parent_id": parent_planet["id"],  # Use UUID for parent lookup
+                    "parent_obj": parent_planet,  # Set permanent parent reference
+                    "temperature": float(220),  # Surface temperature in K (Earth's Moon)
+                    "gravity": float(1.62),  # Surface gravity in m/s² (Earth's Moon)
+                    "orbital_period": float(27.3),  # Orbital period in days (Earth's Moon)
                 })
             else:
                 body.update({
-                    "actual_radius": 1737.4,
-                    "radius": default_radius,
-                    "hitbox_radius": self.calculate_hitbox_radius(obj_type, default_radius),  # Update hitbox to match radius
-                    "orbit_radius": MOON_ORBIT_PX,  # Fallback orbital distance
-                    "temperature": 220,
-                    "gravity": 1.62,
-                    "orbital_period": 27.3,
+                    "actual_radius": float(1737.4),
+                    "radius": float(default_radius),
+                    "hitbox_radius": float(self.calculate_hitbox_radius(obj_type, default_radius)),  # Update hitbox to match radius
+                    "orbit_radius": float(MOON_ORBIT_PX),  # Fallback orbital distance
+                    "temperature": float(220),
+                    "gravity": float(1.62),
+                    "orbital_period": float(27.3),
                 })
         
         self.placed_bodies.append(body)
+        # Register body by ID for guaranteed unique lookups
+        self.bodies_by_id[body_id] = body
+        
+        # CRITICAL: Hard assertion to detect shared state immediately
+        self._assert_no_shared_state()
+        
+        # Debug: Verify independence
+        print(f"DEBUG: Created body id={body_id}, name={body['name']}, mass={body['mass']}, position_id={id(body['position'])}, params_id={id(body)}")
+        # Hard verification: ensure no bodies share core containers after creation
+        self.debug_verify_body_references(source="place_object")
         # Note: orbit_points is now stored in the body dict itself, not in self.orbit_points
         # Keeping self.orbit_points for backward compatibility during transition, but it will be removed
         
@@ -1270,7 +2104,7 @@ class SolarSystemVisualizer:
             self.activity_dropdown_selected = "Moderate (Sun)"
             self.metallicity_dropdown_selected = "0.0 (Sun)"
         elif obj_type == "planet":
-            self.planet_dropdown_selected = "Earth"
+            # REMOVED: self.planet_dropdown_selected = "Earth"  # Now stored per-body in body["planet_dropdown_selected"]
             self.planet_age_dropdown_selected = "4.6 Gyr (Earth's age)"
             self.planet_gravity_dropdown_selected = "Earth"
             self.planet_atmosphere_dropdown_selected = "Earth-like (N₂–O₂ + H₂O + CO₂)"
@@ -1318,8 +2152,7 @@ class SolarSystemVisualizer:
             self.selected_body = None
             self.show_customization_panel = False
             self.active_tab = None
-            self.preview_position = None
-            self.preview_radius = None
+            self.clear_preview()  # Clear preview when simulation starts
             # Initialize all orbits when simulation starts
             self.initialize_all_orbits()
     
@@ -1453,6 +2286,7 @@ class SolarSystemVisualizer:
                         if self.close_button.collidepoint(event.pos):
                             self.show_customization_panel = False
                             self.selected_body = None
+                            self.selected_body_id = None
                             self.mass_input_active = False
                             self.planet_dropdown_active = False
                             self.planet_dropdown_visible = False
@@ -1480,47 +2314,116 @@ class SolarSystemVisualizer:
                                self.last_revolution_checkbox.collidepoint(event.pos))):
                             if self.orbit_enabled_checkbox.collidepoint(event.pos):
                                 # Toggle orbit enabled
-                                self.selected_body["orbit_enabled"] = not self.selected_body.get("orbit_enabled", True)
+                                body = self.get_selected_body()
+                                if body:
+                                    body["orbit_enabled"] = not body.get("orbit_enabled", True)
                             elif self.last_revolution_checkbox.collidepoint(event.pos):
                                 # Toggle last revolution only
                                 current_max = self.selected_body.get("max_orbit_points", 2000)
-                                if current_max < 1000:
-                                    # Switch to full history
-                                    self.selected_body["max_orbit_points"] = 2000
-                                else:
-                                    # Switch to last revolution only (~600 points)
-                                    self.selected_body["max_orbit_points"] = 600
-                                # Clear existing points when switching modes
-                                self.clear_orbit_points(self.selected_body)
-                        # Check if clicked on a planet option (only for planets)
-                        elif (self.selected_body and self.selected_body.get('type') == 'planet' and 
-                              self.planet_dropdown_visible):
-                            dropdown_y = self.planet_dropdown_rect.bottom
-                            for i, (planet_name, mass) in enumerate(self.planet_dropdown_options):
-                                option_rect = pygame.Rect(
-                                    self.planet_dropdown_rect.left,
-                                    dropdown_y + i * 30,
-                                    self.planet_dropdown_rect.width,
-                                    30
-                                )
-                                if option_rect.collidepoint(event.pos):
-                                    if planet_name == "Custom":
-                                        self.show_custom_mass_input = True
-                                        self.mass_input_active = True
-                                        self.mass_input_text = self._format_value(self.selected_body.get('mass', 1.0), '', for_dropdown=False)
+                                body = self.get_selected_body()
+                                if body:
+                                    if current_max < 1000:
+                                        # Switch to full history
+                                        body["max_orbit_points"] = 2000
                                     else:
-                                        self.selected_body["mass"] = mass
-                                        self.show_custom_mass_input = False
-                                        if self.selected_body["type"] != "star":
-                                            self.generate_orbit_grid(self.selected_body)
-                                            # generate_orbit_grid already clears orbit_points, but ensure it's cleared
-                                            self.clear_orbit_points(self.selected_body)
-                                    self.planet_dropdown_selected = planet_name
-                                    self.planet_age_dropdown_selected = "4.5 Gyr (Earth’s age)"
-                                    self.planet_gravity_dropdown_selected = "Earth"
-                                    self.planet_dropdown_visible = False
-                                    self.planet_dropdown_active = False
-                                    break
+                                        # Switch to last revolution only (~600 points)
+                                        body["max_orbit_points"] = 600
+                                    # Clear existing points when switching modes
+                                    self.clear_orbit_points(body)
+                        # Check if clicked on a planet option (for placement when no planet selected, or for editing selected planet)
+                        elif self.planet_dropdown_visible:
+                            # Handle dropdown clicks for placement (no planet selected) or editing (planet selected)
+                            if not self.selected_body or self.selected_body.get('type') != 'planet':
+                                # Placement mode: user is selecting a planet to place
+                                dropdown_y = self.planet_dropdown_rect.bottom
+                                for i, (planet_name, mass) in enumerate(self.planet_dropdown_options):
+                                    option_rect = pygame.Rect(
+                                        self.planet_dropdown_rect.left,
+                                        dropdown_y + i * 30,
+                                        self.planet_dropdown_rect.width,
+                                        30
+                                    )
+                                    if option_rect.collidepoint(event.pos):
+                                        if planet_name == "Custom":
+                                            # For custom, clear selection (explicit state change)
+                                            self.planet_dropdown_selected = None
+                                            self.clear_preview()
+                                        else:
+                                            # Toggle selection - if already selected, deselect it
+                                            if self.planet_dropdown_selected == planet_name:
+                                                # Deselect: clear selection and preview
+                                                self.planet_dropdown_selected = None
+                                                self.clear_preview()
+                                                print(f"Deselected planet for placement: {planet_name}")
+                                            else:
+                                                # Select: Store the selected planet for placement
+                                                self.planet_dropdown_selected = planet_name
+                                                print(f"Selected planet for placement: {planet_name}")
+                                                # Set preview radius once when planet is selected (stable per object type)
+                                                if planet_name in SOLAR_SYSTEM_PLANET_PRESETS:
+                                                    preset = SOLAR_SYSTEM_PLANET_PRESETS[planet_name]
+                                                    planet_radius_re = preset["radius"]  # In Earth radii
+                                                    self.preview_radius = int(planet_radius_re * EARTH_RADIUS_PX)
+                                                else:
+                                                    self.preview_radius = 15  # Default
+                                                # Initialize preview position immediately at mouse cursor
+                                                self.preview_position = pygame.mouse.get_pos()
+                                                # Activate placement mode - preview position will be updated every frame
+                                                self.placement_mode_active = True
+                                        # Keep dropdown open to show selection, but recreate surface to show highlight
+                                        self.create_dropdown_surface()
+                                        # Prevent event from continuing to space area handler
+                                        continue
+                            else:
+                                # Editing mode: user is editing a selected planet
+                                if self.selected_body and self.selected_body.get('type') == 'planet':
+                                    dropdown_y = self.planet_dropdown_rect.bottom
+                                    for i, (planet_name, mass) in enumerate(self.planet_dropdown_options):
+                                        option_rect = pygame.Rect(
+                                            self.planet_dropdown_rect.left,
+                                            dropdown_y + i * 30,
+                                            self.planet_dropdown_rect.width,
+                                            30
+                                        )
+                                        if option_rect.collidepoint(event.pos):
+                                            print(f"PLANET DROPDOWN CLICK (path 1): planet_name={planet_name}, mass={mass}, selected_body_id={self.selected_body_id}", flush=True)
+                                            if planet_name == "Custom":
+                                                self.show_custom_mass_input = True
+                                                self.mass_input_active = True
+                                                # CRITICAL: Read mass from registry, not from selected_body reference
+                                                body = self.get_selected_body()
+                                                if body:
+                                                    self.mass_input_text = self._format_value(body.get('mass', 1.0), '', for_dropdown=False)
+                                                else:
+                                                    self.mass_input_text = "1.0"
+                                            else:
+                                                # CRITICAL: Use update_selected_body_property to ensure we update ONLY the selected body
+                                                # This prevents cross-body mutations by always using ID-based registry lookup
+                                                if self.selected_body_id:
+                                                    # Convert mass to float if needed
+                                                    if hasattr(mass, 'item'):
+                                                        mass_value = float(mass.item())
+                                                    else:
+                                                        mass_value = float(mass)
+                                                    print(f"ABOUT TO CALL update_selected_body_property (path 1) with mass={mass_value}", flush=True)
+                                                    # Use the safe update function that verifies body isolation
+                                                    if self.update_selected_body_property("mass", mass_value, "mass"):
+                                                        print(f"DEBUG: Updated mass via registry for body id={self.selected_body_id}, new_mass={mass_value}", flush=True)
+                                                        # CRITICAL: Store dropdown selection in the body's dict, not global state
+                                                        body = self.get_selected_body()
+                                                        if body:
+                                                            body["planet_dropdown_selected"] = planet_name
+                                                    else:
+                                                        print(f"ERROR: update_selected_body_property returned False!", flush=True)
+                                                else:
+                                                    print(f"ERROR: No selected_body_id in path 1!", flush=True)
+                                                self.show_custom_mass_input = False
+                                            # REMOVED: self.planet_dropdown_selected = planet_name  # This was global, now stored per-body
+                                            self.planet_age_dropdown_selected = "4.5 Gyr (Earth's age)"
+                                            self.planet_gravity_dropdown_selected = "Earth"
+                                            self.planet_dropdown_visible = False
+                                            self.planet_dropdown_active = False
+                                            break
                             # Only close dropdown if clicking outside both the dropdown and its options
                             if (self.planet_dropdown_visible and not 
                                 (self.planet_dropdown_rect.collidepoint(event.pos) or 
@@ -1558,7 +2461,8 @@ class SolarSystemVisualizer:
                                         self.age_input_active = True
                                         self.age_input_text = self._format_value(self.selected_body.get('age', 0.0), '', for_dropdown=False)
                                     else:
-                                        self.selected_body["age"] = age
+                                        # Ensure we're updating the correct selected body
+                                        self.update_selected_body_property("age", age, "age")
                                         self.show_custom_age_input = False
                                     self.planet_age_dropdown_selected = age_name
                                     self.planet_age_dropdown_visible = False
@@ -1596,13 +2500,23 @@ class SolarSystemVisualizer:
                                 if option_rect.collidepoint(event.pos):
                                     if radius_name == "Custom":
                                         self.show_custom_radius_input = True
+                                        self.radius_input_active = True
+                                        # Initialize input text with current radius in R⊕
+                                        body = self.get_selected_body()
+                                        if body:
+                                            current_radius = body.get('radius', 1.0)
+                                            self.radius_input_text = self._format_value(current_radius, '', for_dropdown=False)
+                                        else:
+                                            self.radius_input_text = "1.0"
                                     else:
-                                        # radius is in Earth radii, convert to pixels
-                                        self.selected_body["radius"] = EARTH_RADIUS_PX * radius
-                                        # Update hitbox_radius to match new visual radius
-                                        self.selected_body["hitbox_radius"] = self.calculate_hitbox_radius(self.selected_body["type"], self.selected_body["radius"])
-                                        # Clear orbit points when radius changes
-                                        self.clear_orbit_points(self.selected_body)
+                                        # CRITICAL: radius is in Earth radii (R⊕), store directly
+                                        # No conversion needed - radius dropdown value IS in R⊕
+                                        body = self.get_selected_body()
+                                        if body:
+                                            # Store radius in R⊕ (Earth radii)
+                                            self.update_selected_body_property("radius", radius, "radius")
+                                            # Hitbox will be computed from visual radius on render
+                                            # No physics updates - radius affects visual only
                                         self.show_custom_radius_input = False
                                     self.planet_radius_dropdown_selected = radius_name
                                     self.planet_radius_dropdown_visible = False
@@ -1643,12 +2557,15 @@ class SolarSystemVisualizer:
                                     else:
                                         # When temperature is set via dropdown, set it as equilibrium temperature
                                         # (assuming no greenhouse effect is applied yet)
-                                        self.selected_body["temperature"] = temp
-                                        self.selected_body["equilibrium_temperature"] = temp
-                                        # Apply current greenhouse offset if set
-                                        if 'greenhouse_offset' in self.selected_body:
-                                            delta_t = self.selected_body.get('greenhouse_offset', 0.0)
-                                            self.selected_body["temperature"] = temp + delta_t
+                                        body = self.get_selected_body()
+                                        if body:
+                                            self.update_selected_body_property("equilibrium_temperature", temp, "equilibrium_temperature")
+                                            # Apply current greenhouse offset if set
+                                            if 'greenhouse_offset' in body:
+                                                delta_t = body.get('greenhouse_offset', 0.0)
+                                                self.update_selected_body_property("temperature", temp + delta_t, "temperature")
+                                            else:
+                                                self.update_selected_body_property("temperature", temp, "temperature")
                                         self.show_custom_planet_temperature_input = False
                                         self._update_planet_scores()
                                     self.planet_temperature_dropdown_selected = temp_name
@@ -1693,11 +2610,12 @@ class SolarSystemVisualizer:
                                         if 'equilibrium_temperature' not in self.selected_body:
                                             # Use current temperature as equilibrium if not set
                                             current_temp = self.selected_body.get('temperature', 255)  # Default to ~Earth's T_eq
-                                            self.selected_body['equilibrium_temperature'] = current_temp
+                                            self.update_selected_body_property("equilibrium_temperature", current_temp, "equilibrium_temperature")
                                         T_eq = self.selected_body.get('equilibrium_temperature', 255)
                                         T_surface = T_eq + delta_t
-                                        self.selected_body["temperature"] = T_surface
-                                        self.selected_body["greenhouse_offset"] = delta_t
+                                        # Update temperature and greenhouse offset via the per-object registry
+                                        self.update_selected_body_property("temperature", T_surface, "temperature")
+                                        self.update_selected_body_property("greenhouse_offset", delta_t, "greenhouse_offset")
                                         self.show_custom_atmosphere_input = False
                                         # Update scores (f_T and H) - will be handled by score calculation
                                         self._update_planet_scores()
@@ -1808,7 +2726,7 @@ class SolarSystemVisualizer:
                                     if gravity_name == "Custom":
                                         self.show_custom_planet_gravity_input = True
                                     else:
-                                        self.selected_body["gravity"] = gravity
+                                        self.update_selected_body_property("gravity", gravity, "gravity")
                                         self.show_custom_planet_gravity_input = False
                                     self.planet_gravity_dropdown_selected = gravity_name
                                     self.planet_gravity_dropdown_visible = False
@@ -1843,16 +2761,19 @@ class SolarSystemVisualizer:
                                         self.orbital_distance_input_active = True
                                         self.orbital_distance_input_text = f"{self.selected_body.get('semiMajorAxis', 1.0):.2f}"
                                     else:
-                                        self.selected_body["semiMajorAxis"] = dist
-                                        # Update position based on new semi_major_axis
-                                        parent_star = next((b for b in self.placed_bodies if b["name"] == self.selected_body.get("parent")), None)
-                                        if parent_star:
-                                            # Position planet at the right of the star based on AU_TO_PX
-                                            trace(f"PRE_WRITE {self.selected_body['name']} pos={self.selected_body['position'].copy()} source=handle_events_planet_distance")
-                                            self.selected_body["position"][0] = parent_star["position"][0] + AU_TO_PX * dist
-                                            self.selected_body["position"][1] = parent_star["position"][1]
-                                            trace(f"POST_WRITE {self.selected_body['name']} pos={self.selected_body['position'].copy()} source=handle_events_planet_distance")
-                                        self.generate_orbit_grid(self.selected_body)
+                                        body = self.get_selected_body()
+                                        if body:
+                                            self.update_selected_body_property("semiMajorAxis", dist, "semiMajorAxis")
+                                            # CRITICAL: Update position using centralized function
+                                            # This ensures position is derived from semiMajorAxis * AU_TO_PX
+                                            parent_star = next((b for b in self.placed_bodies if b["name"] == body.get("parent")), None)
+                                            if parent_star is None and body.get("parent_obj"):
+                                                parent_star = body["parent_obj"]
+                                            if parent_star:
+                                                trace(f"PRE_WRITE {body['name']} pos={body['position'].copy()} source=handle_events_planet_distance")
+                                                self.compute_planet_position(body, parent_star)
+                                                trace(f"POST_WRITE {body['name']} pos={body['position'].copy()} source=handle_events_planet_distance")
+                                            self.generate_orbit_grid(body)
                                         self.show_custom_orbital_distance_input = False
                                     self.planet_orbital_distance_dropdown_selected = dist_name
                                     self.planet_orbital_distance_dropdown_visible = False
@@ -1887,7 +2808,7 @@ class SolarSystemVisualizer:
                                         self.orbital_eccentricity_input_active = True
                                         self.orbital_eccentricity_input_text = f"{self.selected_body.get('eccentricity', 0.017):.3f}"
                                     else:
-                                        self.selected_body["eccentricity"] = ecc
+                                        self.update_selected_body_property("eccentricity", ecc, "eccentricity")
                                         self.show_custom_orbital_eccentricity_input = False
                                     self.planet_orbital_eccentricity_dropdown_selected = ecc_name
                                     self.planet_orbital_eccentricity_dropdown_visible = False
@@ -1920,9 +2841,9 @@ class SolarSystemVisualizer:
                                     if period_name == "Custom":
                                         self.show_custom_orbital_period_input = True
                                         self.orbital_period_input_active = True
-                                        self.orbital_period_input_text = f"{self.selected_body.get('orbital_period', 365):.0f}"
+                                        self.orbital_period_input_text = f"{self.selected_body.get('orbital_period', 365.25):.0f}"
                                     else:
-                                        self.selected_body["orbital_period"] = period
+                                        self.update_selected_body_property("orbital_period", period, "orbital_period")
                                         self.show_custom_orbital_period_input = False
                                     self.planet_orbital_period_dropdown_selected = period_name
                                     self.planet_orbital_period_dropdown_visible = False
@@ -2007,7 +2928,7 @@ class SolarSystemVisualizer:
                                         self.stellar_flux_input_active = True
                                         self.stellar_flux_input_text = f"{self.selected_body.get('stellarFlux', 1.0):.3f}"
                                     else:
-                                        self.selected_body["stellarFlux"] = flux
+                                        self.update_selected_body_property("stellarFlux", flux, "stellarFlux")
                                         self.show_custom_stellar_flux_input = False
                                     self.planet_stellar_flux_dropdown_selected = flux_name
                                     self.planet_stellar_flux_dropdown_visible = False
@@ -2041,7 +2962,7 @@ class SolarSystemVisualizer:
                                         self.show_custom_planet_density_input = True
                                         self.planet_density_input_text = f"{self.selected_body.get('density', 5.51):.2f}"
                                     else:
-                                        self.selected_body["density"] = density
+                                        self.update_selected_body_property("density", density, "density")
                                         self.show_custom_planet_density_input = False
                                     self.planet_density_dropdown_selected = density_name
                                     self.planet_density_dropdown_visible = False
@@ -2123,13 +3044,26 @@ class SolarSystemVisualizer:
                                     if moon_name == "Custom":
                                         self.show_custom_moon_mass_input = True
                                         self.mass_input_active = True
-                                        self.mass_input_text = self._format_value(self.selected_body.get('mass', 1.0), '', for_dropdown=False)
-                                    else:
-                                        # Convert kg to lunar masses if needed (1 M☾ = 7.35e22 kg)
-                                        if unit == "kg":
-                                            self.selected_body["mass"] = mass / 7.35e22  # Convert kg to M☾
+                                        # CRITICAL: Read mass from registry, not from selected_body reference
+                                        body = self.get_selected_body()
+                                        if body:
+                                            self.mass_input_text = self._format_value(body.get('mass', 1.0), '', for_dropdown=False)
                                         else:
-                                            self.selected_body["mass"] = mass
+                                            self.mass_input_text = "1.0"
+                                    else:
+                                        # Ensure we're updating the correct selected body and mass is stored as a Python float
+                                        if self.selected_body:
+                                            # Convert kg to lunar masses if needed (1 M☾ = 7.35e22 kg)
+                                            if unit == "kg":
+                                                mass_value = mass / 7.35e22  # Convert kg to M☾
+                                            else:
+                                                mass_value = mass
+                                            # Ensure mass is stored as a Python float, not a numpy array/scalar
+                                            if hasattr(mass_value, 'item'):
+                                                mass_value = float(mass_value.item())
+                                            else:
+                                                mass_value = float(mass_value)
+                                            self.update_selected_body_property("mass", mass_value, "mass")
                                         self.show_custom_moon_mass_input = False
                                         # Update the text input to show the actual value, preserving scientific notation
                                         if mass is not None:
@@ -2172,7 +3106,11 @@ class SolarSystemVisualizer:
                                         self.age_input_active = True
                                         self.age_input_text = self._format_value(self.selected_body.get('age', 0.0), '', for_dropdown=False)
                                     else:
-                                        self.selected_body["age"] = age
+                                        # Ensure age is stored as a Python float, not a numpy array/scalar
+                                        if hasattr(age, 'item'):
+                                            self.update_selected_body_property("age", age, "age")
+                                        else:
+                                            self.update_selected_body_property("age", age, "age")
                                         self.show_custom_moon_age_input = False
                                     self.moon_age_dropdown_selected = age_name
                                     self.moon_age_dropdown_visible = False
@@ -2207,9 +3145,12 @@ class SolarSystemVisualizer:
                                     else:
                                         # Scale the radius for visual display (convert km to appropriate pixel size)
                                         # Use a reasonable scale factor for moons
-                                        self.selected_body["radius"] = max(5, min(20, radius / 100))  # Scale down and clamp
-                                        # Update hitbox_radius to match new visual radius
-                                        self.selected_body["hitbox_radius"] = self.calculate_hitbox_radius(self.selected_body["type"], self.selected_body["radius"])
+                                        body = self.get_selected_body()
+                                        if body:
+                                            new_radius = max(5, min(20, radius / 100))  # Scale down and clamp
+                                            self.update_selected_body_property("radius", new_radius, "radius")
+                                            # Update hitbox_radius to match new visual radius
+                                            body["hitbox_radius"] = float(self.calculate_hitbox_radius(body["type"], body["radius"]))
                                         self.show_custom_moon_radius_input = False
                                     self.moon_radius_dropdown_selected = radius_name
                                     self.moon_radius_dropdown_visible = False
@@ -2243,9 +3184,12 @@ class SolarSystemVisualizer:
                                         self.show_custom_moon_orbital_distance_input = True
                                     else:
                                         # Scale the orbital distance for visual display
-                                        self.selected_body["orbit_radius"] = max(50, min(200, distance / 1000))  # Scale down and clamp
-                                        # Clear orbit points when orbit radius changes
-                                        self.clear_orbit_points(self.selected_body)
+                                        body = self.get_selected_body()
+                                        if body:
+                                            new_orbit_radius = max(50, min(200, distance / 1000))  # Scale down and clamp
+                                            self.update_selected_body_property("orbit_radius", new_orbit_radius, "orbit_radius")
+                                            # Clear orbit points when orbit radius changes
+                                            self.clear_orbit_points(body)
                                         # Regenerate orbit grid with new radius
                                         self.generate_orbit_grid(self.selected_body)
                                         self.show_custom_moon_orbital_distance_input = False
@@ -2286,7 +3230,7 @@ class SolarSystemVisualizer:
                                     if period_name == "Custom":
                                         self.show_custom_moon_orbital_period_input = True
                                     else:
-                                        self.selected_body["orbitalPeriod"] = period
+                                        self.update_selected_body_property("orbitalPeriod", period, "orbitalPeriod")
                                         self.show_custom_moon_orbital_period_input = False
                                     self.moon_orbital_period_dropdown_selected = period_name
                                     self.moon_orbital_period_dropdown_visible = False
@@ -2319,7 +3263,7 @@ class SolarSystemVisualizer:
                                     if temp_name == "Custom":
                                         self.show_custom_moon_temperature_input = True
                                     else:
-                                        self.selected_body["temperature"] = temp
+                                        self.update_selected_body_property("temperature", temp, "temperature")
                                         self.show_custom_moon_temperature_input = False
                                     self.moon_temperature_dropdown_selected = temp_name
                                     self.moon_temperature_dropdown_visible = False
@@ -2352,7 +3296,8 @@ class SolarSystemVisualizer:
                                     if gravity_name == "Custom":
                                         self.show_custom_moon_gravity_input = True
                                     else:
-                                        self.selected_body["surfaceGravity"] = gravity
+                                        # Update surface gravity via per-object registry
+                                        self.update_selected_body_property("gravity", gravity, "gravity")
                                         self.show_custom_moon_gravity_input = False
                                         # Update the text input to show the actual value, preserving scientific notation
                                         if gravity is not None:
@@ -2400,7 +3345,7 @@ class SolarSystemVisualizer:
                                         self.luminosity_input_active = True
                                         self.luminosity_input_text = self._format_value(self.selected_body.get('luminosity', 1.0), '', for_dropdown=False)
                                     else:
-                                        self.selected_body["luminosity"] = luminosity
+                                        self.update_selected_body_property("luminosity", luminosity, "luminosity")
                                         # Update habitable zone when luminosity changes
                                         self.selected_body["hz_surface"] = self.create_habitable_zone(self.selected_body)
                                         self.show_custom_luminosity_input = False
@@ -2456,7 +3401,12 @@ class SolarSystemVisualizer:
                                         self.age_input_active = True
                                         self.age_input_text = self._format_value(self.selected_body.get('age', 0.0), '', for_dropdown=False)
                                     else:
-                                        self.selected_body["age"] = age
+                                        # CRITICAL: Use update_selected_body_property to ensure we update ONLY the selected body
+                                        if hasattr(age, 'item'):
+                                            age_value = float(age.item())
+                                        else:
+                                            age_value = float(age)
+                                        self.update_selected_body_property("age", age_value, "age")
                                         self.show_custom_star_age_input = False
                                     self.star_age_dropdown_selected = age_name
                                     self.star_age_dropdown_visible = False
@@ -2489,9 +3439,22 @@ class SolarSystemVisualizer:
                                     if mass_name == "Custom":
                                         self.show_custom_star_mass_input = True
                                         self.mass_input_active = True
-                                        self.mass_input_text = self._format_value(self.selected_body.get('mass', 1.0), '', for_dropdown=False)
+                                        # CRITICAL: Read mass from registry, not from selected_body reference
+                                        body = self.get_selected_body()
+                                        if body:
+                                            self.mass_input_text = self._format_value(body.get('mass', 1.0), '', for_dropdown=False)
+                                        else:
+                                            self.mass_input_text = "1.0"
                                     else:
-                                        self.selected_body["mass"] = mass * 1000.0  # Convert to Earth masses
+                                        # Ensure we're updating the correct selected body and mass is stored as a Python float
+                                        if self.selected_body:
+                                            mass_value = mass * 1000.0  # Convert to Earth masses
+                                            # Ensure mass is stored as a Python float, not a numpy array/scalar
+                                            if hasattr(mass_value, 'item'):
+                                                mass_value = float(mass_value.item())
+                                            else:
+                                                mass_value = float(mass_value)
+                                            self.update_selected_body_property("mass", mass_value, "mass")
                                         self.show_custom_star_mass_input = False
                                     self.star_mass_dropdown_selected = mass_name
                                     self.star_mass_dropdown_visible = False
@@ -2529,8 +3492,8 @@ class SolarSystemVisualizer:
                                     name, temp, color = self.spectral_class_dropdown_options[option_index]
                                     if temp is not None and color is not None:
                                         if self.selected_body:
-                                            self.selected_body["temperature"] = temp
-                                            self.selected_body["color"] = color
+                                            self.update_selected_body_property("temperature", temp, "temperature")
+                                            self.update_selected_body_property("star_color", color, "star_color")
                                         self.spectral_class_dropdown_selected = name
                                     else:  # Custom option
                                         self.show_custom_temperature_input = True
@@ -2584,16 +3547,47 @@ class SolarSystemVisualizer:
                                 if screen_option_rect.collidepoint(event.pos):
                                     if self.planet_dropdown_visible:
                                         name, value = self.planet_dropdown_options[i]
-                                        if value is not None:
-                                            self.selected_body["mass"] = value
+                                        print(f"PLANET DROPDOWN CLICK: name={name}, value={value}, selected_body_id={self.selected_body_id}", flush=True)
+                                        # Check if in placement mode (no planet selected) or editing mode (planet selected)
+                                        if not self.selected_body_id or not self.selected_body or self.selected_body.get('type') != 'planet':
+                                            # Placement mode: Store selected planet for placement
+                                            if name == "Custom":
+                                                self.planet_dropdown_selected = None
+                                                self.clear_preview()
+                                            else:
+                                                self.planet_dropdown_selected = name
+                                                print(f"Selected planet for placement: {name}")
+                                                # Set preview radius once when planet is selected (stable per object type)
+                                                if name in SOLAR_SYSTEM_PLANET_PRESETS:
+                                                    preset = SOLAR_SYSTEM_PLANET_PRESETS[name]
+                                                    planet_radius_re = preset["radius"]  # In Earth radii
+                                                    self.preview_radius = int(planet_radius_re * EARTH_RADIUS_PX)
+                                                else:
+                                                    self.preview_radius = 15  # Default
+                                                # Activate placement mode - preview position will be updated every frame
+                                                self.placement_mode_active = True
+                                            # Keep dropdown open to show selection, but recreate surface to show highlight
+                                            self.create_dropdown_surface()
                                         else:
-                                            self.show_custom_planet_mass_input = True
-                                            self.planet_mass_input_active = True
-                                        self.planet_dropdown_selected = name
-                                        self.planet_age_dropdown_selected = "4.5 Gyr (Earth’s age)"
-                                        self.planet_gravity_dropdown_selected = "Earth"
-                                        self.planet_dropdown_visible = False
-                                        self.planet_dropdown_active = False
+                                            # Editing mode: Update selected planet's mass
+                                            if value is not None:
+                                                # Ensure we're updating the correct selected body and mass is stored as a Python float
+                                                # Ensure mass is stored as a Python float, not a numpy array/scalar
+                                                mass_value = float(value) if not hasattr(value, 'item') else float(value.item())
+                                                print(f"ABOUT TO CALL update_selected_body_property with mass={mass_value}", flush=True)
+                                                if self.update_selected_body_property("mass", mass_value, "mass"):
+                                                    # CRITICAL: Store dropdown selection in the body's dict, not global state
+                                                    body = self.get_selected_body()
+                                                    if body:
+                                                        body["planet_dropdown_selected"] = name
+                                            else:
+                                                self.show_custom_planet_mass_input = True
+                                                self.planet_mass_input_active = True
+                                            # REMOVED: self.planet_dropdown_selected = name  # This was global, now stored per-body
+                                            self.planet_age_dropdown_selected = "4.5 Gyr (Earth's age)"
+                                            self.planet_gravity_dropdown_selected = "Earth"
+                                            self.planet_dropdown_visible = False
+                                            self.planet_dropdown_active = False
                                     elif self.moon_dropdown_visible:
                                         option_data = self.moon_dropdown_options[i]
                                         if len(option_data) == 3:
@@ -2602,11 +3596,19 @@ class SolarSystemVisualizer:
                                             name, value = option_data
                                             unit = None
                                         if value is not None:
-                                            # Convert kg to lunar masses if needed (1 M☾ = 7.35e22 kg)
-                                            if unit == "kg":
-                                                self.selected_body["mass"] = value / 7.35e22  # Convert kg to M☾
-                                            else:
-                                                self.selected_body["mass"] = value
+                                            # Ensure we're updating the correct selected body and mass is stored as a Python float
+                                            if self.selected_body:
+                                                # Convert kg to lunar masses if needed (1 M☾ = 7.35e22 kg)
+                                                if unit == "kg":
+                                                    mass_value = value / 7.35e22  # Convert kg to M☾
+                                                else:
+                                                    mass_value = value
+                                                # CRITICAL: Use update_selected_body_property to ensure we update ONLY the selected body
+                                                if hasattr(mass_value, 'item'):
+                                                    mass_float = float(mass_value.item())
+                                                else:
+                                                    mass_float = float(mass_value)
+                                                self.update_selected_body_property("mass", mass_float, "mass")
                                         else:
                                             self.show_custom_moon_mass_input = True
                                             self.moon_mass_input_active = True
@@ -2616,7 +3618,8 @@ class SolarSystemVisualizer:
                                     elif self.moon_age_dropdown_visible:
                                         name, value = self.moon_age_dropdown_options[i]
                                         if value is not None:
-                                            self.selected_body["age"] = value
+                                            # Ensure age is stored as a Python float, not a numpy array/scalar
+                                            self.update_selected_body_property("age", value, "age")
                                         else:
                                             self.show_custom_moon_age_input = True
                                             self.age_input_active = True
@@ -2628,11 +3631,14 @@ class SolarSystemVisualizer:
                                         if value is not None:
                                             # Scale the radius for visual display (convert km to appropriate pixel size)
                                             # Use a reasonable scale factor for moons
-                                            self.selected_body["radius"] = max(5, min(20, value / 100))  # Scale down and clamp
-                                            # Update hitbox_radius to match new visual radius
-                                            self.selected_body["hitbox_radius"] = self.calculate_hitbox_radius(self.selected_body["type"], self.selected_body["radius"])
-                                            # Clear orbit points when radius changes
-                                            self.clear_orbit_points(self.selected_body)
+                                            body = self.get_selected_body()
+                                            if body:
+                                                new_radius = max(5, min(20, value / 100))  # Scale down and clamp
+                                                self.update_selected_body_property("radius", new_radius, "radius")
+                                                # Update hitbox_radius to match new visual radius
+                                                body["hitbox_radius"] = float(self.calculate_hitbox_radius(body["type"], body["radius"]))
+                                                # Clear orbit points when radius changes
+                                                self.clear_orbit_points(body)
                                         else:
                                             self.show_custom_moon_radius_input = True
                                         self.moon_radius_dropdown_selected = name
@@ -2642,7 +3648,10 @@ class SolarSystemVisualizer:
                                         name, value = self.moon_orbital_distance_dropdown_options[i]
                                         if value is not None:
                                             # Scale the orbital distance for visual display
-                                            self.selected_body["orbit_radius"] = max(50, min(200, value / 1000))  # Scale down and clamp
+                                            body = self.get_selected_body()
+                                            if body:
+                                                new_orbit_radius = max(50, min(200, value / 1000))  # Scale down and clamp
+                                                self.update_selected_body_property("orbit_radius", new_orbit_radius, "orbit_radius")
                                             # Clear orbit points when orbit radius changes
                                             self.clear_orbit_points(self.selected_body)
                                             # Regenerate orbit grid with new radius
@@ -2655,7 +3664,10 @@ class SolarSystemVisualizer:
                                     elif self.star_mass_dropdown_visible:
                                         name, value = self.star_mass_dropdown_options[i]
                                         if value is not None:
-                                            self.selected_body["mass"] = value
+                                            # Ensure we're updating the correct selected body and mass is stored as a Python float
+                                            if self.selected_body:
+                                                # Ensure mass is stored as a Python float, not a numpy array/scalar
+                                                self.update_selected_body_property("mass", value, "mass")
                                         else:
                                             self.show_custom_star_mass_input = True
                                             self.star_mass_input_active = True
@@ -2665,9 +3677,11 @@ class SolarSystemVisualizer:
                                     elif self.luminosity_dropdown_visible:
                                         name, value = self.luminosity_dropdown_options[i]
                                         if value is not None:
-                                            self.selected_body["luminosity"] = value
+                                            self.update_selected_body_property("luminosity", value, "luminosity")
                                             # Update habitable zone when luminosity changes
-                                            self.selected_body["hz_surface"] = self.create_habitable_zone(self.selected_body)
+                                            body = self.get_selected_body()
+                                            if body:
+                                                body["hz_surface"] = self.create_habitable_zone(body)
                                         else:
                                             self.show_custom_luminosity_input = True
                                             self.luminosity_input_active = True
@@ -2677,7 +3691,13 @@ class SolarSystemVisualizer:
                                     elif self.planet_age_dropdown_visible:
                                         name, value = self.planet_age_dropdown_options[i]
                                         if value is not None:
-                                            self.selected_body["age"] = value
+                                            # Ensure we're updating the correct selected body
+                                            if self.selected_body:
+                                                # Ensure age is stored as a Python float, not a numpy array/scalar
+                                                if hasattr(value, 'item'):
+                                                    self.update_selected_body_property("age", value, "age")
+                                                else:
+                                                    self.update_selected_body_property("age", value, "age")
                                         else:
                                             self.show_custom_planet_age_input = True
                                             self.planet_age_input_active = True
@@ -2687,7 +3707,8 @@ class SolarSystemVisualizer:
                                     elif self.star_age_dropdown_visible:
                                         name, value = self.star_age_dropdown_options[i]
                                         if value is not None:
-                                            self.selected_body["age"] = value
+                                            # Ensure age is stored as a Python float, not a numpy array/scalar
+                                            self.update_selected_body_property("age", value, "age")
                                         else:
                                             self.show_custom_star_age_input = True
                                             self.star_age_input_active = True
@@ -2697,9 +3718,11 @@ class SolarSystemVisualizer:
                                     elif self.radius_dropdown_visible:
                                         name, value = self.radius_dropdown_options[i]
                                         if value is not None:
-                                            self.selected_body["radius"] = value
-                                            # Update hitbox_radius to match new visual radius
-                                            self.selected_body["hitbox_radius"] = self.calculate_hitbox_radius(self.selected_body["type"], self.selected_body["radius"])
+                                            body = self.get_selected_body()
+                                            if body:
+                                                self.update_selected_body_property("radius", value, "radius")
+                                                # Update hitbox_radius to match new visual radius
+                                                body["hitbox_radius"] = float(self.calculate_hitbox_radius(body["type"], body["radius"]))
                                         else:
                                             self.show_custom_radius_input = True
                                             self.radius_input_active = True
@@ -2709,7 +3732,7 @@ class SolarSystemVisualizer:
                                     elif self.activity_dropdown_visible:
                                         name, value = self.activity_dropdown_options[i]
                                         if value is not None:
-                                            self.selected_body["activity"] = value
+                                            self.update_selected_body_property("activity", value, "activity")
                                         else:
                                             self.show_custom_activity_input = True
                                             self.activity_input_active = True
@@ -2719,7 +3742,7 @@ class SolarSystemVisualizer:
                                     elif self.metallicity_dropdown_visible:
                                         name, value = self.metallicity_dropdown_options[i]
                                         if value is not None:
-                                            self.selected_body["metallicity"] = value
+                                            self.update_selected_body_property("metallicity", value, "metallicity")
                                         else:
                                             self.show_custom_metallicity_input = True
                                             self.metallicity_input_active = True
@@ -2729,14 +3752,17 @@ class SolarSystemVisualizer:
                                     elif self.planet_orbital_distance_dropdown_visible:
                                         name, value = self.planet_orbital_distance_dropdown_options[i]
                                         if value is not None:
-                                            self.selected_body["semiMajorAxis"] = value
-                                            # Update position based on new semi_major_axis
+                                            self.update_selected_body_property("semiMajorAxis", value, "semiMajorAxis")
+                                            # CRITICAL: Update position using centralized function
                                             parent_star = next((b for b in self.placed_bodies if b["name"] == self.selected_body.get("parent")), None)
-                                            if parent_star:
-                                                # Position planet at the right of the star based on AU_TO_PX
-                                                self.selected_body["position"][0] = parent_star["position"][0] + AU_TO_PX * value
-                                                self.selected_body["position"][1] = parent_star["position"][1]
-                                            self.generate_orbit_grid(self.selected_body)
+                                            body = self.get_selected_body()
+                                            if parent_star is None and body and body.get("parent_obj"):
+                                                parent_star = body["parent_obj"]
+                                            if parent_star and body:
+                                                # Use centralized function to ensure position is derived from semiMajorAxis * AU_TO_PX
+                                                self.compute_planet_position(body, parent_star)
+                                            if body:
+                                                self.generate_orbit_grid(body)
                                             self.show_custom_orbital_distance_input = False
                                         else:
                                             self.show_custom_orbital_distance_input = True
@@ -2749,7 +3775,7 @@ class SolarSystemVisualizer:
                                     elif self.planet_orbital_eccentricity_dropdown_visible:
                                         name, value = self.planet_orbital_eccentricity_dropdown_options[i]
                                         if value is not None:
-                                            self.selected_body["eccentricity"] = value
+                                            self.update_selected_body_property("eccentricity", value, "eccentricity")
                                             self.show_custom_orbital_eccentricity_input = False
                                         else:
                                             self.show_custom_orbital_eccentricity_input = True
@@ -2762,7 +3788,7 @@ class SolarSystemVisualizer:
                                     elif self.planet_orbital_period_dropdown_visible:
                                         name, value = self.planet_orbital_period_dropdown_options[i]
                                         if value is not None:
-                                            self.selected_body["orbital_period"] = value
+                                            self.update_selected_body_property("orbital_period", value, "orbital_period")
                                             self.show_custom_orbital_period_input = False
                                         else:
                                             self.show_custom_orbital_period_input = True
@@ -2773,25 +3799,115 @@ class SolarSystemVisualizer:
                                         self.planet_orbital_period_dropdown_active = False
                                         break
                     else:
-                        # Handle tab clicks
-                        for tab_name, tab_rect in self.tabs.items():
-                            if tab_rect.collidepoint(event.pos):
-                                # Toggle active tab - if clicking the same tab, deactivate it
-                                if self.active_tab == tab_name:
-                                    self.active_tab = None
-                                    self.preview_position = None
-                                    self.preview_radius = None
+                        # Handle planet preset selector arrow click
+                        # Allow opening dropdown when Planet tab is active (even if no planet selected)
+                        if (self.planet_preset_arrow_rect and 
+                            self.planet_preset_arrow_rect.collidepoint(event.pos) and
+                            self.active_tab == "planet"):
+                            # Toggle preset dropdown
+                            self.planet_preset_dropdown_visible = not self.planet_preset_dropdown_visible
+                            print(f"DEBUG: Arrow clicked! Preset dropdown toggled. Visible: {self.planet_preset_dropdown_visible}, Active tab: {self.active_tab}, Arrow rect: {self.planet_preset_arrow_rect}, Click pos: {event.pos}")
+                        
+                        # Handle planet preset dropdown option clicks
+                        elif (self.planet_preset_dropdown_visible and 
+                              self.planet_preset_dropdown_rect and
+                              self.planet_preset_dropdown_rect.collidepoint(event.pos)):
+                            # Calculate which option was clicked
+                            relative_y = event.pos[1] - self.planet_preset_dropdown_rect.top
+                            option_index = relative_y // 28
+                            
+                            if 0 <= option_index < len(self.planet_preset_options):
+                                preset_name = self.planet_preset_options[option_index]
+                                # Check if a planet is selected (editing mode) or not (placement mode)
+                                if self.selected_body and self.selected_body.get('type') == 'planet':
+                                    # Editing mode: Apply preset to selected planet
+                                    self.apply_planet_preset(preset_name)
+                                    # Close dropdown
+                                    self.planet_preset_dropdown_visible = False
                                 else:
-                                    self.active_tab = tab_name
-                                # Clear selected body when changing tabs
-                                self.selected_body = None
-                                self.show_customization_panel = False
-                                # Clear preview when switching tabs
-                                self.preview_position = None
-                                self.preview_radius = None
-                                self.mass_input_active = False
-                                self.planet_dropdown_active = False
-                                self.planet_dropdown_visible = False
+                                    # Placement mode: Toggle selection - if already selected, deselect it
+                                    if self.planet_dropdown_selected == preset_name:
+                                        # Deselect: clear selection and preview
+                                        self.planet_dropdown_selected = None
+                                        self.clear_preview()
+                                        print(f"Deselected planet preset: {preset_name}")
+                                    else:
+                                        # Select: Store selected preset for planet placement
+                                        self.planet_dropdown_selected = preset_name
+                                        print(f"Selected planet preset for placement: {preset_name}")
+                                        # Set preview radius once when planet is selected (stable per object type)
+                                        if preset_name in SOLAR_SYSTEM_PLANET_PRESETS:
+                                            preset = SOLAR_SYSTEM_PLANET_PRESETS[preset_name]
+                                            planet_radius_re = preset["radius"]  # In Earth radii
+                                            self.preview_radius = int(planet_radius_re * EARTH_RADIUS_PX)
+                                        else:
+                                            self.preview_radius = 15  # Default
+                                        # Initialize preview position immediately at mouse cursor
+                                        self.preview_position = pygame.mouse.get_pos()
+                                        # Activate placement mode - preview position will be updated every frame
+                                        self.placement_mode_active = True
+                                    # Keep dropdown open to show selection (will be highlighted on next render)
+                                    # Dropdown will close when clicking outside or when placing planet
+                        
+                        # Close preset dropdown if clicking outside
+                        elif (self.planet_preset_dropdown_visible and
+                              self.planet_preset_dropdown_rect and
+                              not self.planet_preset_dropdown_rect.collidepoint(event.pos) and
+                              (not self.planet_preset_arrow_rect or not self.planet_preset_arrow_rect.collidepoint(event.pos))):
+                            self.planet_preset_dropdown_visible = False
+                        
+                        # Handle tab clicks (but exclude preset arrow area)
+                        for tab_name, tab_rect in self.tabs.items():
+                            # Skip if clicking on preset arrow
+                            if (tab_name == "planet" and 
+                                self.planet_preset_arrow_rect and 
+                                self.planet_preset_arrow_rect.collidepoint(event.pos)):
+                                continue  # Let preset arrow handler deal with it
+                            
+                            if tab_rect.collidepoint(event.pos):
+                                # Special handling for Planet tab - toggle preset dropdown
+                                if tab_name == "planet":
+                                    self.active_tab = "planet"
+                                    # Toggle planet preset dropdown menu (close if already open, open if closed)
+                                    if self.planet_preset_dropdown_visible:
+                                        self.planet_preset_dropdown_visible = False
+                                    else:
+                                        self.planet_preset_dropdown_visible = True
+                                    # Clear selected body when switching to planet tab
+                                    self.selected_body = None
+                                    self.selected_body_id = None
+                                    self.show_customization_panel = False
+                                    # Clear preview when switching to planet tab (explicit state change)
+                                    if not self.planet_dropdown_selected:
+                                        self.clear_preview()
+                                    self.mass_input_active = False
+                                    # Also close the customization panel dropdown if it was open
+                                    self.planet_dropdown_active = False
+                                    self.planet_dropdown_visible = False
+                                else:
+                                    # For other tabs, toggle active tab - if clicking the same tab, deactivate it
+                                    if self.active_tab == tab_name:
+                                        self.active_tab = None
+                                        # Clear preview when deactivating tab (explicit state change)
+                                        if not self.planet_dropdown_selected:
+                                            self.clear_preview()
+                                    else:
+                                        self.active_tab = tab_name
+                                        # Activate placement mode for stars and moons
+                                        if tab_name in ["star", "moon"]:
+                                            self.start_placement_mode(tab_name)
+                                    # Clear selected body when changing tabs
+                                    self.selected_body = None
+                                    self.selected_body_id = None
+                                    self.show_customization_panel = False
+                                    # Clear preview when switching tabs (explicit state change)
+                                    if not self.planet_dropdown_selected:
+                                        self.clear_preview()
+                                    self.mass_input_active = False
+                                    self.planet_dropdown_active = False
+                                    self.planet_dropdown_visible = False
+                                    # Close preset dropdown when switching tabs
+                                    self.planet_preset_dropdown_visible = False
                                 break
                         
                         # Handle space area clicks
@@ -2807,22 +3923,358 @@ class SolarSystemVisualizer:
                         clicked_body = None
                         for body in self.placed_bodies:
                             body_screen = self.world_to_screen(body["position"])
-                            # Use hitbox_radius if available, fallback to radius for backwards compatibility
-                            body_hitbox_radius = body.get("hitbox_radius", body["radius"]) * self.camera_zoom
+                            # CRITICAL: Compute hitbox from visual radius
+                            # For planets, compute visual radius from R⊕
+                            if body["type"] == "planet":
+                                visual_radius = body["radius"] * EARTH_RADIUS_PX
+                            else:
+                                visual_radius = body["radius"]
+                            
+                            # Calculate hitbox with scale factor for clickability
+                            hitbox_radius_px = self.calculate_hitbox_radius(body["type"], visual_radius)
+                            body_hitbox_radius = hitbox_radius_px * self.camera_zoom
                             if (event.pos[0] - body_screen[0])**2 + (event.pos[1] - body_screen[1])**2 <= body_hitbox_radius**2:
                                 clicked_body = body
                                 break
                         
                         if clicked_body:
-                            # Select the clicked body
-                            self.selected_body = clicked_body
+                            # CRITICAL: Verify clicked body is in registry and get canonical reference
+                            clicked_id = clicked_body.get("id")
+                            if not clicked_id:
+                                print(f"ERROR: Clicked body has no ID! name={clicked_body.get('name')}")
+                                continue
+                            
+                            # Get canonical body from registry to ensure we're using the right reference
+                            if clicked_id not in self.bodies_by_id:
+                                print(f"ERROR: Clicked body id {clicked_id} not in registry!")
+                                continue
+                            
+                            canonical_body = self.bodies_by_id[clicked_id]
+                            
+                            # Verify clicked body and canonical body are the same object
+                            if id(clicked_body) != id(canonical_body):
+                                print(f"WARNING: Clicked body dict_id={id(clicked_body)} differs from registry dict_id={id(canonical_body)}")
+                                print(f"  Using canonical body from registry")
+                            
+                            # Select the clicked body (by both direct reference and stable ID)
+                            self.selected_body = canonical_body
+                            self.selected_body_id = clicked_id
+                            
+                            print(f"SELECTED body_id={clicked_id[:8]} name={canonical_body.get('name')} dict_id={id(canonical_body)}")
+                            
                             self.show_customization_panel = True
                             self.mass_input_active = False
                             self.planet_dropdown_active = False
                             self.planet_dropdown_visible = False
-                            # --- Moon age dropdown selection logic ---
-                            if self.selected_body.get('type') == 'moon':
+                            
+                            # CRITICAL: Initialize dropdown selection based on body's current mass (per-body state)
+                            if canonical_body.get('type') == 'planet':
+                                # Find which dropdown option matches the body's current mass
+                                body_mass = canonical_body.get('mass', 1.0)
+                                if hasattr(body_mass, 'item'):
+                                    body_mass = float(body_mass.item())
+                                else:
+                                    body_mass = float(body_mass)
+                                
+                                # Find matching option
+                                matching_option = None
+                                for name, value in self.planet_dropdown_options:
+                                    if value is not None and abs(float(value) - body_mass) < 0.01:  # Small tolerance for float comparison
+                                        matching_option = name
+                                        break
+                                
+                                # Initialize per-body dropdown selection
+                                if matching_option:
+                                    canonical_body["planet_dropdown_selected"] = matching_option
+                                else:
+                                    # Mass doesn't match any preset, use "Custom"
+                                    canonical_body["planet_dropdown_selected"] = "Custom"
+                            # --- Planet age dropdown selection logic ---
+                            if self.selected_body.get('type') == 'planet':
                                 age = self.selected_body.get('age', 4.5)
+                                # Ensure age is a Python float, not a numpy array/scalar
+                                if hasattr(age, 'item'):
+                                    age = float(age.item())
+                                else:
+                                    age = float(age)
+                                found = False
+                                for name, preset_age in self.planet_age_dropdown_options:
+                                    if preset_age is not None and abs(preset_age - age) < 0.1:
+                                        self.planet_age_dropdown_selected = name
+                                        found = True
+                                        break
+                                if not found:
+                                    self.planet_age_dropdown_selected = "Custom"
+                            
+                            # --- Planet temperature dropdown selection logic ---
+                            if self.selected_body.get('type') == 'planet':
+                                temperature = self.selected_body.get('temperature', 288)
+                                # Ensure temperature is a Python float, not a numpy array/scalar
+                                if hasattr(temperature, 'item'):
+                                    temperature = float(temperature.item())
+                                else:
+                                    temperature = float(temperature)
+                                found = False
+                                for name, preset_temp in self.planet_temperature_dropdown_options:
+                                    if preset_temp is not None and abs(preset_temp - temperature) < 1:
+                                        self.planet_temperature_dropdown_selected = name
+                                        found = True
+                                        break
+                                if not found:
+                                    self.planet_temperature_dropdown_selected = "Custom"
+                            
+                            # --- Planet radius dropdown selection logic ---
+                            if self.selected_body.get('type') == 'planet':
+                                # CRITICAL: For planets, radius is stored in Earth radii (R⊕)
+                                radius_earth = self.selected_body.get('radius', 1.0)
+                                # Ensure radius is a Python float
+                                if hasattr(radius_earth, 'item'):
+                                    radius_earth = float(radius_earth.item())
+                                else:
+                                    radius_earth = float(radius_earth)
+                                found = False
+                                for name, preset_radius in self.planet_radius_dropdown_options:
+                                    if preset_radius is not None and abs(preset_radius - radius_earth) < 0.01:
+                                        self.planet_radius_dropdown_selected = name
+                                        found = True
+                                        break
+                                if not found:
+                                    self.planet_radius_dropdown_selected = "Custom"
+                            
+                            # --- Planet atmosphere dropdown selection logic ---
+                            if self.selected_body.get('type') == 'planet':
+                                greenhouse_offset = self.selected_body.get('greenhouse_offset', 33.0)
+                                # Ensure greenhouse_offset is a Python float
+                                if hasattr(greenhouse_offset, 'item'):
+                                    greenhouse_offset = float(greenhouse_offset.item())
+                                else:
+                                    greenhouse_offset = float(greenhouse_offset)
+                                found = False
+                                for name, preset_offset in self.planet_atmosphere_dropdown_options:
+                                    if preset_offset is not None and abs(preset_offset - greenhouse_offset) < 0.1:
+                                        self.planet_atmosphere_dropdown_selected = name
+                                        found = True
+                                        break
+                                if not found:
+                                    self.planet_atmosphere_dropdown_selected = "Custom"
+                            
+                            # --- Planet gravity dropdown selection logic ---
+                            if self.selected_body.get('type') == 'planet':
+                                gravity = self.selected_body.get('gravity', 9.81)
+                                # Ensure gravity is a Python float
+                                if hasattr(gravity, 'item'):
+                                    gravity = float(gravity.item())
+                                else:
+                                    gravity = float(gravity)
+                                found = False
+                                for name, preset_gravity in self.planet_gravity_dropdown_options:
+                                    if preset_gravity is not None and abs(preset_gravity - gravity) < 0.01:
+                                        self.planet_gravity_dropdown_selected = name
+                                        found = True
+                                        break
+                                if not found:
+                                    self.planet_gravity_dropdown_selected = "Custom"
+                            
+                            # --- Planet orbital distance (semi-major axis) dropdown selection logic ---
+                            if self.selected_body.get('type') == 'planet':
+                                semi_major_axis = self.selected_body.get('semiMajorAxis', 1.0)
+                                # Ensure semiMajorAxis is a Python float
+                                if hasattr(semi_major_axis, 'item'):
+                                    semi_major_axis = float(semi_major_axis.item())
+                                else:
+                                    semi_major_axis = float(semi_major_axis)
+                                found = False
+                                for name, preset_distance in self.planet_orbital_distance_dropdown_options:
+                                    if preset_distance is not None and abs(preset_distance - semi_major_axis) < 0.01:
+                                        self.planet_orbital_distance_dropdown_selected = name
+                                        found = True
+                                        break
+                                if not found:
+                                    self.planet_orbital_distance_dropdown_selected = "Custom"
+                            
+                            # --- Planet orbital eccentricity dropdown selection logic ---
+                            if self.selected_body.get('type') == 'planet':
+                                eccentricity = self.selected_body.get('eccentricity', 0.017)
+                                # Ensure eccentricity is a Python float
+                                if hasattr(eccentricity, 'item'):
+                                    eccentricity = float(eccentricity.item())
+                                else:
+                                    eccentricity = float(eccentricity)
+                                found = False
+                                for name, preset_ecc in self.planet_orbital_eccentricity_dropdown_options:
+                                    if preset_ecc is not None and abs(preset_ecc - eccentricity) < 0.001:
+                                        self.planet_orbital_eccentricity_dropdown_selected = name
+                                        found = True
+                                        break
+                                if not found:
+                                    self.planet_orbital_eccentricity_dropdown_selected = "Custom"
+                            
+                            # --- Planet orbital period dropdown selection logic ---
+                            if self.selected_body.get('type') == 'planet':
+                                orbital_period = self.selected_body.get('orbital_period', 365.25)
+                                # Ensure orbital_period is a Python float
+                                if hasattr(orbital_period, 'item'):
+                                    orbital_period = float(orbital_period.item())
+                                else:
+                                    orbital_period = float(orbital_period)
+                                found = False
+                                for name, preset_period in self.planet_orbital_period_dropdown_options:
+                                    if preset_period is not None and abs(preset_period - orbital_period) < 0.1:
+                                        self.planet_orbital_period_dropdown_selected = name
+                                        found = True
+                                        break
+                                if not found:
+                                    self.planet_orbital_period_dropdown_selected = "Custom"
+                            
+                            # --- Planet stellar flux dropdown selection logic ---
+                            if self.selected_body.get('type') == 'planet':
+                                stellar_flux = self.selected_body.get('stellarFlux', 1.0)
+                                # Ensure stellarFlux is a Python float
+                                if hasattr(stellar_flux, 'item'):
+                                    stellar_flux = float(stellar_flux.item())
+                                else:
+                                    stellar_flux = float(stellar_flux)
+                                found = False
+                                for name, preset_flux in self.planet_stellar_flux_dropdown_options:
+                                    if preset_flux is not None and abs(preset_flux - stellar_flux) < 0.001:
+                                        self.planet_stellar_flux_dropdown_selected = name
+                                        found = True
+                                        break
+                                if not found:
+                                    self.planet_stellar_flux_dropdown_selected = "Custom"
+                            
+                            # --- Planet density dropdown selection logic ---
+                            if self.selected_body.get('type') == 'planet':
+                                density = self.selected_body.get('density', 5.51)  # Default to Earth's density if not set
+                                # Ensure density is a Python float
+                                if hasattr(density, 'item'):
+                                    density = float(density.item())
+                                else:
+                                    density = float(density)
+                                found = False
+                                for name, preset_density in self.planet_density_dropdown_options:
+                                    if preset_density is not None and abs(preset_density - density) < 0.01:
+                                        self.planet_density_dropdown_selected = name
+                                        found = True
+                                        break
+                                if not found:
+                                    self.planet_density_dropdown_selected = "Custom"
+                            
+                            # --- Star mass dropdown selection logic ---
+                            if self.selected_body.get('type') == 'star':
+                                mass = self.selected_body.get('mass', 1000.0)  # Default to 1 solar mass = 1000 Earth masses
+                                # Ensure mass is a Python float
+                                if hasattr(mass, 'item'):
+                                    mass = float(mass.item())
+                                else:
+                                    mass = float(mass)
+                                # Convert from Earth masses to solar masses for comparison
+                                mass_solar = mass / 1000.0
+                                found = False
+                                for name, preset_mass in self.star_mass_dropdown_options:
+                                    if preset_mass is not None and abs(preset_mass - mass_solar) < 0.01:
+                                        self.star_mass_dropdown_selected = name
+                                        found = True
+                                        break
+                                if not found:
+                                    self.star_mass_dropdown_selected = "Custom"
+                            
+                            # --- Star temperature (spectral class) dropdown selection logic ---
+                            if self.selected_body.get('type') == 'star':
+                                # Stars use "temperature" for updates, but may have "star_temperature" for initialization
+                                temperature = self.selected_body.get('temperature', self.selected_body.get('star_temperature', 5778))
+                                # Ensure temperature is a Python float
+                                if hasattr(temperature, 'item'):
+                                    temperature = float(temperature.item())
+                                else:
+                                    temperature = float(temperature)
+                                found = False
+                                for name, preset_temp, preset_color in self.spectral_class_dropdown_options:
+                                    if preset_temp is not None and abs(preset_temp - temperature) < 50:  # 50K tolerance
+                                        self.spectral_class_dropdown_selected = name
+                                        found = True
+                                        break
+                                if not found:
+                                    self.spectral_class_dropdown_selected = "Custom"
+                            
+                            # --- Star luminosity dropdown selection logic ---
+                            if self.selected_body.get('type') == 'star':
+                                luminosity = self.selected_body.get('luminosity', 1.0)
+                                # Ensure luminosity is a Python float
+                                if hasattr(luminosity, 'item'):
+                                    luminosity = float(luminosity.item())
+                                else:
+                                    luminosity = float(luminosity)
+                                found = False
+                                for name, preset_lum in self.luminosity_dropdown_options:
+                                    if preset_lum is not None and abs(preset_lum - luminosity) < 0.01:
+                                        self.luminosity_dropdown_selected = name
+                                        found = True
+                                        break
+                                if not found:
+                                    self.luminosity_dropdown_selected = "Custom"
+                            
+                            # --- Star radius dropdown selection logic ---
+                            if self.selected_body.get('type') == 'star':
+                                radius_px = self.selected_body.get('radius', SUN_RADIUS_PX)
+                                # Convert from pixels to solar radii
+                                if hasattr(radius_px, 'item'):
+                                    radius_px = float(radius_px.item())
+                                else:
+                                    radius_px = float(radius_px)
+                                # Convert pixels to solar radii (SUN_RADIUS_PX pixels = 1 solar radius)
+                                radius_solar = radius_px / SUN_RADIUS_PX
+                                found = False
+                                for name, preset_radius in self.radius_dropdown_options:
+                                    if preset_radius is not None and abs(preset_radius - radius_solar) < 0.1:
+                                        self.radius_dropdown_selected = name
+                                        found = True
+                                        break
+                                if not found:
+                                    self.radius_dropdown_selected = "Custom"
+                            
+                            # --- Star activity level dropdown selection logic ---
+                            if self.selected_body.get('type') == 'star':
+                                activity = self.selected_body.get('activity', 0.5)  # Default to Sun's moderate activity
+                                # Ensure activity is a Python float
+                                if hasattr(activity, 'item'):
+                                    activity = float(activity.item())
+                                else:
+                                    activity = float(activity)
+                                found = False
+                                for name, preset_activity in self.activity_dropdown_options:
+                                    if preset_activity is not None and abs(preset_activity - activity) < 0.01:
+                                        self.activity_dropdown_selected = name
+                                        found = True
+                                        break
+                                if not found:
+                                    self.activity_dropdown_selected = "Custom"
+                            
+                            # --- Star metallicity dropdown selection logic ---
+                            if self.selected_body.get('type') == 'star':
+                                metallicity = self.selected_body.get('metallicity', 0.0)  # Default to Sun's metallicity
+                                # Ensure metallicity is a Python float
+                                if hasattr(metallicity, 'item'):
+                                    metallicity = float(metallicity.item())
+                                else:
+                                    metallicity = float(metallicity)
+                                found = False
+                                for name, preset_metallicity in self.metallicity_dropdown_options:
+                                    if preset_metallicity is not None and abs(preset_metallicity - metallicity) < 0.01:
+                                        self.metallicity_dropdown_selected = name
+                                        found = True
+                                        break
+                                if not found:
+                                    self.metallicity_dropdown_selected = "Custom"
+                            
+                            # --- Moon age dropdown selection logic ---
+                            elif self.selected_body.get('type') == 'moon':
+                                age = self.selected_body.get('age', 4.5)
+                                # Ensure age is a Python float, not a numpy array/scalar
+                                if hasattr(age, 'item'):
+                                    age = float(age.item())
+                                else:
+                                    age = float(age)
                                 found = False
                                 for name, preset_age in self.moon_age_dropdown_options:
                                     if preset_age == age:
@@ -2875,221 +4327,381 @@ class SolarSystemVisualizer:
                                         break
                                 if not found:
                                     self.moon_temperature_dropdown_selected = "Moon"  # Default to Moon instead of Custom
+                                
+                                # --- Moon mass dropdown selection logic ---
+                                mass = self.selected_body.get('mass', 1.0)
+                                # Ensure mass is a Python float, not a numpy array/scalar
+                                if hasattr(mass, 'item'):
+                                    mass = float(mass.item())
+                                else:
+                                    mass = float(mass)
+                                found = False
+                                for option_data in self.moon_dropdown_options:
+                                    if len(option_data) == 3:
+                                        moon_name, preset_mass, unit = option_data
+                                    else:
+                                        moon_name, preset_mass = option_data
+                                        unit = None
+                                    if preset_mass is not None:
+                                        # Convert preset_mass to lunar masses for comparison
+                                        if unit == "kg":
+                                            preset_mass_lunar = preset_mass / 7.35e22  # Convert kg to M☾
+                                        else:
+                                            preset_mass_lunar = preset_mass
+                                        if abs(preset_mass_lunar - mass) < 0.0001:  # Small tolerance for float comparison
+                                            self.moon_dropdown_selected = moon_name
+                                            found = True
+                                            break
+                                if not found:
+                                    self.moon_dropdown_selected = "Custom"
+                                
+                                # --- Moon gravity dropdown selection logic ---
+                                gravity = self.selected_body.get('gravity', 1.62)  # Default to Moon's gravity
+                                # Ensure gravity is a Python float
+                                if hasattr(gravity, 'item'):
+                                    gravity = float(gravity.item())
+                                else:
+                                    gravity = float(gravity)
+                                found = False
+                                for name, preset_gravity in self.moon_gravity_dropdown_options:
+                                    if preset_gravity is not None and abs(preset_gravity - gravity) < 0.001:
+                                        self.moon_gravity_dropdown_selected = name
+                                        found = True
+                                        break
+                                if not found:
+                                    self.moon_gravity_dropdown_selected = "Custom"
                         elif self.active_tab and space_area.collidepoint(event.pos):
-                            # Clear preview when placing object
-                            self.preview_position = None
-                            self.preview_radius = None
+                            # Check if click was on a dropdown option - if so, don't place
+                            clicked_on_dropdown_option = False
                             
-                            # Create a new celestial body at the click position
-                            self.body_counter[self.active_tab] += 1
+                            # Check planet dropdown options
+                            if self.planet_dropdown_visible:
+                                dropdown_y = self.planet_dropdown_rect.bottom
+                                for i, (planet_name, mass) in enumerate(self.planet_dropdown_options):
+                                    option_rect = pygame.Rect(
+                                        self.planet_dropdown_rect.left,
+                                        dropdown_y + i * 30,
+                                        self.planet_dropdown_rect.width,
+                                        30
+                                    )
+                                    if option_rect.collidepoint(event.pos):
+                                        clicked_on_dropdown_option = True
+                                        break
                             
-                            # Set default values based on body type
-                            if self.active_tab == "star":
-                                # Sun-like defaults
-                                default_mass = 1.0  # Solar masses
-                                default_age = 4.6  # Gyr
-                                default_spectral = "G-type (Yellow, Sun)"
-                                default_luminosity = 1.0  # Solar luminosities
-                                default_name = "Sun"
-                                default_radius = SUN_RADIUS_PX
-                            elif self.active_tab == "planet":
-                                # Earth-like defaults
-                                default_mass = 1.0  # Earth masses
-                                default_age = 4.5  # Gyr
-                                default_name = "Earth"
-                                default_radius = EARTH_RADIUS_PX
-                            else:  # moon
-                                # Luna-like defaults
-                                default_mass = 1.0  # Earth's Moon mass (1 lunar mass)
-                                default_age = 4.6  # Gyr
-                                default_name = "Moon"
-                                default_radius = MOON_RADIUS_PX  # Slightly enlarged for visibility
+                            # Check preset dropdown options
+                            if not clicked_on_dropdown_option and self.planet_preset_dropdown_visible and self.planet_preset_dropdown_rect:
+                                if self.planet_preset_dropdown_rect.collidepoint(event.pos):
+                                    clicked_on_dropdown_option = True
                             
-                            world_click = self.screen_to_world(event.pos)
+                            # Check other dropdown options (using dropdown_options_rects)
+                            if not clicked_on_dropdown_option and hasattr(self, 'dropdown_options_rects') and self.dropdown_options_rects:
+                                for i, option_rect in enumerate(self.dropdown_options_rects):
+                                    if hasattr(self, 'dropdown_rect') and self.dropdown_rect:
+                                        screen_option_rect = pygame.Rect(
+                                            self.dropdown_rect.left,
+                                            self.dropdown_rect.top + i * self.dropdown_option_height,
+                                            option_rect.width,
+                                            option_rect.height
+                                        )
+                                        if screen_option_rect.collidepoint(event.pos):
+                                            clicked_on_dropdown_option = True
+                                            break
                             
-                            body = {
-                                "type": self.active_tab,
-                                "position": np.array(world_click, dtype=float),
-                                "velocity": np.array([0.0, 0.0]),
-                                "radius": default_radius,
-                                "hitbox_radius": self.calculate_hitbox_radius(self.active_tab, default_radius),  # Invisible click hitbox
-                                "name": default_name,
-                                "mass": default_mass * (1000.0 if self.active_tab == "star" else 1.0),  # Convert to Earth masses for stars
-                                "parent": None,
-                                "parent_obj": None,  # Permanent parent reference for faster lookups
-                                "orbit_radius": 0.0,  # Distance from parent
-                                "orbit_angle": 0.0,   # Current angle in orbit
-                                "orbit_speed": 0.0,   # Angular speed
-                                "rotation_angle": 0.0, # Current rotation angle
-                                "rotation_speed": self.rotation_speed * (1.0 if self.active_tab == "planet" else 2.0 if self.active_tab == "moon" else 0.0), # Rotation speed
-                                "age": default_age,  # Set default age
-                                "habit_score": 0.0,  # Added habitability score attribute
-                                "orbit_points": [],  # Persistent orbit curve points
-                                "max_orbit_points": 2000,  # Full history (~1-2 revolutions depending on timestep)
-                                "orbit_enabled": True,  # Toggle for showing orbit lines
-                            }
-                            
-                            # Add planet-specific attributes
-                            if self.active_tab == "planet":
-                                # Default equilibrium temperature (Earth's T_eq ~255K)
-                                default_T_eq = 255.0
-                                # Default atmosphere offset (Earth-like: +33K)
-                                default_greenhouse_offset = 33.0
-                                default_T_surface = default_T_eq + default_greenhouse_offset  # 288K
-                                body.update({
-                                    "gravity": 9.81,  # Earth's gravity in m/s²
-                                    "semiMajorAxis": 1.0,  # Default orbital distance (AU)
-                                    "eccentricity": 0.017,  # Default orbital eccentricity (Earth-like)
-                                    "orbital_period": 365,  # Default orbital period (days)
-                                    "stellarFlux": 1.0,  # Default stellar flux (Earth units)
-                                    "temperature": default_T_surface,  # Surface temperature with greenhouse effect
-                                    "equilibrium_temperature": default_T_eq,  # Equilibrium temperature
-                                    "greenhouse_offset": default_greenhouse_offset,  # Greenhouse offset
-                                })
-                            
-                            # Add star-specific attributes
-                            if self.active_tab == "star":
-                                body.update({
-                                    "luminosity": default_luminosity,
-                                    "star_temperature": 5778,  # Sun's temperature in Kelvin
-                                    "star_color": (255, 255, 0),  # Yellow color for G-type star
-                                })
-                                # Create habitable zone for the star
-                                body["hz_surface"] = self.create_habitable_zone(body)
-                            
-                            # Add moon-specific attributes
-                            if self.active_tab == "moon":
-                                body.update({
-                                    "actual_radius": 1737.4,  # Actual radius in km (The Moon) - for dropdown logic
-                                    "radius": default_radius,  # Visual radius in pixels for display
-                                    "hitbox_radius": self.calculate_hitbox_radius(self.active_tab, default_radius),  # Update hitbox to match radius
-                                    "temperature": 220,  # Surface temperature in K (Earth's Moon)
-                                    "gravity": 1.62,  # Surface gravity in m/s² (Earth's Moon)
-                                    "orbital_period": 27.3,  # Orbital period in days (Earth's Moon)
-                                })
-                            
-                            self.placed_bodies.append(body)
-                            
-                            # For moons, immediately find nearest planet and set up orbit
-                            if self.active_tab == "moon":
-                                planets = [b for b in self.placed_bodies if b["type"] == "planet"]
-                                if planets:
-                                    # Find nearest planet to the moon's cursor position
-                                    nearest_planet = min(planets, key=lambda p: np.linalg.norm(p["position"] - body["position"]))
-                                    # Calculate orbit radius from cursor position
-                                    orbit_radius = np.linalg.norm(nearest_planet["position"] - body["position"])
-                                    # Ensure minimum orbit radius
-                                    if orbit_radius < MOON_ORBIT_PX:
-                                        orbit_radius = MOON_ORBIT_PX
-                                    
-                                    # Set parent and orbit radius
-                                    body["parent"] = nearest_planet["name"]
-                                    body["parent_obj"] = nearest_planet  # Set permanent parent reference
-                                    body["orbit_radius"] = orbit_radius
-                                    
-                                    # Calculate initial orbit angle from cursor position
-                                    dx = body["position"][0] - nearest_planet["position"][0]
-                                    dy = body["position"][1] - nearest_planet["position"][1]
-                                    body["orbit_angle"] = np.arctan2(dy, dx)
-                                    
-                                    # Calculate orbital speed for circular orbit
-                                    base_speed = np.sqrt(self.G * nearest_planet["mass"] / (orbit_radius ** 3))
-                                    # Moons need faster orbital speed for visible motion
-                                    MOON_SPEED_FACTOR = 5.0
-                                    body["orbit_speed"] = base_speed * MOON_SPEED_FACTOR
-                                    
-                                    # CRITICAL: Immediately recalculate moon position from planet + orbit offset
-                                    # This ensures the moon starts at the correct position relative to the planet
-                                    moon_offset_x = orbit_radius * np.cos(body["orbit_angle"])
-                                    moon_offset_y = orbit_radius * np.sin(body["orbit_angle"])
-                                    # Instrumentation: Pre-write
-                                    trace(f"PRE_WRITE {body['name']} pos={body['position'].copy()} source=handle_events_moon_placement")
-                                    body["position"][0] = nearest_planet["position"][0] + moon_offset_x
-                                    body["position"][1] = nearest_planet["position"][1] + moon_offset_y
-                                    # Ensure position is float array
-                                    body["position"] = np.array(body["position"], dtype=float)
-                                    # Instrumentation: Post-write
-                                    trace(f"POST_WRITE {body['name']} pos={body['position'].copy()} source=handle_events_moon_placement")
+                            # Only place if not clicking on a dropdown option
+                            if not clicked_on_dropdown_option:
+                                # Clear preview when placing object (explicit state change)
+                                self.clear_preview()
+                                
+                                # Create a new celestial body at the click position
+                                self.body_counter[self.active_tab] += 1
+                                
+                                # Set default values based on body type
+                                if self.active_tab == "star":
+                                    # Sun-like defaults
+                                    default_mass = 1.0  # Solar masses
+                                    default_age = 4.6  # Gyr
+                                    default_spectral = "G-type (Yellow, Sun)"
+                                    default_luminosity = 1.0  # Solar luminosities
+                                    default_name = "Sun"
+                                    default_radius = SUN_RADIUS_PX
+                                elif self.active_tab == "planet":
+                                    # Require explicit planet selection - no default
+                                    selected_planet_name = self.planet_dropdown_selected if hasattr(self, 'planet_dropdown_selected') else None
                                     
                                     # Debug output
-                                    print(f"DEBUG: Moon {body['name']} placed:")
-                                    print(f"  parent={nearest_planet['name']}, orbit_radius={orbit_radius:.2f}")
-                                    print(f"  orbit_angle={body['orbit_angle']:.4f}, orbit_speed={body['orbit_speed']:.6f}")
-                                    print(f"  planet_pos=({nearest_planet['position'][0]:.2f}, {nearest_planet['position'][1]:.2f})")
-                                    print(f"  moon_pos=({body['position'][0]:.2f}, {body['position'][1]:.2f})")
+                                    print(f"DEBUG: Attempting to place planet. selected_planet_name={selected_planet_name}, planet_dropdown_selected={getattr(self, 'planet_dropdown_selected', 'NOT_SET')}")
                                     
-                                    # Set initial velocity for circular orbit
-                                    v = body["orbit_speed"] * body["orbit_radius"]
-                                    body["velocity"] = np.array([-v * np.sin(body["orbit_angle"]), v * np.cos(body["orbit_angle"])])
+                                    # Prevent placement if no planet is selected
+                                    if not selected_planet_name or selected_planet_name not in SOLAR_SYSTEM_PLANET_PRESETS:
+                                        print(f"Please select a planet from the dropdown before placing (selected: {selected_planet_name})")
+                                        # Skip the rest of this block - don't create the body
+                                        # Set defaults to None to skip body creation
+                                        default_mass = None
+                                        default_radius = None
+                                        default_name = None
+                                        default_age = None
+                                    else:
+                                        # Get preset parameters
+                                        preset = SOLAR_SYSTEM_PLANET_PRESETS[selected_planet_name]
+                                        default_mass = preset["mass"]
+                                        default_radius = preset["radius"]  # In Earth radii (R⊕)
+                                        default_name = selected_planet_name
+                                        default_age = 4.5  # Gyr (can be customized later)
+                                else:  # moon
+                                    # Luna-like defaults
+                                    default_mass = 1.0  # Earth's Moon mass (1 lunar mass)
+                                    default_age = 4.6  # Gyr
+                                    default_name = "Moon"
+                                    default_radius = MOON_RADIUS_PX  # Slightly enlarged for visibility
+                                
+                                # Only create body if we have valid defaults (i.e., a planet was selected for planets, or for stars/moons)
+                                if (self.active_tab != "planet" or (default_mass is not None and default_name is not None)):
+                                    world_click = self.screen_to_world(event.pos)
                                     
-                                    # Generate orbit grid for visualization (but preserve orbital parameters)
-                                    # Only generate the grid visualization, don't recalculate orbital parameters
-                                    grid_points = []
-                                    for i in range(100):  # 100 points for a smooth circle
-                                        angle = i * 2 * np.pi / 100
-                                        x = nearest_planet["position"][0] + orbit_radius * np.cos(angle)
-                                        y = nearest_planet["position"][1] + orbit_radius * np.sin(angle)
-                                        grid_points.append(np.array([x, y]))
-                                    self.orbit_grid_points[body["name"]] = grid_points
-                                else:
-                                    # No planets available yet, moon will be set up later in update_physics
-                                    pass
-                            # Note: orbit_points is now stored in the body dict itself, not in self.orbit_points
-                            
-                            # Set dropdown selections to match defaults
-                            if self.active_tab == "star":
-                                self.star_mass_dropdown_selected = "1.0 M☉ (Sun)"
-                                self.star_age_dropdown_selected = "Sun (4.6 Gyr)"
-                                self.spectral_dropdown_selected = "G-type (Yellow, Sun) (5,778 K)"
-                                self.luminosity_dropdown_selected = "G-type Main Sequence (Sun)"
-                                self.temperature_dropdown_selected = "G-type (Sun) (5,800 K)"
-                                self.radius_dropdown_selected = "G-type (Sun)"
-                                self.activity_dropdown_selected = "Moderate (Sun)"
-                                self.metallicity_dropdown_selected = "0.0 (Sun)"
-                            elif self.active_tab == "planet":
-                                self.planet_dropdown_selected = "Earth"
-                                self.planet_age_dropdown_selected = "4.6 Gyr (Earth's age)"
-                                self.planet_gravity_dropdown_selected = "Earth"
-                                self.planet_atmosphere_dropdown_selected = "Earth-like (N₂–O₂ + H₂O + CO₂)"
-                                self.planet_orbital_distance_dropdown_selected = "Earth"
-                                self.planet_orbital_eccentricity_dropdown_selected = "Earth"
-                                self.planet_orbital_period_dropdown_selected = "Earth"
-                                self.planet_stellar_flux_dropdown_selected = "Earth"
-                                if self.selected_body:
-                                    self.selected_body["semiMajorAxis"] = 1.0
-                                    self.selected_body["eccentricity"] = 0.0167
-                                    self.selected_body["orbital_period"] = 365.25
-                                    self.selected_body["stellarFlux"] = 1.0
-                            else:  # moon
-                                self.moon_dropdown_selected = "Moon"
-                                self.moon_age_dropdown_selected = "Moon"
-                                self.moon_radius_dropdown_selected = "Moon"
-                                self.moon_orbital_distance_dropdown_selected = "Moon"
-                                self.moon_orbital_period_dropdown_selected = "Moon"
-                                self.moon_temperature_dropdown_selected = "Moon"
-                                self.moon_gravity_dropdown_selected = "Moon"
-                            
-                            # Automatically start simulation when at least one star and one planet are placed
-                            stars = [b for b in self.placed_bodies if b["type"] == "star"]
-                            planets = [b for b in self.placed_bodies if b["type"] == "planet"]
-                            
-                            if len(stars) > 0 and len(planets) > 0:
-                                print(f"DEBUG: Starting simulation. Selected body: {self.selected_body}")
-                                print(f"DEBUG: show_customization_panel before: {self.show_customization_panel}")
-                                self.show_simulation_builder = False
-                                self.show_simulation = True
-                                # Clear any selected body and active tab when simulation starts for better UX
-                                self.selected_body = None
-                                self.show_customization_panel = False
-                                self.active_tab = None
-                                self.preview_position = None
-                                self.preview_radius = None
+                                    # Create unique ID for this body to ensure independence
+                                    body_id = str(uuid4())
+                                    
+                                    # CRITICAL: For planets, use authoritative preset-based creation
+                                    if self.active_tab == "planet":
+                                        # Get the selected planet name (already validated above)
+                                        selected_planet_name = self.planet_dropdown_selected if hasattr(self, 'planet_dropdown_selected') else None
+                                        
+                                        # Use authoritative preset-based creation function
+                                        if selected_planet_name and selected_planet_name in SOLAR_SYSTEM_PLANET_PRESETS:
+                                            body = self.create_planet_from_preset(selected_planet_name, world_click, body_id)
+                                            
+                                            # Generate orbit grid for visualization (based on target position)
+                                            self.generate_orbit_grid(body)
+                                            self.clear_orbit_points(body)
+                                            
+                                            # Body is created with all preset values - skip standard planet attribute setup
+                                            # Continue to registration and placement logic below
+                                        else:
+                                            # Should not happen (validation above), but skip if it does
+                                            continue
+                                    else:
+                                        # For stars and moons, use standard creation
+                                        # CRITICAL: Use factory function to create body with NO shared references
+                                        body = self._create_new_body_dict(
+                                            obj_type=self.active_tab,
+                                            body_id=body_id,
+                                            position=world_click,
+                                            default_name=default_name,
+                                            default_mass=default_mass,
+                                            default_age=default_age,
+                                            default_radius=default_radius
+                                        )
+                                    
+                                    # Add star-specific attributes
+                                    if self.active_tab == "star":
+                                        body.update({
+                                            "luminosity": float(default_luminosity),
+                                            "star_temperature": float(5778),  # Sun's temperature in Kelvin
+                                            "star_color": (253, 184, 19),  # Yellow color for G-type star (tuple, immutable) - matches base_color
+                                            "base_color": str(CELESTIAL_BODY_COLORS.get(default_name, CELESTIAL_BODY_COLORS.get("Sun", "#FDB813"))),  # Ensure base_color is set
+                                        })
+                                        # Create habitable zone for the star
+                                        body["hz_surface"] = self.create_habitable_zone(body)
+                                    
+                                    # Add moon-specific attributes
+                                    if self.active_tab == "moon":
+                                        body.update({
+                                            "actual_radius": 1737.4,  # Actual radius in km (The Moon) - for dropdown logic
+                                            "radius": default_radius,  # Visual radius in pixels for display
+                                            "hitbox_radius": self.calculate_hitbox_radius(self.active_tab, default_radius),  # Update hitbox to match radius
+                                            "temperature": 220,  # Surface temperature in K (Earth's Moon)
+                                            "gravity": 1.62,  # Surface gravity in m/s² (Earth's Moon)
+                                            "orbital_period": 27.3,  # Orbital period in days (Earth's Moon)
+                                        })
+                                    
+                                    # Ensure the new body is completely independent
+                                    # Clear any selected body to avoid confusion when placing new objects
+                                    self.selected_body = None
+                                    self.selected_body_id = None
+                                    self.show_customization_panel = False
+                                    
+                                    # Close dropdowns after successful placement
+                                    if self.active_tab == "planet":
+                                        self.planet_dropdown_visible = False
+                                        self.planet_dropdown_active = False
+                                        self.planet_preset_dropdown_visible = False
+                                    # Clear selection and preview after successful placement (explicit state change)
+                                    self.planet_dropdown_selected = None
+                                    self.clear_preview()
+                                    
+                                    self.placed_bodies.append(body)
+                                    # Register body by ID for guaranteed unique lookups
+                                    self.bodies_by_id[body_id] = body
+                                    
+                                    # CRITICAL: Hard assertion to detect shared state immediately
+                                    self._assert_no_shared_state()
+                                    
+                                    # Debug: Verify independence
+                                    print(f"DEBUG: Created body id={body_id}, name={body['name']}, mass={body['mass']}, position_id={id(body['position'])}, params_id={id(body)}")
+                                    # Hard verification: ensure no bodies share core containers after creation
+                                    self.debug_verify_body_references(source="handle_events_place_body")
+                                    
+                                    # For moons, immediately find nearest planet and set up orbit
+                                    if self.active_tab == "moon":
+                                        planets = [b for b in self.placed_bodies if b["type"] == "planet"]
+                                        if planets:
+                                            # Find nearest planet to the moon's cursor position
+                                            nearest_planet = min(planets, key=lambda p: np.linalg.norm(p["position"] - body["position"]))
+                                            # Calculate orbit radius from cursor position
+                                            orbit_radius = np.linalg.norm(nearest_planet["position"] - body["position"])
+                                            # Ensure minimum orbit radius
+                                            if orbit_radius < MOON_ORBIT_PX:
+                                                orbit_radius = MOON_ORBIT_PX
+                                            
+                                            # Set parent and orbit radius - use ID for explicit parent-child relationship
+                                            body["parent"] = nearest_planet["name"]
+                                            body["parent_id"] = nearest_planet["id"]  # Use UUID for parent lookup
+                                            body["parent_obj"] = nearest_planet  # Set permanent parent reference for faster lookups
+                                            body["orbit_radius"] = float(orbit_radius)
+                                            
+                                            # Calculate initial orbit angle from cursor position
+                                            dx = body["position"][0] - nearest_planet["position"][0]
+                                            dy = body["position"][1] - nearest_planet["position"][1]
+                                            body["orbit_angle"] = np.arctan2(dy, dx)
+                                            
+                                            # Calculate orbital speed for circular orbit
+                                            base_speed = np.sqrt(self.G * nearest_planet["mass"] / (orbit_radius ** 3))
+                                            # Moons need faster orbital speed for visible motion
+                                            MOON_SPEED_FACTOR = 5.0
+                                            body["orbit_speed"] = base_speed * MOON_SPEED_FACTOR
+                                            
+                                            # CRITICAL: Immediately recalculate moon position from planet + orbit offset
+                                            # This ensures the moon starts at the correct position relative to the planet
+                                            moon_offset_x = orbit_radius * np.cos(body["orbit_angle"])
+                                            moon_offset_y = orbit_radius * np.sin(body["orbit_angle"])
+                                            # Instrumentation: Pre-write
+                                            trace(f"PRE_WRITE {body['name']} pos={body['position'].copy()} source=handle_events_moon_placement")
+                                            body["position"][0] = nearest_planet["position"][0] + moon_offset_x
+                                            body["position"][1] = nearest_planet["position"][1] + moon_offset_y
+                                            # Ensure position is float array
+                                            body["position"] = np.array(body["position"], dtype=float)
+                                            # Instrumentation: Post-write
+                                            trace(f"POST_WRITE {body['name']} pos={body['position'].copy()} source=handle_events_moon_placement")
+                                        
+                                        # Debug output
+                                        print(f"DEBUG: Moon {body['name']} placed:")
+                                        print(f"  parent={nearest_planet['name']}, orbit_radius={orbit_radius:.2f}")
+                                        print(f"  orbit_angle={body['orbit_angle']:.4f}, orbit_speed={body['orbit_speed']:.6f}")
+                                        print(f"  planet_pos=({nearest_planet['position'][0]:.2f}, {nearest_planet['position'][1]:.2f})")
+                                        print(f"  moon_pos=({body['position'][0]:.2f}, {body['position'][1]:.2f})")
+                                        
+                                        # Set initial velocity for circular orbit
+                                        v = body["orbit_speed"] * body["orbit_radius"]
+                                        body["velocity"] = np.array([-v * np.sin(body["orbit_angle"]), v * np.cos(body["orbit_angle"])]).copy()  # Ensure independent copy
+                                        
+                                        # Generate orbit grid for visualization (but preserve orbital parameters)
+                                        # Only generate the grid visualization, don't recalculate orbital parameters
+                                        grid_points = []
+                                        for i in range(100):  # 100 points for a smooth circle
+                                            angle = i * 2 * np.pi / 100
+                                            x = nearest_planet["position"][0] + orbit_radius * np.cos(angle)
+                                            y = nearest_planet["position"][1] + orbit_radius * np.sin(angle)
+                                            grid_points.append(np.array([x, y]))
+                                        self.orbit_grid_points[body["name"]] = grid_points
+                                    else:
+                                        # No planets available yet, moon will be set up later in update_physics
+                                        pass
+                                # Note: orbit_points is now stored in the body dict itself, not in self.orbit_points
+                                
+                                # Set dropdown selections to match defaults
+                                if self.active_tab == "star":
+                                    self.star_mass_dropdown_selected = "1.0 M☉ (Sun)"
+                                    self.star_age_dropdown_selected = "Sun (4.6 Gyr)"
+                                    self.spectral_dropdown_selected = "G-type (Yellow, Sun) (5,778 K)"
+                                    self.luminosity_dropdown_selected = "G-type Main Sequence (Sun)"
+                                    self.temperature_dropdown_selected = "G-type (Sun) (5,800 K)"
+                                    self.radius_dropdown_selected = "G-type (Sun)"
+                                    self.activity_dropdown_selected = "Moderate (Sun)"
+                                    self.metallicity_dropdown_selected = "0.0 (Sun)"
+                                elif self.active_tab == "planet":
+                                    # Store selected planet name in body (already done above)
+                                    # Sync UI dropdowns to match preset values
+                                    selected_planet_name = body.get("planet_dropdown_selected", "Earth")
+                                    if selected_planet_name in SOLAR_SYSTEM_PLANET_PRESETS:
+                                        preset = SOLAR_SYSTEM_PLANET_PRESETS[selected_planet_name]
+                                        # Sync gravity dropdown
+                                        gravity = preset.get("gravity", 9.81)
+                                        found = False
+                                        for name, preset_gravity in self.planet_gravity_dropdown_options:
+                                            if preset_gravity is not None and abs(preset_gravity - gravity) < 0.01:
+                                                self.planet_gravity_dropdown_selected = name
+                                                found = True
+                                                break
+                                        if not found:
+                                            self.planet_gravity_dropdown_selected = "Custom"
+                                        
+                                        # Sync atmosphere dropdown
+                                        greenhouse_offset = preset.get("greenhouse_offset", 33.0)
+                                        found = False
+                                        for name, preset_offset in self.planet_atmosphere_dropdown_options:
+                                            if preset_offset is not None and abs(preset_offset - greenhouse_offset) < 0.1:
+                                                self.planet_atmosphere_dropdown_selected = name
+                                                found = True
+                                                break
+                                        if not found:
+                                            self.planet_atmosphere_dropdown_selected = "Custom"
+                                        
+                                        # Sync orbital distance dropdown
+                                        semi_major_axis = preset.get("semiMajorAxis", 1.0)
+                                        found = False
+                                        for name, preset_distance in self.planet_orbital_distance_dropdown_options:
+                                            if preset_distance is not None and abs(preset_distance - semi_major_axis) < 0.01:
+                                                self.planet_orbital_distance_dropdown_selected = name
+                                                found = True
+                                                break
+                                        if not found:
+                                            self.planet_orbital_distance_dropdown_selected = "Custom"
+                                        
+                                        # Sync other dropdowns similarly
+                                        self.planet_age_dropdown_selected = "4.6 Gyr (Earth's age)"  # Default age
+                                        self.planet_orbital_eccentricity_dropdown_selected = "Earth"  # Can be enhanced
+                                        self.planet_orbital_period_dropdown_selected = "Earth"  # Can be enhanced
+                                        self.planet_stellar_flux_dropdown_selected = "Earth"  # Can be enhanced
+                                    else:
+                                        # Default Earth values
+                                        self.planet_age_dropdown_selected = "4.6 Gyr (Earth's age)"
+                                        self.planet_gravity_dropdown_selected = "Earth"
+                                        self.planet_atmosphere_dropdown_selected = "Earth-like (N₂–O₂ + H₂O + CO₂)"
+                                        self.planet_orbital_distance_dropdown_selected = "Earth"
+                                        self.planet_orbital_eccentricity_dropdown_selected = "Earth"
+                                        self.planet_orbital_period_dropdown_selected = "Earth"
+                                        self.planet_stellar_flux_dropdown_selected = "Earth"
+                                elif self.active_tab == "moon":  # moon
+                                    self.moon_dropdown_selected = "Moon"
+                                    self.moon_age_dropdown_selected = "Moon"
+                                    self.moon_radius_dropdown_selected = "Moon"
+                                    self.moon_orbital_distance_dropdown_selected = "Moon"
+                                    self.moon_orbital_period_dropdown_selected = "Moon"
+                                    self.moon_temperature_dropdown_selected = "Moon"
+                                    self.moon_gravity_dropdown_selected = "Moon"
+                                
+                                # Automatically start simulation when at least one star and one planet are placed
+                                stars = [b for b in self.placed_bodies if b["type"] == "star"]
+                                planets = [b for b in self.placed_bodies if b["type"] == "planet"]
+                                
+                                if len(stars) > 0 and len(planets) > 0:
+                                    print(f"DEBUG: Starting simulation. Selected body: {self.selected_body}")
+                                    print(f"DEBUG: show_customization_panel before: {self.show_customization_panel}")
+                                    self.show_simulation_builder = False
+                                    self.show_simulation = True
+                                    # Clear any selected body and active tab when simulation starts for better UX
+                                    self.selected_body = None
+                                    self.selected_body_id = None
+                                    self.show_customization_panel = False
+                                    self.active_tab = None
+                                self.clear_preview()  # Clear preview when simulation starts
                                 # Initialize all orbits when simulation starts
                                 self.initialize_all_orbits()
                                 print(f"DEBUG: show_customization_panel after: {self.show_customization_panel}")
                         else:
                             # Clicked empty space, deselect body
                             self.selected_body = None
+                            self.selected_body_id = None
                             self.show_customization_panel = False
                             self.mass_input_active = False
                             self.planet_dropdown_active = False
@@ -3130,32 +4742,60 @@ class SolarSystemVisualizer:
                                     lunar_mass = new_mass
                                 
                                 if self.mass_min <= lunar_mass <= self.mass_max:
-                                    self.selected_body["mass"] = lunar_mass
+                                    # Ensure we're updating the correct selected body and mass is stored as a Python float
+                                    if self.selected_body:
+                                        # Ensure mass is stored as a Python float, not a numpy array/scalar
+                                        if hasattr(lunar_mass, 'item'):
+                                            self.update_selected_body_property("mass", lunar_mass, "mass")
+                                        else:
+                                            self.update_selected_body_property("mass", lunar_mass, "mass")
+                                # Regenerate orbit grid for non-star bodies after mass change
+                                if self.selected_body and self.selected_body.get("type") != "star":
                                     self.generate_orbit_grid(self.selected_body)
                             else:
                                 if self.mass_min <= new_mass <= self.mass_max:
-                                    self.selected_body["mass"] = new_mass
-                                    if self.selected_body["type"] != "star":
+                                    # Ensure we're updating the correct selected body and mass is stored as a Python float
+                                    if self.selected_body:
+                                        # Ensure mass is stored as a Python float, not a numpy array/scalar
+                                        if hasattr(new_mass, 'item'):
+                                            self.update_selected_body_property("mass", new_mass, "mass")
+                                        else:
+                                            self.update_selected_body_property("mass", new_mass, "mass")
+                                    if self.selected_body and self.selected_body.get("type") != "star":
                                         self.generate_orbit_grid(self.selected_body)
                                 self.mass_input_active = False
                         else:
                             # Invalid input, keep current value
                             if self.selected_body.get('type') == 'moon':
-                                # For moons, mass is already in Lunar masses
-                                lunar_mass = self.selected_body.get('mass', 1.0)
-                                self.mass_input_text = self._format_value(lunar_mass, '', for_dropdown=False)
+                                # CRITICAL: Read mass from registry
+                                body = self.get_selected_body()
+                                if body and body.get('type') == 'moon':
+                                    lunar_mass = body.get('mass', 1.0)
+                                    self.mass_input_text = self._format_value(lunar_mass, '', for_dropdown=False)
+                                else:
+                                    self.mass_input_text = "1.0"
                             else:
-                                self.mass_input_text = self._format_value(self.selected_body.get('mass', 1.0), '', for_dropdown=False)
+                                # CRITICAL: Read mass from registry
+                                body = self.get_selected_body()
+                                if body:
+                                    self.mass_input_text = self._format_value(body.get('mass', 1.0), '', for_dropdown=False)
+                                else:
+                                    self.mass_input_text = "1.0"
                     elif event.key == pygame.K_BACKSPACE:
                         self.mass_input_text = self.mass_input_text[:-1]
                     elif event.key == pygame.K_ESCAPE:
                         self.mass_input_active = False
-                        if self.selected_body.get('type') == 'moon':
-                            # For moons, mass is already in Lunar masses
-                            lunar_mass = self.selected_body.get('mass', 1.0)
-                            self.mass_input_text = self._format_value(lunar_mass, '', for_dropdown=False)
+                        # CRITICAL: Read mass from registry
+                        body = self.get_selected_body()
+                        if body:
+                            if body.get('type') == 'moon':
+                                # For moons, mass is already in Lunar masses
+                                lunar_mass = body.get('mass', 1.0)
+                                self.mass_input_text = self._format_value(lunar_mass, '', for_dropdown=False)
+                            else:
+                                self.mass_input_text = self._format_value(body.get('mass', 1.0), '', for_dropdown=False)
                         else:
-                            self.mass_input_text = self._format_value(self.selected_body.get('mass', 1.0), '', for_dropdown=False)
+                            self.mass_input_text = "1.0"
                     elif event.unicode.isnumeric() or event.unicode == '.' or event.unicode.lower() == 'e' or event.unicode == '-' or event.unicode == '+' or event.unicode.lower() in ['k', 'g', 'm', '☾']:
                         # Allow numbers, decimal point, scientific notation (e, E), signs, and unit characters
                         if self.selected_body.get('type') == 'moon':
@@ -3181,9 +4821,11 @@ class SolarSystemVisualizer:
                         # Try to convert input to float and validate
                         new_luminosity = self._parse_input_value(self.luminosity_input_text)
                         if new_luminosity is not None and self.luminosity_min <= new_luminosity <= self.luminosity_max:
-                            self.selected_body["luminosity"] = new_luminosity
+                            self.update_selected_body_property("luminosity", new_luminosity, "luminosity")
                             # Update habitable zone when luminosity changes
-                            self.selected_body["hz_surface"] = self.create_habitable_zone(self.selected_body)
+                            body = self.get_selected_body()
+                            if body:
+                                body["hz_surface"] = self.create_habitable_zone(body)
                             self.luminosity_input_active = False
                         else:
                             # Invalid input, keep current value
@@ -3210,8 +4852,8 @@ class SolarSystemVisualizer:
                     if event.key == pygame.K_RETURN:
                         temp = self._parse_input_value(self.temperature_input_text)
                         if temp is not None and self.temperature_min <= temp <= self.temperature_max:
-                            if self.selected_body:
-                                self.selected_body["temperature"] = temp
+                            if self.selected_body_id:
+                                self.update_selected_body_property("temperature", temp, "temperature")
                             self.temperature_dropdown_selected = f"Custom ({temp:.0f} K)"
                             self.temperature_input_text = ""
                             self.temperature_input_active = False
@@ -3224,7 +4866,7 @@ class SolarSystemVisualizer:
                     if event.key == pygame.K_RETURN:
                         metallicity = self._parse_input_value(self.metallicity_input_text)
                         if metallicity is not None and self.metallicity_min <= metallicity <= self.metallicity_max:
-                            self.selected_body["metallicity"] = metallicity
+                            self.update_selected_body_property("metallicity", metallicity, "metallosity")
                             self.metallicity_input_text = ""
                             self.metallicity_input_active = False
                             self.show_custom_metallicity_input = False
@@ -3232,11 +4874,30 @@ class SolarSystemVisualizer:
                         self.metallicity_input_text = self.metallicity_input_text[:-1]
                     elif event.unicode.isnumeric() or event.unicode == '.':
                         self.metallicity_input_text += event.unicode
+                if self.show_custom_radius_input and self.selected_body and self.selected_body.get('type') == 'planet':
+                    if event.key == pygame.K_RETURN:
+                        radius = self._parse_input_value(self.radius_input_text)
+                        if radius is not None and 0.1 <= radius <= 20.0:  # Reasonable radius range in R⊕
+                            # CRITICAL: Store radius in Earth radii (R⊕), not pixels
+                            self.update_selected_body_property("radius", radius, "radius")
+                            # Hitbox will be computed from visual radius on render
+                            # No physics updates - radius affects visual only
+                            self.radius_input_text = ""
+                            self.show_custom_radius_input = False
+                            self.radius_input_active = False
+                    elif event.key == pygame.K_BACKSPACE:
+                        self.radius_input_text = self.radius_input_text[:-1]
+                    elif event.key == pygame.K_ESCAPE:
+                        self.show_custom_radius_input = False
+                        self.radius_input_active = False
+                        self.radius_input_text = ""
+                    elif event.unicode.isnumeric() or event.unicode == '.':
+                        self.radius_input_text += event.unicode
                 if self.show_custom_planet_gravity_input and self.selected_body and self.selected_body.get('type') == 'planet':
                     if event.key == pygame.K_RETURN:
                         gravity = self._parse_input_value(self.planet_gravity_input_text)
                         if gravity is not None and 0.1 <= gravity <= 100.0:  # Reasonable gravity range
-                            self.selected_body["gravity"] = gravity
+                            self.update_selected_body_property("gravity", gravity, "gravity")
                             self.planet_gravity_input_text = ""
                             self.show_custom_planet_gravity_input = False
                     elif event.key == pygame.K_BACKSPACE:
@@ -3257,8 +4918,9 @@ class SolarSystemVisualizer:
                                 self.selected_body['equilibrium_temperature'] = current_temp
                             T_eq = self.selected_body.get('equilibrium_temperature', 255)
                             T_surface = T_eq + delta_t
-                            self.selected_body["temperature"] = T_surface
-                            self.selected_body["greenhouse_offset"] = delta_t
+                            # CRITICAL: Use update_selected_body_property to ensure we update ONLY the selected body
+                            self.update_selected_body_property("temperature", T_surface, "temperature")
+                            self.update_selected_body_property("greenhouse_offset", delta_t, "greenhouse_offset")
                             self.planet_atmosphere_dropdown_selected = f"Custom ({delta_t:+.0f} K)"
                             self.planet_atmosphere_input_text = ""
                             self.show_custom_atmosphere_input = False
@@ -3276,7 +4938,7 @@ class SolarSystemVisualizer:
                     if event.key == pygame.K_RETURN:
                         gravity = self._parse_input_value(self.moon_gravity_input_text)
                         if gravity is not None and 0.001 <= gravity <= 100.0:  # Reasonable gravity range for moons
-                            self.selected_body["surfaceGravity"] = gravity
+                            self.update_selected_body_property("gravity", gravity, "gravity")
                             self.moon_gravity_input_text = ""
                             self.show_custom_moon_gravity_input = False
                     elif event.key == pygame.K_BACKSPACE:
@@ -3292,11 +4954,14 @@ class SolarSystemVisualizer:
                         distance = self._parse_input_value(self.orbital_distance_input_text)
                         if distance is not None and 1000 <= distance <= 10000000:  # Reasonable orbital distance range for moons (km)
                             # Scale the orbital distance for visual display
-                            self.selected_body["orbit_radius"] = max(50, min(200, distance / 1000))
-                            # Clear orbit points when orbit radius changes
-                            self.clear_orbit_points(self.selected_body)
-                            # Regenerate orbit grid with new radius
-                            self.generate_orbit_grid(self.selected_body)
+                            new_orbit_radius = max(50, min(200, distance / 1000))
+                            self.update_selected_body_property("orbit_radius", new_orbit_radius, "orbit_radius")
+                            body = self.get_selected_body()
+                            if body:
+                                # Clear orbit points when orbit radius changes
+                                self.clear_orbit_points(body)
+                                # Regenerate orbit grid with new radius
+                                self.generate_orbit_grid(body)
                             self.orbital_distance_input_text = ""
                             self.show_custom_moon_orbital_distance_input = False
                     elif event.key == pygame.K_BACKSPACE:
@@ -3311,12 +4976,15 @@ class SolarSystemVisualizer:
                     if event.key == pygame.K_RETURN:
                         dist = self._parse_input_value(self.orbital_distance_input_text)
                         if dist is not None and self.orbital_distance_min <= dist <= self.orbital_distance_max:
-                            self.selected_body["semiMajorAxis"] = dist
-                            # Update position based on new semi_major_axis
+                            # CRITICAL: Use update_selected_body_property to ensure we update ONLY the selected body
+                            self.update_selected_body_property("semiMajorAxis", dist, "semiMajorAxis")
+                            # CRITICAL: Update position using centralized function
                             parent_star = next((b for b in self.placed_bodies if b["name"] == self.selected_body.get("parent")), None)
+                            if parent_star is None and self.selected_body.get("parent_obj"):
+                                parent_star = self.selected_body["parent_obj"]
                             if parent_star:
-                                # Position planet at the right of the star based on AU_TO_PX
-                                self.selected_body["position"][0] = parent_star["position"][0] + AU_TO_PX * dist
+                                # Use centralized function to ensure position is derived from semiMajorAxis * AU_TO_PX
+                                self.compute_planet_position(self.selected_body, parent_star)
                                 self.selected_body["position"][1] = parent_star["position"][1]
                             self.generate_orbit_grid(self.selected_body)
                             self.planet_orbital_distance_dropdown_selected = f"Custom ({dist:.2f} AU)"
@@ -3389,7 +5057,8 @@ class SolarSystemVisualizer:
                         try:
                             density = float(self.planet_density_input_text)
                             if self.planet_density_min <= density <= self.planet_density_max:
-                                self.selected_body["density"] = density
+                                # CRITICAL: Use update_selected_body_property to ensure we update ONLY the selected body
+                                self.update_selected_body_property("density", density, "density")
                                 self.planet_density_dropdown_selected = f"Custom ({density:.2f} g/cm³)"
                             self.planet_density_input_text = ""
                             self.show_custom_planet_density_input = False
@@ -3403,27 +5072,30 @@ class SolarSystemVisualizer:
                     elif event.unicode.isnumeric() or event.unicode == '.':
                         self.planet_density_input_text += event.unicode
             elif event.type == pygame.MOUSEMOTION:
-                # Update preview position when mouse moves and a tab is active
-                if self.active_tab:
-                    space_area = pygame.Rect(0, self.tab_height + 2*self.tab_margin, 
-                                              self.width, 
-                                              self.height - (self.tab_height + 2*self.tab_margin))
-                    if space_area.collidepoint(event.pos):
-                        self.preview_position = event.pos
-                        # Set preview radius based on object type
-                        if self.active_tab == "star":
-                            self.preview_radius = 20
-                        elif self.active_tab == "planet":
-                            self.preview_radius = 15
-                        else:  # moon
-                            self.preview_radius = 10
-                    else:
-                        self.preview_position = None
-                        self.preview_radius = None
-                else:
-                    self.preview_position = None
-                    self.preview_radius = None
+                # DO NOT update preview_position here - it causes freezing!
+                # Preview position is updated every frame in render loop using pygame.mouse.get_pos()
+                # This ensures smooth, frame-accurate tracking regardless of event timing
+                pass
         return True
+    
+    def clear_preview(self):
+        """Clear placement preview - only call on explicit state changes"""
+        self.preview_position = None
+        self.preview_radius = None
+        self.placement_mode_active = False
+    
+    def start_placement_mode(self, object_type):
+        """Start placement mode for an object type"""
+        self.placement_mode_active = True
+        # Set preview radius once when placement mode begins
+        if object_type == "planet":
+            # For planets, radius is set when planet is selected from dropdown
+            # This is handled separately in the dropdown selection code
+            pass
+        elif object_type == "star":
+            self.preview_radius = 20
+        elif object_type == "moon":
+            self.preview_radius = 10
     
     def update_ambient_colors(self):
         """Update the ambient colors for the title"""
@@ -3463,11 +5135,137 @@ class SolarSystemVisualizer:
         # Draw the orbit line
         pygame.draw.lines(self.screen, color, False, pts, max(1, int(2 * self.camera_zoom)))
     
+    def compute_planet_position(self, planet, parent_star):
+        """
+        MANDATORY: Centralized function to compute planet position from semiMajorAxis.
+        Position is ALWAYS derived from:
+        - parent_star.position
+        - planet.orbit_angle
+        - planet.semiMajorAxis * AU_TO_PX
+        
+        This ensures AU is the single source of truth for planetary distance.
+        """
+        if planet["type"] != "planet" or parent_star is None:
+            return
+        
+        # CRITICAL: orbit_radius_px MUST equal semiMajorAxis * AU_TO_PX
+        orbit_radius_px = planet.get("semiMajorAxis", 1.0) * AU_TO_PX
+        
+        # Compute position from parent position, orbit_angle, and orbit_radius_px
+        x = parent_star["position"][0] + orbit_radius_px * math.cos(planet["orbit_angle"])
+        y = parent_star["position"][1] + orbit_radius_px * math.sin(planet["orbit_angle"])
+        
+        # Update position (derived, never stored independently)
+        planet["position"] = np.array([x, y], dtype=float)
+        
+        # Update orbit_radius for backwards compatibility (derived from semiMajorAxis)
+        planet["orbit_radius"] = float(orbit_radius_px)
+    
+    def recompute_orbit_parameters(self, body, force_recompute=False):
+        """
+        Recompute orbital parameters for a single body based on its current mass and parent.
+        This ensures each body has independent physics calculations.
+        
+        Args:
+            body: The body dict to recompute parameters for
+            force_recompute: If True, always recalculate even if parameters exist
+        """
+        if body["type"] == "star":
+            return
+        
+        # Find parent body
+        parent = body.get("parent_obj")
+        if parent is None:
+            if body.get("parent"):
+                parent = next((b for b in self.placed_bodies if b["name"] == body["parent"]), None)
+            if parent is None:
+                if body["type"] == "planet":
+                    stars = [b for b in self.placed_bodies if b["type"] == "star"]
+                    if stars:
+                        parent = min(stars, key=lambda s: np.linalg.norm(s["position"] - body["position"]))
+                elif body["type"] == "moon":
+                    planets = [b for b in self.placed_bodies if b["type"] == "planet"]
+                    if planets:
+                        parent = min(planets, key=lambda p: np.linalg.norm(p["position"] - body["position"]))
+        
+        if not parent:
+            return
+        
+        # Set permanent parent reference
+        body["parent_obj"] = parent
+        body["parent"] = parent["name"]
+        
+        # CRITICAL: For planets, orbit_radius MUST be derived from semiMajorAxis * AU_TO_PX
+        # Position is derived, never stored. AU is the single source of truth.
+        if body["type"] == "planet":
+            # For planets: orbit_radius is ALWAYS semiMajorAxis * AU_TO_PX
+            semi_major_axis = body.get("semiMajorAxis", 1.0)
+            orbit_radius = semi_major_axis * AU_TO_PX
+            body["orbit_radius"] = float(orbit_radius)
+            
+            # Initialize orbit_angle if not set
+            if body.get("orbit_angle", 0.0) == 0.0:
+                body["orbit_angle"] = float(random.uniform(0, 2 * np.pi))
+                print(f"ORBIT_ANGLE_INIT body_id={body.get('id', 'unknown')} name={body.get('name', 'unknown')} "
+                      f"random_angle={body['orbit_angle']:.6f}")
+            
+            # CRITICAL: Update position immediately using centralized function
+            self.compute_planet_position(body, parent)
+        else:
+            # For moons: calculate orbit radius from current position (or use existing)
+            if force_recompute or body.get("orbit_radius", 0.0) == 0.0:
+                orbit_radius = np.linalg.norm(parent["position"] - body["position"])
+                body["orbit_radius"] = float(orbit_radius)
+                
+                # CRITICAL: Initialize orbit_angle randomly to ensure independent orbital phase
+                existing_angle = body.get("orbit_angle", 0.0)
+                if existing_angle == 0.0:
+                    body["orbit_angle"] = float(random.uniform(0, 2 * np.pi))
+                    print(f"ORBIT_ANGLE_INIT body_id={body.get('id', 'unknown')} name={body.get('name', 'unknown')} "
+                          f"random_angle={body['orbit_angle']:.6f}")
+            else:
+                orbit_radius = body.get("orbit_radius", 0.0)
+                if body.get("orbit_angle", 0.0) == 0.0:
+                    body["orbit_angle"] = float(random.uniform(0, 2 * np.pi))
+                    print(f"ORBIT_ANGLE_INIT body_id={body.get('id', 'unknown')} name={body.get('name', 'unknown')} "
+                          f"random_angle={body['orbit_angle']:.6f}")
+        
+        # CRITICAL: Recalculate orbital speed using BOTH parent mass AND body mass
+        # Standard gravitational parameter: μ = G * (M_parent + M_body)
+        # Angular speed: ω = sqrt(μ / r^3)
+        if orbit_radius > 0:
+            parent_mass = float(parent.get("mass", 0.0))
+            body_mass = float(body.get("mass", 0.0))
+            mu = self.G * (parent_mass + body_mass)  # Combined mass for gravitational parameter
+            base_speed = np.sqrt(mu / (orbit_radius ** 3))
+            
+            # Store mu per-body for verification
+            body["mu"] = float(mu)
+            
+            if body["type"] == "moon":
+                # Moons use faster speed factor for visible circular orbits
+                MOON_SPEED_FACTOR = 5.0
+                body["orbit_speed"] = float(base_speed * MOON_SPEED_FACTOR)
+            else:
+                body["orbit_speed"] = float(base_speed * 10.0)  # Planets use 10.0 factor
+            
+            # Recalculate velocity for circular orbit
+            v = body["orbit_speed"] * orbit_radius
+            body["velocity"] = np.array([-v * np.sin(body["orbit_angle"]), v * np.cos(body["orbit_angle"])], dtype=float).copy()
+        else:
+            body["orbit_speed"] = 0.0
+            body["mu"] = 0.0
+        
+        # Verification print: show per-body orbit parameters
+        print(f"PHYSICS_RECOMPUTE body_id={body.get('id', 'unknown')} name={body.get('name', 'unknown')} "
+              f"mass={body.get('mass', 0.0):.6f} orbit_speed={body.get('orbit_speed', 0.0):.6f} "
+              f"mu={body.get('mu', 0.0):.6f} parent_mass={parent.get('mass', 0.0):.6f}")
+    
     def generate_orbit_grid(self, body):
         """Generate a circular grid for the orbit path"""
         if body["type"] == "star":
             return
-            
+        
         # Find parent body
         parent = None
         if body["type"] == "planet":
@@ -3503,35 +5301,8 @@ class SolarSystemVisualizer:
                 print(f"  preserve_params={preserve_params}")
             
             if not preserve_params:
-                # Calculate orbit radius from current position
-                orbit_radius = np.linalg.norm(parent["position"] - body["position"])
-                body["orbit_radius"] = orbit_radius
-                body["parent"] = parent["name"]
-                
-                # Set initial orbit angle
-                dx = body["position"][0] - parent["position"][0]
-                dy = body["position"][1] - parent["position"][1]
-                body["orbit_angle"] = np.arctan2(dy, dx)
-                
-                # Calculate orbital speed for circular orbit
-                # Angular speed: ω = sqrt(G * M / r^3) for circular orbit
-                # Moons need faster orbital speed for visible motion
-                if orbit_radius > 0:
-                    base_speed = np.sqrt(self.G * parent["mass"] / (orbit_radius ** 3))
-                    if body["type"] == "moon":
-                        # Moons use faster speed factor for visible circular orbits
-                        # Factor of 5.0 makes moon complete ~5 orbits per planet orbit
-                        MOON_SPEED_FACTOR = 5.0
-                        body["orbit_speed"] = base_speed * MOON_SPEED_FACTOR
-                    else:
-                        body["orbit_speed"] = base_speed * 10.0  # Planets still use 10.0
-                else:
-                    body["orbit_speed"] = 0.0
-                
-                # Set initial velocity for circular orbit
-                # v_x = -v * sin(angle), v_y = v * cos(angle)
-                v = body["orbit_speed"] * orbit_radius
-                body["velocity"] = np.array([-v * np.sin(body["orbit_angle"]), v * np.cos(body["orbit_angle"])])
+                # Use recompute_orbit_parameters to ensure per-body physics
+                self.recompute_orbit_parameters(body, force_recompute=True)
                 
                 # Clear orbit points when orbital parameters change
                 self.clear_orbit_points(body)
@@ -3539,8 +5310,14 @@ class SolarSystemVisualizer:
                 # Parameters already set, just ensure parent is set
                 body["parent"] = parent["name"]
             
-            # Always generate grid points for visualization (using current orbit_radius)
-            orbit_radius = body.get("orbit_radius", 0.0)
+            # CRITICAL: For planets, orbit_radius MUST equal semiMajorAxis * AU_TO_PX
+            # For moons, use existing orbit_radius
+            if body["type"] == "planet":
+                orbit_radius = body.get("semiMajorAxis", 1.0) * AU_TO_PX
+            else:
+                orbit_radius = body.get("orbit_radius", 0.0)
+            
+            # Always generate grid points for visualization
             grid_points = []
             for i in range(100):  # 100 points for a smooth circle
                 angle = i * 2 * np.pi / 100
@@ -3606,6 +5383,53 @@ class SolarSystemVisualizer:
             effective_dt = 0.0
         else:
             effective_dt = self.base_time_step * self.time_scale
+        
+        # Update orbital correction animations
+        import time
+        current_time = time.time()
+        bodies_to_remove_from_correction = []
+        
+        for body_id, correction_data in list(self.orbital_corrections.items()):
+            body = self.bodies_by_id.get(body_id)
+            if not body:
+                bodies_to_remove_from_correction.append(body_id)
+                continue
+            
+            elapsed = current_time - correction_data["start_time"]
+            progress = min(elapsed / correction_data["duration"], 1.0)
+            
+            # Smooth easing function (ease-out cubic)
+            eased_progress = 1.0 - (1.0 - progress) ** 3
+            
+            if progress < 1.0:
+                # Still animating - interpolate position
+                start_pos = correction_data["start_pos"]
+                target_pos = correction_data["target_pos"]
+                
+                # Interpolate position
+                current_pos = start_pos + (target_pos - start_pos) * eased_progress
+                body["position"] = np.array(current_pos, dtype=float)
+                
+                # Update visual position for rendering
+                body["visual_position"] = np.array(current_pos, dtype=float)
+            else:
+                # Animation complete - snap to final position and compute from physics
+                body["position"] = np.array(correction_data["target_pos"], dtype=float)
+                body["visual_position"] = np.array(correction_data["target_pos"], dtype=float)
+                body["is_correcting_orbit"] = False
+                
+                # After animation, ensure position is computed from physics (AU)
+                if body["type"] == "planet":
+                    parent_star = body.get("parent_obj")
+                    if parent_star:
+                        self.compute_planet_position(body, parent_star)
+                        body["visual_position"] = body["position"].copy()
+                
+                bodies_to_remove_from_correction.append(body_id)
+        
+        # Remove completed corrections
+        for body_id in bodies_to_remove_from_correction:
+            self.orbital_corrections.pop(body_id, None)
         
         # First, establish parent-child relationships if not already set
         for body in self.placed_bodies:
@@ -3676,14 +5500,24 @@ class SolarSystemVisualizer:
                 if body.get("parent_obj") is None or body["parent_obj"] != parent:
                     body["parent_obj"] = parent
                 
-                # Ensure orbit_speed is set and non-zero
-                orbit_radius = body.get("orbit_radius", 0.0)
+                # CRITICAL: For planets, orbit_radius is derived from semiMajorAxis * AU_TO_PX
+                if body["type"] == "planet":
+                    orbit_radius = body.get("semiMajorAxis", 1.0) * AU_TO_PX
+                    body["orbit_radius"] = float(orbit_radius)
+                else:
+                    orbit_radius = body.get("orbit_radius", 0.0)
+                
                 orbit_speed = body.get("orbit_speed", 0.0)
                 
                 if orbit_speed == 0.0 or orbit_radius == 0.0:
+                    # Use recompute_orbit_parameters to ensure per-body physics calculation
+                    self.recompute_orbit_parameters(body, force_recompute=True)
                     self.generate_orbit_grid(body)
                     # Re-get values after regeneration
-                    orbit_radius = body.get("orbit_radius", 0.0)
+                    if body["type"] == "planet":
+                        orbit_radius = body.get("semiMajorAxis", 1.0) * AU_TO_PX
+                    else:
+                        orbit_radius = body.get("orbit_radius", 0.0)
                     orbit_speed = body.get("orbit_speed", 0.0)
                 
                 # Get parent_obj reference (guaranteed to be set above)
@@ -3703,20 +5537,26 @@ class SolarSystemVisualizer:
                         body["orbit_angle"] -= 2 * np.pi
                     while body["orbit_angle"] < 0:
                         body["orbit_angle"] += 2 * np.pi
+                    
+                    # Verification print: show per-body physics parameters including orbit_angle
+                    print(f"PHYSICS_UPDATE body_id={body.get('id', 'unknown')} name={body.get('name', 'unknown')} "
+                          f"mass={body.get('mass', 0.0):.6f} orbit_speed={body.get('orbit_speed', 0.0):.6f} "
+                          f"mu={body.get('mu', 0.0):.6f} orbit_radius={body.get('orbit_radius', 0.0):.6f} "
+                          f"orbit_angle={body.get('orbit_angle', 0.0):.6f}")
                 
-                # CRITICAL: Always recalculate position from parent EVERY FRAME
-                # Calculate orbital offset from parent (in parent's coordinate frame)
-                if orbit_radius > 0.0 and not np.isnan(orbit_radius) and p is not None:
-                    planet_offset_x = orbit_radius * np.cos(body["orbit_angle"])
-                    planet_offset_y = orbit_radius * np.sin(body["orbit_angle"])
-                    # Set position RELATIVE to parent (hierarchical orbit)
-                    # Use parent_obj for direct reference - ensures we use the actual parent object
-                    trace(f"PRE_WRITE {body['name']} pos={body['position'].copy()} source=update_physics_planet parent_pos={p['position'].copy()}")
-                    body["position"][0] = p["position"][0] + planet_offset_x
-                    body["position"][1] = p["position"][1] + planet_offset_y
-                    # Ensure position is float array
-                    body["position"] = np.array(body["position"], dtype=float)
-                    trace(f"POST_WRITE {body['name']} pos={body['position'].copy()} source=update_physics_planet")
+                # CRITICAL: For planets, position MUST be computed from semiMajorAxis * AU_TO_PX
+                # Use centralized function to ensure AU is single source of truth
+                # BUT: Skip position update if orbital correction animation is active
+                if p is not None:
+                    # Only update position from physics if not correcting orbit
+                    if not body.get("is_correcting_orbit", False):
+                        trace(f"PRE_WRITE {body['name']} pos={body['position'].copy()} source=update_physics_planet parent_pos={p['position'].copy()}")
+                        self.compute_planet_position(body, p)
+                        trace(f"POST_WRITE {body['name']} pos={body['position'].copy()} source=update_physics_planet")
+                        # Update visual_position to match position when not animating
+                        if "visual_position" in body:
+                            body["visual_position"] = body["position"].copy()
+                    orbit_radius = body.get("orbit_radius", 0.0)  # Update orbit_radius from computed value
                 
                 # Skip remaining updates if paused
                 if effective_dt == 0.0:
@@ -3724,7 +5564,7 @@ class SolarSystemVisualizer:
                 
                 # Update velocity for circular orbit (relative to parent's frame)
                 v = body["orbit_speed"] * body["orbit_radius"]
-                body["velocity"] = np.array([-v * np.sin(body["orbit_angle"]), v * np.cos(body["orbit_angle"])])
+                body["velocity"] = np.array([-v * np.sin(body["orbit_angle"]), v * np.cos(body["orbit_angle"])]).copy()  # Ensure independent copy
                 
                 # Update rotation angle
                 body["rotation_angle"] += body["rotation_speed"] * effective_dt
@@ -3787,6 +5627,8 @@ class SolarSystemVisualizer:
                 orbit_speed = body.get("orbit_speed", 0.0)
                 
                 if orbit_speed == 0.0 or orbit_radius == 0.0:
+                    # Use recompute_orbit_parameters to ensure per-body physics calculation
+                    self.recompute_orbit_parameters(body, force_recompute=True)
                     self.generate_orbit_grid(body)
                     # Re-get values after regeneration
                     orbit_radius = body.get("orbit_radius", 0.0)
@@ -3818,6 +5660,12 @@ class SolarSystemVisualizer:
                         body["orbit_angle"] -= 2 * np.pi
                     while body["orbit_angle"] < 0:
                         body["orbit_angle"] += 2 * np.pi
+                    
+                    # Verification print: show per-body physics parameters including orbit_angle
+                    print(f"PHYSICS_UPDATE body_id={body.get('id', 'unknown')} name={body.get('name', 'unknown')} "
+                          f"mass={body.get('mass', 0.0):.6f} orbit_speed={body.get('orbit_speed', 0.0):.6f} "
+                          f"mu={body.get('mu', 0.0):.6f} orbit_radius={body.get('orbit_radius', 0.0):.6f} "
+                          f"orbit_angle={body.get('orbit_angle', 0.0):.6f}")
                 
                 # Step 2: ALWAYS recalculate position from parent EVERY FRAME (even when paused)
                 # Formula: moon.position = planet.position + [r * cos(angle), r * sin(angle)]
@@ -3877,7 +5725,7 @@ class SolarSystemVisualizer:
                 
                 # Update velocity for circular orbit (relative to parent's frame)
                 v = body["orbit_speed"] * body["orbit_radius"]
-                body["velocity"] = np.array([-v * np.sin(body["orbit_angle"]), v * np.cos(body["orbit_angle"])])
+                body["velocity"] = np.array([-v * np.sin(body["orbit_angle"]), v * np.cos(body["orbit_angle"])]).copy()  # Ensure independent copy
                 
                 # Update rotation angle
                 body["rotation_angle"] += body["rotation_speed"] * effective_dt
@@ -4104,6 +5952,11 @@ class SolarSystemVisualizer:
     
     def format_age_display(self, age: float) -> str:
         """Format age for display, converting to Myr if less than 0.5 Gyr"""
+        # Ensure age is a Python float, not a numpy array/scalar
+        if hasattr(age, 'item'):
+            age = float(age.item())
+        else:
+            age = float(age)
         if age < 0.5:
             myr = age * 1000  # Convert Gyr to Myr
             return f"{myr:.1f} Myr"
@@ -4234,8 +6087,19 @@ class SolarSystemVisualizer:
             )
             self.dropdown_options_rects.append(option_rect)
             
-            # Draw option background
-            pygame.draw.rect(self.dropdown_surface, (255, 255, 255), option_rect)  # Solid white background
+            # Check if this option is selected (for planet dropdown in placement mode)
+            is_selected = False
+            if self.planet_dropdown_visible:
+                # In placement mode, check if this option matches the selected planet
+                if not self.selected_body or self.selected_body.get('type') != 'planet':
+                    if self.planet_dropdown_selected == name:
+                        is_selected = True
+            
+            # Draw option background with highlighting if selected
+            if is_selected:
+                pygame.draw.rect(self.dropdown_surface, (200, 220, 255), option_rect)  # Light blue highlight
+            else:
+                pygame.draw.rect(self.dropdown_surface, (255, 255, 255), option_rect)  # Solid white background
             pygame.draw.rect(self.dropdown_surface, self.dropdown_border_color, option_rect, self.dropdown_border_width)
             
             # Draw option text
@@ -4503,6 +6367,64 @@ class SolarSystemVisualizer:
             
             # Draw the overlay on the screen
             self.screen.blit(overlay, (0, 0))
+    
+    def render_planet_preset_dropdown(self):
+        """Render the planet preset dropdown menu on top of everything else"""
+        if self.planet_preset_dropdown_visible and self.active_tab == "planet":
+            # Get the planet tab rect
+            planet_tab_rect = self.tabs.get("planet")
+            if planet_tab_rect:
+                dropdown_width = 140
+                dropdown_height = len(self.planet_preset_options) * 28
+                self.planet_preset_dropdown_rect = pygame.Rect(
+                    planet_tab_rect.right - dropdown_width,
+                    planet_tab_rect.bottom + 2,
+                    dropdown_width,
+                    dropdown_height
+                )
+                
+                # Create an overlay surface to ensure dropdown is on top
+                overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+                overlay.fill((0, 0, 0, 0))  # Transparent background
+                
+                # Draw dropdown background with white fill on overlay
+                pygame.draw.rect(overlay, self.WHITE, self.planet_preset_dropdown_rect)
+                pygame.draw.rect(overlay, self.BLACK, self.planet_preset_dropdown_rect, 2)
+                
+                # Draw preset options on overlay
+                for i, preset_name in enumerate(self.planet_preset_options):
+                    option_rect = pygame.Rect(
+                        self.planet_preset_dropdown_rect.left,
+                        self.planet_preset_dropdown_rect.top + i * 28,
+                        self.planet_preset_dropdown_rect.width,
+                        28
+                    )
+                    # Check if this option is selected (for placement mode)
+                    is_selected = False
+                    if not self.selected_body or self.selected_body.get('type') != 'planet':
+                        if self.planet_dropdown_selected == preset_name:
+                            is_selected = True
+                    
+                    # Draw option background with highlighting if selected
+                    if is_selected:
+                        pygame.draw.rect(overlay, (200, 220, 255), option_rect)  # Light blue highlight
+                    # Border is already drawn by the outer rect, but draw separator lines between options
+                    if i > 0:
+                        pygame.draw.line(overlay, self.BLACK, 
+                                       (option_rect.left, option_rect.top), 
+                                       (option_rect.right, option_rect.top), 1)
+                    
+                    text_surface = self.tab_font.render(preset_name, True, self.BLACK)
+                    text_rect = text_surface.get_rect(midleft=(option_rect.left + 8, option_rect.centery))
+                    overlay.blit(text_surface, text_rect)
+                
+                # Blit overlay onto screen (ensures it's on top)
+                self.screen.blit(overlay, (0, 0))
+                
+                # Debug output (only print once per frame to avoid spam)
+                if not hasattr(self, '_last_dropdown_debug') or self._last_dropdown_debug != self.planet_preset_dropdown_visible:
+                    print(f"DEBUG: Rendering preset dropdown at {self.planet_preset_dropdown_rect}, visible={self.planet_preset_dropdown_visible}, active_tab={self.active_tab}, tab_rect={planet_tab_rect}")
+                    self._last_dropdown_debug = self.planet_preset_dropdown_visible
 
     def render_simulation(self, engine: SimulationEngine):
         """Render the solar system simulation"""
@@ -4523,12 +6445,30 @@ class SolarSystemVisualizer:
                 pygame.draw.rect(self.screen, self.WHITE, tab_rect, 2, border_radius=5)
             else:
                 pygame.draw.rect(self.screen, self.GRAY, tab_rect, border_radius=5)
-            
+
             # Draw tab text
             tab_text = self.tab_font.render(tab_name.capitalize(), True, self.WHITE)
             tab_text_rect = tab_text.get_rect(center=tab_rect.center)
             self.screen.blit(tab_text, tab_text_rect)
-        
+            
+            # Draw preset selector arrow for Planet tab (bottom-right corner)
+            if tab_name == "planet":
+                # Calculate arrow position in bottom-right of tab
+                arrow_x = tab_rect.right - self.planet_preset_arrow_size - 3
+                arrow_y = tab_rect.bottom - self.planet_preset_arrow_size - 3
+                self.planet_preset_arrow_rect = pygame.Rect(
+                    arrow_x - 2, arrow_y - 2,
+                    self.planet_preset_arrow_size + 4, self.planet_preset_arrow_size + 4
+                )
+                
+                # Draw small chevron/down arrow
+                arrow_points = [
+                    (arrow_x, arrow_y),
+                    (arrow_x + self.planet_preset_arrow_size, arrow_y),
+                    (arrow_x + self.planet_preset_arrow_size // 2, arrow_y + self.planet_preset_arrow_size)
+                ]
+                pygame.draw.polygon(self.screen, self.WHITE, arrow_points)
+
         # Draw customization panel only if a body is selected
         if self.show_customization_panel and self.selected_body:
             # Draw plain white panel
@@ -4572,15 +6512,19 @@ class SolarSystemVisualizer:
                 pygame.draw.rect(self.screen, self.BLUE if self.planet_dropdown_active else self.GRAY, 
                                self.planet_dropdown_rect, 1)
                 dropdown_text = "Select Reference Planet"
-                if self.planet_dropdown_selected:
-                    # Find the selected option's value
-                    selected = next(((name, value) for name, value in self.planet_dropdown_options if name == self.planet_dropdown_selected), None)
-                    if selected:
-                        name, value = selected
-                        if value is not None:
-                            dropdown_text = f"{name} (" + self._format_value(value, 'M⊕') + ")"
-                        else:
-                            dropdown_text = name  # Custom
+                # CRITICAL: Read dropdown selection from the selected body's dict, not global state
+                body = self.get_selected_body()
+                if body:
+                    body_dropdown_selected = body.get("planet_dropdown_selected")
+                    if body_dropdown_selected:
+                        # Find the selected option's value
+                        selected = next(((name, value) for name, value in self.planet_dropdown_options if name == body_dropdown_selected), None)
+                        if selected:
+                            name, value = selected
+                            if value is not None:
+                                dropdown_text = f"{name} (" + self._format_value(value, 'M⊕') + ")"
+                            else:
+                                dropdown_text = name  # Custom
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.planet_dropdown_rect.left + 5, 
                                                          self.planet_dropdown_rect.centery))
@@ -4638,18 +6582,23 @@ class SolarSystemVisualizer:
                     pygame.draw.rect(self.screen, self.WHITE, self.mass_input_rect, 2)
                     pygame.draw.rect(self.screen, self.BLUE if self.mass_input_active else self.GRAY, 
                                    self.mass_input_rect, 1)
-                    if self.selected_body.get('type') == 'moon':
-                        # For moons, mass is already in Lunar masses
-                        lunar_mass = self.selected_body.get('mass', 1.0)
-                        if self.mass_input_active:
-                            text_surface = self.subtitle_font.render(self.mass_input_text, True, self.BLACK)
+                    # CRITICAL: Read mass from registry to ensure we get the correct body
+                    body = self.get_selected_body()
+                    if body:
+                        if body.get('type') == 'moon':
+                            # For moons, mass is already in Lunar masses
+                            lunar_mass = body.get('mass', 1.0)
+                            if self.mass_input_active:
+                                text_surface = self.subtitle_font.render(self.mass_input_text, True, self.BLACK)
+                            else:
+                                text_surface = self.subtitle_font.render(self._format_value(lunar_mass, '', for_dropdown=False), True, self.BLACK)
                         else:
-                            text_surface = self.subtitle_font.render(self._format_value(lunar_mass, '', for_dropdown=False), True, self.BLACK)
+                            if self.mass_input_active:
+                                text_surface = self.subtitle_font.render(self.mass_input_text, True, self.BLACK)
+                            else:
+                                text_surface = self.subtitle_font.render(self._format_value(body.get('mass', 1.0), '', for_dropdown=False), True, self.BLACK)
                     else:
-                        if self.mass_input_active:
-                            text_surface = self.subtitle_font.render(self.mass_input_text, True, self.BLACK)
-                        else:
-                            text_surface = self.subtitle_font.render(self._format_value(self.selected_body.get('mass', 1.0), '', for_dropdown=False), True, self.BLACK)
+                        text_surface = self.subtitle_font.render("N/A", True, self.BLACK)
                     text_rect = text_surface.get_rect(midleft=(self.mass_input_rect.left + 5, 
                                                              self.mass_input_rect.centery))
                     self.screen.blit(text_surface, text_rect)
@@ -4669,7 +6618,12 @@ class SolarSystemVisualizer:
                     if self.mass_input_active:
                         text_surface = self.subtitle_font.render(self.mass_input_text, True, self.BLACK)
                     else:
-                        text_surface = self.subtitle_font.render(self._format_value(self.selected_body.get('mass', 1.0), '', for_dropdown=False), True, self.BLACK)
+                        # CRITICAL: Read mass from registry
+                        body = self.get_selected_body()
+                        if body:
+                            text_surface = self.subtitle_font.render(self._format_value(body.get('mass', 1.0), '', for_dropdown=False), True, self.BLACK)
+                        else:
+                            text_surface = self.subtitle_font.render("N/A", True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.mass_input_rect.left + 5, self.mass_input_rect.centery))
                 self.screen.blit(text_surface, text_rect)
             
@@ -4949,6 +6903,21 @@ class SolarSystemVisualizer:
                 text_rect = text_surface.get_rect(midleft=(self.planet_radius_dropdown_rect.left + 5, 
                                                          self.planet_radius_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
+                
+                # Show custom radius input if "Custom" is selected, just below dropdown
+                if self.show_custom_radius_input and self.selected_body.get('type') == 'planet':
+                    custom_radius_label = self.subtitle_font.render("Enter Custom Radius (R⊕):", True, self.BLACK)
+                    custom_radius_label_rect = custom_radius_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 275))
+                    self.screen.blit(custom_radius_label, custom_radius_label_rect)
+                    
+                    custom_radius_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 305, self.customization_panel_width - 100, 30)
+                    pygame.draw.rect(self.screen, self.WHITE, custom_radius_input_rect, 2)
+                    pygame.draw.rect(self.screen, self.BLUE if self.radius_input_active else self.GRAY,
+                                   custom_radius_input_rect, 1)
+                    text_surface = self.subtitle_font.render(self.radius_input_text, True, self.BLACK)
+                    text_rect = text_surface.get_rect(midleft=(custom_radius_input_rect.left + 5,
+                                                             custom_radius_input_rect.centery))
+                    self.screen.blit(text_surface, text_rect)
             
             # TEMPERATURE SECTION (only for planets)
             if self.selected_body.get('type') == 'planet':
@@ -5378,23 +7347,55 @@ class SolarSystemVisualizer:
             if body["type"] != "star":
                 self.draw_orbit(body)
             
-            # Draw body
+            # Draw body using base_color (per-object, stored as hex string)
+            base_color_hex = body.get("base_color")
+            if base_color_hex:
+                color = hex_to_rgb(base_color_hex)
+            else:
+                # Fallback to default colors if base_color not set
+                if body["type"] == "star":
+                    color = hex_to_rgb(CELESTIAL_BODY_COLORS.get("Sun", "#FDB813"))
+                elif body["type"] == "planet":
+                    color = hex_to_rgb(CELESTIAL_BODY_COLORS.get(body.get("name", "Earth"), "#2E7FFF"))
+                else:  # moon
+                    color = hex_to_rgb(CELESTIAL_BODY_COLORS.get("Moon", "#B0B0B0"))
+            
             if body["type"] == "star":
-                color = self.YELLOW
                 pos = self.world_to_screen(body["position"])
+                # Stars: radius is in pixels (legacy)
                 pygame.draw.circle(self.screen, color, (int(pos[0]), int(pos[1])), max(1, int(body["radius"] * self.camera_zoom)))
             else:
-                color = self.BLUE if body["type"] == "planet" else self.WHITE
                 self.draw_rotating_body(body, color)
             
-            # Highlight selected body
-            if self.selected_body and body["name"] == self.selected_body["name"]:
+            # Highlight selected body (compare object identity, not name, to ensure only the clicked object is highlighted)
+            if self.selected_body is body:
                 pos = self.world_to_screen(body["position"])
-                pygame.draw.circle(self.screen, self.RED, (int(pos[0]), int(pos[1])), max(1, int((body["radius"] + 5) * self.camera_zoom)), 2)
+                # CRITICAL: For planets, compute visual radius from R⊕
+                if body["type"] == "planet":
+                    visual_radius = body["radius"] * EARTH_RADIUS_PX
+                else:
+                    visual_radius = body["radius"]
+                pygame.draw.circle(self.screen, self.RED, (int(pos[0]), int(pos[1])), max(1, int((visual_radius + 5) * self.camera_zoom)), 2)
         
-        # Draw placement preview if active tab is selected
-        if self.active_tab and self.preview_position and self.preview_radius:
-            self.draw_placement_preview()
+        # Update placement preview position EVERY FRAME (frame-driven, not event-driven)
+        # This ensures smooth cursor following regardless of event timing
+        mouse_pos = pygame.mouse.get_pos()
+        
+        # Update preview position every frame if in placement mode
+        if self.placement_mode_active or self.planet_dropdown_selected:
+            # For planets, always follow cursor everywhere
+            if self.planet_dropdown_selected:
+                self.preview_position = mouse_pos
+            # For stars and moons, only show when mouse is over space area
+            elif self.active_tab:
+                space_area = pygame.Rect(0, self.tab_height + 2*self.tab_margin, 
+                                          self.width, 
+                                          self.height - (self.tab_height + 2*self.tab_margin))
+                if space_area.collidepoint(mouse_pos):
+                    self.preview_position = mouse_pos
+                else:
+                    # Clear preview for stars/moons when mouse leaves space area
+                    self.preview_position = None
         
         # Draw instructions
         if self.active_tab:
@@ -5413,23 +7414,72 @@ class SolarSystemVisualizer:
         # Render dropdown menu last, so it appears on top of everything
         self.render_dropdown()
         
+        # Render planet preset dropdown on top of everything
+        self.render_planet_preset_dropdown()
+        
+        # Draw preview LAST so it appears on top of everything (including dropdowns)
+        # This ensures the preview is always visible and follows cursor smoothly
+        # BUT hide it when hovering over the planet preset dropdown for better visibility
+        # (mouse_pos already available from preview position update above)
+        should_hide_preview = False
+        if (self.planet_preset_dropdown_visible and 
+            self.planet_preset_dropdown_rect and 
+            self.planet_preset_dropdown_rect.collidepoint(mouse_pos)):
+            should_hide_preview = True
+        
+        if self.preview_position and self.preview_radius and self.preview_radius > 0 and not should_hide_preview:
+            self.draw_placement_preview()
+
         pygame.display.flip()
     
     def draw_placement_preview(self):
         """Draw a semi-transparent preview of the object being placed"""
         if not self.preview_position or not self.preview_radius:
+            # Debug: Print why preview isn't drawing
+            if not hasattr(self, '_last_no_draw_debug') or time.time() - self._last_no_draw_debug > 1.0:
+                print(f"DEBUG: draw_placement_preview skipped. preview_position={self.preview_position}, preview_radius={self.preview_radius}")
+                self._last_no_draw_debug = time.time()
             return
         
+        # Ensure preview_radius is valid (greater than 0)
+        if self.preview_radius <= 0:
+            print(f"WARNING: Invalid preview_radius: {self.preview_radius}")
+            return
+        
+        # Debug: Print once per second when drawing preview
+        if not hasattr(self, '_last_draw_debug') or time.time() - self._last_draw_debug > 1.0:
+            print(f"DEBUG: Drawing preview at {self.preview_position}, radius={self.preview_radius}, planet={self.planet_dropdown_selected}")
+            self._last_draw_debug = time.time()
+        
         # Determine preview color and glow color based on object type
-        if self.active_tab == "star":
-            preview_color = (255, 255, 0)  # Yellow
-            glow_color = (255, 255, 100)  # Bright yellow for glow
+        # Use base_color from presets when available
+        if self.planet_dropdown_selected:
+            # Get planet's base_color from preset
+            planet_name = self.planet_dropdown_selected
+            if planet_name in SOLAR_SYSTEM_PLANET_PRESETS:
+                base_color_hex = SOLAR_SYSTEM_PLANET_PRESETS[planet_name].get("base_color")
+                if base_color_hex:
+                    preview_color = hex_to_rgb(base_color_hex)
+                else:
+                    # Fallback to Earth color if not found
+                    preview_color = hex_to_rgb(CELESTIAL_BODY_COLORS.get("Earth", "#2E7FFF"))
+            else:
+                # Fallback for custom planets
+                preview_color = hex_to_rgb(CELESTIAL_BODY_COLORS.get("Earth", "#2E7FFF"))
+            # Create lighter version for glow (brighten by ~30%)
+            glow_color = tuple(min(255, int(c * 1.3)) for c in preview_color)
+        elif self.active_tab == "star":
+            # Use Sun color
+            preview_color = hex_to_rgb(CELESTIAL_BODY_COLORS.get("Sun", "#FDB813"))
+            glow_color = tuple(min(255, int(c * 1.2)) for c in preview_color)  # Slightly brighter
         elif self.active_tab == "planet":
-            preview_color = (100, 150, 255)  # Blue
-            glow_color = (150, 200, 255)  # Light blue for glow
+            # Generic planet color (shouldn't happen, but fallback)
+            preview_color = hex_to_rgb(CELESTIAL_BODY_COLORS.get("Earth", "#2E7FFF"))
+            glow_color = tuple(min(255, int(c * 1.3)) for c in preview_color)
         else:  # moon
-            preview_color = (200, 200, 200)  # Gray
-            glow_color = (230, 230, 230)  # Light gray for glow
+            # Use Moon color
+            preview_color = hex_to_rgb(CELESTIAL_BODY_COLORS.get("Moon", "#B0B0B0"))
+            glow_color = tuple(min(255, int(c * 1.2)) for c in preview_color)  # Slightly brighter
         
         center_x, center_y = int(self.preview_position[0]), int(self.preview_position[1])
         
@@ -5448,7 +7498,8 @@ class SolarSystemVisualizer:
         # Draw main preview circle (semi-transparent)
         preview_surface = pygame.Surface((self.preview_radius * 2 + 4, self.preview_radius * 2 + 4), pygame.SRCALPHA)
         preview_center = (preview_surface.get_width() // 2, preview_surface.get_height() // 2)
-        pygame.draw.circle(preview_surface, (*preview_color, 128), preview_center, self.preview_radius)
+        # Use alpha 180 for better visibility (was 128)
+        pygame.draw.circle(preview_surface, (*preview_color, 180), preview_center, self.preview_radius)
         self.screen.blit(preview_surface, (center_x - preview_surface.get_width() // 2,
                                           center_y - preview_surface.get_height() // 2))
         
@@ -5459,7 +7510,11 @@ class SolarSystemVisualizer:
                                           center_y - outline_surface.get_height() // 2))
         
         # Draw tooltip below the preview
-        tooltip_text = "Click to confirm placement."
+        # Show planet name if a planet is selected for placement (regardless of active_tab)
+        if self.planet_dropdown_selected:
+            tooltip_text = f"Click to place {self.planet_dropdown_selected}"
+        else:
+            tooltip_text = "Click to confirm placement."
         tooltip_surface = self.subtitle_font.render(tooltip_text, True, self.WHITE)
         tooltip_rect = tooltip_surface.get_rect(center=(center_x, center_y + self.preview_radius + 25))
         
@@ -5572,8 +7627,16 @@ class SolarSystemVisualizer:
     
     def draw_rotating_body(self, body, color):
         """Draw a celestial body with rotation"""
-        # Create a surface for the body
-        radius = max(1, int(body["radius"] * self.camera_zoom))
+        # CRITICAL: For planets, radius is in Earth radii (R⊕), compute visual radius
+        # For stars and moons, radius is in pixels (legacy)
+        if body["type"] == "planet":
+            # Compute visual radius: planet["radius"] * EARTH_RADIUS_PX
+            visual_radius = body["radius"] * EARTH_RADIUS_PX
+        else:
+            # Stars and moons: radius is already in pixels
+            visual_radius = body["radius"]
+        
+        radius = max(1, int(visual_radius * self.camera_zoom))
         surface_size = radius * 2 + 4  # Add some padding
         surface = pygame.Surface((surface_size, surface_size), pygame.SRCALPHA)
         
@@ -5586,9 +7649,37 @@ class SolarSystemVisualizer:
         end_y = radius + 2 + radius * 0.8 * np.sin(rotation_angle)
         pygame.draw.line(surface, self.WHITE, (radius + 2, radius + 2), (end_x, end_y), 2)
         
-        # Blit the surface onto the screen (apply camera)
-        pos = self.world_to_screen(body["position"])
+        # Use visual_position if correcting orbit, otherwise use position
+        render_pos = body.get("visual_position", body["position"])
+        pos = self.world_to_screen(render_pos)
         self.screen.blit(surface, (pos[0] - radius - 2, pos[1] - radius - 2))
+        
+        # Draw orbital correction guide if animating
+        if body.get("is_correcting_orbit", False) and body["type"] == "planet":
+            body_id = body.get("id")
+            if body_id and body_id in self.orbital_corrections:
+                correction = self.orbital_corrections[body_id]
+                parent_star = body.get("parent_obj")
+                if parent_star:
+                    star_pos = self.world_to_screen(parent_star["position"])
+                    planet_pos = self.world_to_screen(render_pos)
+                    target_pos = self.world_to_screen(correction["target_pos"])
+                    
+                    # Draw faint radial guide line from star to target
+                    guide_color = (200, 200, 200, 128)  # Semi-transparent gray
+                    pygame.draw.line(self.screen, guide_color[:3], star_pos, target_pos, 1)
+                    
+                    # Draw small label near planet
+                    au_value = body.get("orbit_radius_au", body.get("semiMajorAxis", 1.0))
+                    label_text = f"Moving to {au_value:.2f} AU"
+                    label_surface = self.subtitle_font.render(label_text, True, (255, 255, 255, 180))
+                    label_rect = label_surface.get_rect(center=(planet_pos[0], planet_pos[1] - radius - 15))
+                    # Draw semi-transparent background for label
+                    bg_rect = label_rect.inflate(10, 5)
+                    bg_surface = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
+                    bg_surface.fill((0, 0, 0, 128))
+                    self.screen.blit(bg_surface, bg_rect)
+                    self.screen.blit(label_surface, label_rect)
     
     def render_simulation_builder(self):
         """Render the simulation builder screen with tabs and space area"""
@@ -5609,12 +7700,30 @@ class SolarSystemVisualizer:
                 pygame.draw.rect(self.screen, self.WHITE, tab_rect, 2, border_radius=5)
             else:
                 pygame.draw.rect(self.screen, self.GRAY, tab_rect, border_radius=5)
-            
+
             # Draw tab text
             tab_text = self.tab_font.render(tab_name.capitalize(), True, self.WHITE)
             tab_text_rect = tab_text.get_rect(center=tab_rect.center)
             self.screen.blit(tab_text, tab_text_rect)
-        
+            
+            # Draw preset selector arrow for Planet tab (bottom-right corner)
+            if tab_name == "planet":
+                # Calculate arrow position in bottom-right of tab
+                arrow_x = tab_rect.right - self.planet_preset_arrow_size - 3
+                arrow_y = tab_rect.bottom - self.planet_preset_arrow_size - 3
+                self.planet_preset_arrow_rect = pygame.Rect(
+                    arrow_x - 2, arrow_y - 2,
+                    self.planet_preset_arrow_size + 4, self.planet_preset_arrow_size + 4
+                )
+                
+                # Draw small chevron/down arrow
+                arrow_points = [
+                    (arrow_x, arrow_y),
+                    (arrow_x + self.planet_preset_arrow_size, arrow_y),
+                    (arrow_x + self.planet_preset_arrow_size // 2, arrow_y + self.planet_preset_arrow_size)
+                ]
+                pygame.draw.polygon(self.screen, self.WHITE, arrow_points)
+
         # Draw customization panel only if a body is selected
         if self.show_customization_panel and self.selected_body:
             # Draw plain white panel
@@ -5646,8 +7755,12 @@ class SolarSystemVisualizer:
                 pygame.draw.rect(self.screen, self.BLUE if self.planet_dropdown_active else self.GRAY, 
                                self.planet_dropdown_rect, 1)
                 dropdown_text = "Select Reference Planet"
-                if self.planet_dropdown_selected:
-                    dropdown_text = self.planet_dropdown_selected
+                # CRITICAL: Read dropdown selection from the selected body's dict, not global state
+                body = self.get_selected_body()
+                if body:
+                    body_dropdown_selected = body.get("planet_dropdown_selected")
+                    if body_dropdown_selected:
+                        dropdown_text = body_dropdown_selected
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.planet_dropdown_rect.left + 5, 
                                                          self.planet_dropdown_rect.centery))
@@ -5665,7 +7778,12 @@ class SolarSystemVisualizer:
                     if self.mass_input_active:
                         text_surface = self.subtitle_font.render(self.mass_input_text, True, self.BLACK)
                     else:
-                        text_surface = self.subtitle_font.render(self._format_value(self.selected_body.get('mass', 1.0), '', for_dropdown=False), True, self.BLACK)
+                        # CRITICAL: Read mass from registry
+                        body = self.get_selected_body()
+                        if body:
+                            text_surface = self.subtitle_font.render(self._format_value(body.get('mass', 1.0), '', for_dropdown=False), True, self.BLACK)
+                        else:
+                            text_surface = self.subtitle_font.render("N/A", True, self.BLACK)
                     text_rect = text_surface.get_rect(midleft=(self.mass_input_rect.left + 5, 
                                                              self.mass_input_rect.centery))
                     self.screen.blit(text_surface, text_rect)
@@ -5976,6 +8094,21 @@ class SolarSystemVisualizer:
                 text_rect = text_surface.get_rect(midleft=(self.planet_radius_dropdown_rect.left + 5, 
                                                          self.planet_radius_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
+                
+                # Show custom radius input if "Custom" is selected, just below dropdown
+                if self.show_custom_radius_input and self.selected_body.get('type') == 'planet':
+                    custom_radius_label = self.subtitle_font.render("Enter Custom Radius (R⊕):", True, self.BLACK)
+                    custom_radius_label_rect = custom_radius_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 275))
+                    self.screen.blit(custom_radius_label, custom_radius_label_rect)
+                    
+                    custom_radius_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 305, self.customization_panel_width - 100, 30)
+                    pygame.draw.rect(self.screen, self.WHITE, custom_radius_input_rect, 2)
+                    pygame.draw.rect(self.screen, self.BLUE if self.radius_input_active else self.GRAY,
+                                   custom_radius_input_rect, 1)
+                    text_surface = self.subtitle_font.render(self.radius_input_text, True, self.BLACK)
+                    text_rect = text_surface.get_rect(midleft=(custom_radius_input_rect.left + 5,
+                                                             custom_radius_input_rect.centery))
+                    self.screen.blit(text_surface, text_rect)
             
             # TEMPERATURE SECTION (only for planets)
             if self.selected_body.get('type') == 'planet':
@@ -6345,10 +8478,12 @@ class SolarSystemVisualizer:
             # Draw orbit toggles (only for planets and moons)
             if self.selected_body.get('type') in ['planet', 'moon']:
                 # Ensure orbit attributes exist
-                if "orbit_enabled" not in self.selected_body:
-                    self.selected_body["orbit_enabled"] = True
-                if "max_orbit_points" not in self.selected_body:
-                    self.selected_body["max_orbit_points"] = 2000
+                body = self.get_selected_body()
+                if body:
+                    if "orbit_enabled" not in body:
+                        body["orbit_enabled"] = True
+                    if "max_orbit_points" not in body:
+                        body["max_orbit_points"] = 2000
                 
                 # Draw "Show Orbit" checkbox
                 orbit_enabled = self.selected_body.get("orbit_enabled", True)
@@ -6413,49 +8548,68 @@ class SolarSystemVisualizer:
             if body["type"] != "star":
                 self.draw_orbit(body)
             
-            # Draw body
+            # Draw body using base_color (per-object, stored as hex string)
+            base_color_hex = body.get("base_color")
+            if base_color_hex:
+                color = hex_to_rgb(base_color_hex)
+            else:
+                # Fallback to default colors if base_color not set
+                if body["type"] == "star":
+                    color = hex_to_rgb(CELESTIAL_BODY_COLORS.get("Sun", "#FDB813"))
+                elif body["type"] == "planet":
+                    color = hex_to_rgb(CELESTIAL_BODY_COLORS.get(body.get("name", "Earth"), "#2E7FFF"))
+                else:  # moon
+                    color = hex_to_rgb(CELESTIAL_BODY_COLORS.get("Moon", "#B0B0B0"))
+            
             if body["type"] == "star":
-                color = self.YELLOW
                 pos = self.world_to_screen(body["position"])
+                # Stars: radius is in pixels (legacy)
                 pygame.draw.circle(self.screen, color, (int(pos[0]), int(pos[1])), max(1, int(body["radius"] * self.camera_zoom)))
             else:
-                color = self.BLUE if body["type"] == "planet" else self.WHITE
-                
                 # Draw the rotating body
                 self.draw_rotating_body(body, color)
             
-            # Highlight selected body
-            if self.selected_body and body["name"] == self.selected_body["name"]:
+            # Highlight selected body (compare object identity, not name, to ensure only the clicked object is highlighted)
+            if self.selected_body is body:
                 pos = self.world_to_screen(body["position"])
-                pygame.draw.circle(self.screen, self.RED, (int(pos[0]), int(pos[1])), max(1, int((body["radius"] + 5) * self.camera_zoom)), 2)
+                # CRITICAL: For planets, compute visual radius from R⊕
+                if body["type"] == "planet":
+                    visual_radius = body["radius"] * EARTH_RADIUS_PX
+                else:
+                    visual_radius = body["radius"]
+                pygame.draw.circle(self.screen, self.RED, (int(pos[0]), int(pos[1])), max(1, int((visual_radius + 5) * self.camera_zoom)), 2)
         
-        # Draw placement preview if active tab is selected
-        # Update preview position from mouse if not set or if mouse moved
-        if self.active_tab:
-            mouse_pos = pygame.mouse.get_pos()
-            space_area = pygame.Rect(0, self.tab_height + 2*self.tab_margin, 
-                                      self.width, 
-                                      self.height - (self.tab_height + 2*self.tab_margin))
-            if space_area.collidepoint(mouse_pos):
+        # Update placement preview position EVERY FRAME (frame-driven, not event-driven)
+        # This ensures smooth cursor following regardless of event timing
+        mouse_pos = pygame.mouse.get_pos()
+        
+        # Update preview position every frame if in placement mode
+        if self.placement_mode_active or self.planet_dropdown_selected:
+            # For planets, always follow cursor everywhere
+            if self.planet_dropdown_selected:
                 self.preview_position = mouse_pos
-                # Set preview radius based on object type if not already set
-                if self.preview_radius is None:
-                    if self.active_tab == "star":
-                        self.preview_radius = 20
-                    elif self.active_tab == "planet":
-                        self.preview_radius = 15
-                    else:  # moon
-                        self.preview_radius = 10
-            else:
-                self.preview_position = None
-                self.preview_radius = None
-        
-        if self.active_tab and self.preview_position and self.preview_radius:
-            self.draw_placement_preview()
+                # Debug: Print once per second when updating preview position
+                if not hasattr(self, '_last_pos_debug') or time.time() - self._last_pos_debug > 1.0:
+                    print(f"DEBUG: Updating preview position. planet={self.planet_dropdown_selected}, pos={self.preview_position}, radius={self.preview_radius}")
+                    self._last_pos_debug = time.time()
+            # For stars and moons, only show when mouse is over space area
+            elif self.active_tab:
+                space_area = pygame.Rect(0, self.tab_height + 2*self.tab_margin, 
+                                          self.width, 
+                                          self.height - (self.tab_height + 2*self.tab_margin))
+                if space_area.collidepoint(mouse_pos):
+                    self.preview_position = mouse_pos
+                else:
+                    # Clear preview for stars/moons when mouse leaves space area
+                    # This is acceptable as it's a visual state change (mouse leaving area)
+                    self.preview_position = None
         
         # Draw instructions if a tab is active
         if self.active_tab:
-            instruction_text = self.subtitle_font.render(f"Click in the space to place a {self.active_tab}", True, self.WHITE)
+            if self.active_tab == "planet" and self.planet_dropdown_selected:
+                instruction_text = self.subtitle_font.render(f"Click in the space to place {self.planet_dropdown_selected}", True, self.WHITE)
+            else:
+                instruction_text = self.subtitle_font.render(f"Click in the space to place a {self.active_tab}", True, self.WHITE)
             instruction_rect = instruction_text.get_rect(center=(self.width//2, self.tab_height + self.tab_margin))
             self.screen.blit(instruction_text, instruction_rect)
         else:
@@ -6484,6 +8638,27 @@ class SolarSystemVisualizer:
         
         # Render dropdown menu last, so it appears on top of everything
         self.render_dropdown()
+        
+        # Render planet preset dropdown on top of everything
+        self.render_planet_preset_dropdown()
+        
+        # Draw preview LAST so it appears on top of everything (including dropdowns)
+        # This ensures the preview is always visible and follows cursor smoothly
+        # BUT hide it when hovering over the planet preset dropdown for better visibility
+        # (mouse_pos already available from preview position update above)
+        should_hide_preview = False
+        if (self.planet_preset_dropdown_visible and 
+            self.planet_preset_dropdown_rect and 
+            self.planet_preset_dropdown_rect.collidepoint(mouse_pos)):
+            should_hide_preview = True
+        
+        if self.preview_position and self.preview_radius and self.preview_radius > 0 and not should_hide_preview:
+            self.draw_placement_preview()
+        elif self.planet_dropdown_selected:
+            # Debug: Check why preview isn't showing (only print once per second to avoid spam)
+            if not hasattr(self, '_last_preview_debug') or time.time() - self._last_preview_debug > 1.0:
+                print(f"DEBUG: Planet selected but preview not drawing. preview_position={self.preview_position}, preview_radius={self.preview_radius}, planet_dropdown_selected={self.planet_dropdown_selected}, placement_mode_active={self.placement_mode_active}")
+                self._last_preview_debug = time.time()
         
         pygame.display.flip()
 
