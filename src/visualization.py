@@ -111,10 +111,8 @@ TIME_SCALE = 0.3           # Smooth & readable orbit motion (increased for visib
 
 # Planet visual scaling constants (NASA-style perceptual compression)
 SUN_RADIUS_R_EARTH = 109.0  # Sun radius in Earth radii (R⊕) per NASA standards
-BASE_PLANET_PX = 200        # Base planet pixel size for scaling calculation
-MIN_PLANET_PX = 6           # Minimum planet size for clickability (inner planets)
-MAX_PLANET_PX = 28          # Maximum planet size (must be < SUN_RADIUS_PX = 32)
-PLANET_SCALE_POWER = 0.65   # Power for perceptual scaling (0.65 preserves more differences than sqrt)
+MIN_PLANET_PX = 4.0         # Minimum planet size for visibility
+PLANET_SCALE_POWER = 0.5    # Square root scaling (updated from 0.65)
 
 # Helper function to convert hex color string to RGB tuple
 def hex_to_rgb(hex_string: str) -> Tuple[int, int, int]:
@@ -384,6 +382,15 @@ class SolarSystemVisualizer:
         self.is_panning = False
         self.pan_start = None
         self.last_zoom_for_orbits = 1.0
+        
+        # Camera Focus System (Click-to-Focus)
+        self.camera_focus = {
+            "active": False,
+            "target_body_id": None,  # Follow this body during transition
+            "target_world_pos": None, # Initial target if body moves
+            "target_zoom": None
+        }
+        
         self.orbit_screen_cache = {}  # name -> (zoom, points)
         self.orbit_grid_screen_cache = {}  # name -> (zoom, points)
         self.last_middle_click_time = 0
@@ -707,13 +714,13 @@ class SolarSystemVisualizer:
                                                      self.customization_panel_width - 100, 30)
         self.spectral_class_dropdown_active = False
         self.spectral_class_dropdown_options = [
-            ("O-type (Blue, ~40,000 K)", 40000, (0, 0, 255)),
-            ("B-type (Blue-white, ~20,000 K)", 20000, (173, 216, 230)),
-            ("A-type (White, ~10,000 K)", 10000, (255, 255, 255)),
-            ("F-type (Yellow-white, ~7,500 K)", 7500, (255, 255, 224)),
-            ("G-type (Yellow, Sun, ~5,800 K)", 5800, (255, 255, 0)),
-            ("K-type (Orange, ~4,500 K)", 4500, (255, 165, 0)),
             ("M-type (Red, ~3,000 K)", 3000, (255, 0, 0)),
+            ("K-type (Orange, ~4,500 K)", 4500, (255, 165, 0)),
+            ("G-type (Yellow, Sun, ~5,800 K)", 5800, (255, 255, 0)),
+            ("F-type (Yellow-white, ~7,500 K)", 7500, (255, 255, 224)),
+            ("A-type (White, ~10,000 K)", 10000, (255, 255, 255)),
+            ("B-type (Blue-white, ~20,000 K)", 20000, (173, 216, 230)),
+            ("O-type (Blue, ~40,000 K)", 40000, (0, 0, 255)),
             ("Custom", None, None)
         ]
         self.spectral_class_dropdown_selected = "G-type (Yellow, Sun, ~5,800 K)"  # Default to Sun
@@ -732,13 +739,8 @@ class SolarSystemVisualizer:
             ("0.08 M☉ (Hydrogen-burning limit)", 0.08),
             ("0.5 M☉", 0.5),
             ("1.0 M☉ (Sun)", 1.0),
-            ("1.5 M☉", 1.5),
             ("3.0 M☉", 3.0),
-            ("5.0 M☉", 5.0),
             ("10.0 M☉", 10.0),
-            ("20.0 M☉", 20.0),
-            ("50.0 M☉", 50.0),
-            ("100.0 M☉", 100.0),
             ("Custom", None)
         ]
         self.star_mass_dropdown_selected = "1.0 M☉ (Sun)"  # Default to Sun
@@ -764,13 +766,13 @@ class SolarSystemVisualizer:
                                               self.customization_panel_width - 100, 30)
         self.radius_dropdown_active = False
         self.radius_dropdown_options = [
-            ("O-type", 10.0),
-            ("B-type", 5.0),
-            ("A-type", 2.0),
-            ("F-type", 1.3),
-            ("G-type (Sun)", 1.0),
-            ("K-type", 0.8),
             ("M-type", 0.3),
+            ("K-type", 0.8),
+            ("G-type (Sun)", 1.0),
+            ("F-type", 1.3),
+            ("A-type", 2.0),
+            ("B-type", 5.0),
+            ("O-type", 10.0),
             ("Custom", None)
         ]
         self.radius_dropdown_selected = "G-type (Sun)"  # Default to Sun
@@ -1025,6 +1027,60 @@ class SolarSystemVisualizer:
         self.camera_zoom = 1.0
         self.camera_offset = [0.0, 0.0]
         # Clear orbit caches so they recalculate at new zoom
+        self.orbit_screen_cache.clear()
+        self.orbit_grid_screen_cache.clear()
+        self.last_zoom_for_orbits = self.camera_zoom
+        # Cancel any active focus
+        self.camera_focus["active"] = False
+
+    def update_camera(self):
+        """Smoothly interpolate camera zoom and offset towards target focus"""
+        if not self.camera_focus["active"]:
+            return
+            
+        target_zoom = self.camera_focus["target_zoom"]
+        target_body_id = self.camera_focus["target_body_id"]
+        
+        # Get target world position (follow body if it exists)
+        if target_body_id and target_body_id in self.bodies_by_id:
+            target_world_pos = self.bodies_by_id[target_body_id]["position"]
+            self.camera_focus["target_world_pos"] = target_world_pos.copy()
+        else:
+            target_world_pos = self.camera_focus["target_world_pos"]
+            
+        if target_world_pos is None or target_zoom is None:
+            self.camera_focus["active"] = False
+            return
+            
+        # Smooth interpolation factor (tunable)
+        INTERP_FACTOR = 0.08
+        
+        # 1. Smoothly interpolate zoom
+        zoom_diff = target_zoom - self.camera_zoom
+        self.camera_zoom += zoom_diff * INTERP_FACTOR
+        
+        # 2. Smoothly interpolate offset to center target_world_pos
+        # target_offset = screen_center - (world_pos * zoom)
+        screen_center_x = self.width / 2
+        screen_center_y = self.height / 2
+        
+        target_offset_x = screen_center_x - target_world_pos[0] * self.camera_zoom
+        target_offset_y = screen_center_y - target_world_pos[1] * self.camera_zoom
+        
+        offset_diff_x = target_offset_x - self.camera_offset[0]
+        offset_diff_y = target_offset_y - self.camera_offset[1]
+        
+        self.camera_offset[0] += offset_diff_x * INTERP_FACTOR
+        self.camera_offset[1] += offset_diff_y * INTERP_FACTOR
+        
+        # Snap to target if very close
+        if abs(zoom_diff) < 0.005 and math.hypot(offset_diff_x, offset_diff_y) < 0.5:
+            self.camera_zoom = target_zoom
+            self.camera_offset[0] = target_offset_x
+            self.camera_offset[1] = target_offset_y
+            self.camera_focus["active"] = False
+            
+        # Invalidate orbit caches during movement
         self.orbit_screen_cache.clear()
         self.orbit_grid_screen_cache.clear()
         self.last_zoom_for_orbits = self.camera_zoom
@@ -1347,6 +1403,21 @@ class SolarSystemVisualizer:
         scale_factor = scale_factors.get(obj_type, 1.0)
         return visual_radius * scale_factor
     
+    def calculate_star_visual_radius(self, star_body: dict) -> float:
+        """
+        Calculate visual radius in pixels for a star based on its stellar radius (R☉).
+        Formula: star_radius_px = SUN_RADIUS_PX * stellar_radius_solar
+        
+        Args:
+            star_body: Star body dictionary with "radius" in Solar radii (R☉)
+            
+        Returns:
+            Visual radius in pixels
+        """
+        stellar_radius_solar = star_body.get("radius", 1.0)
+        # Authoritative Formula: star_radius_px = BASE_STAR_RADIUS_PX * stellar_radius_solar
+        return SUN_RADIUS_PX * stellar_radius_solar
+
     def calculate_planet_visual_radius(self, planet_body: dict, placed_bodies: list) -> float:
         """
         Calculate normalized visual radius for a planet using NASA-style perceptual scaling.
@@ -1356,53 +1427,37 @@ class SolarSystemVisualizer:
         Jupiter (11 R⊕) always appears smaller than the Sun (109 R⊕) while maintaining
         scientifically accurate relative ratios.
         
-        Core principle: Physics data (radius in R⊕) remains unchanged; only visual
-        representation is perceptually compressed for UX.
-        
         Args:
             planet_body: Planet body dictionary with "radius" in Earth radii (R⊕)
             placed_bodies: List of all placed bodies to find parent star
             
         Returns:
-            Visual radius in pixels (clamped between MIN_PLANET_PX and MAX_PLANET_PX)
+            Visual radius in pixels (clamped between 4 and star_radius_px * 0.25)
         """
         # Get planet radius in Earth radii (R⊕)
         planet_radius_R_earth = planet_body.get("radius", 1.0)
         
-        # Find parent star
+        # New Perceptual Scaling Formula: planet_radius_px = EARTH_RADIUS_PX * sqrt(planet_radius_earth / 109.0)
+        visual_radius = EARTH_RADIUS_PX * math.sqrt(planet_radius_R_earth / SUN_RADIUS_R_EARTH)
+        
+        # Find parent star for max clamping
         parent_star = planet_body.get("parent_obj")
         if parent_star is None:
             # Fallback: find nearest star
             stars = [b for b in placed_bodies if b.get("type") == "star"]
             if stars:
-                # Find nearest star by position
                 planet_pos = planet_body.get("position", np.array([0, 0]))
                 parent_star = min(stars, key=lambda s: np.linalg.norm(s.get("position", np.array([0, 0])) - planet_pos))
         
-        # Get star radius in Earth radii (R⊕)
         if parent_star:
-            # Stars store radius in pixels, convert to Earth radii
-            # For Sun: SUN_RADIUS_PX pixels = 32 pixels, but actual Sun = 109 R⊕
-            # Use scientific value: Sun = 109 R⊕ per NASA standards
-            star_radius_R_earth = SUN_RADIUS_R_EARTH  # Default to Sun's radius
-            # TODO: For other stars, could calculate from mass or use stored value
-            # For now, use Sun's radius as reference (most common case)
+            star_visual_radius = self.calculate_star_visual_radius(parent_star)
         else:
-            # No parent star found, use Sun as default reference
-            star_radius_R_earth = SUN_RADIUS_R_EARTH
-        
-        # Normalize planet radius relative to star
-        normalized_radius = planet_radius_R_earth / star_radius_R_earth
-        
-        # Apply perceptual scaling with power 0.65 to preserve relative differences
-        # This ensures:
-        # - Jupiter (11.2/109 ≈ 0.103) scales to 0.103^0.65 ≈ 0.195 → ~29px (bigger than Earth)
-        # - Earth (1/109 ≈ 0.009) scales to 0.009^0.65 ≈ 0.033 → ~5px (baseline)
-        # - Mercury (0.383/109 ≈ 0.0035) scales to 0.0035^0.65 ≈ 0.015 → ~2.25px (clamped to MIN)
-        visual_radius = BASE_PLANET_PX * (normalized_radius ** PLANET_SCALE_POWER)
-        
-        # Clamp to min/max for UX (prevent tiny planets from being unclickable)
-        visual_radius = max(MIN_PLANET_PX, min(visual_radius, MAX_PLANET_PX))
+            # Fallback to Sun-sized star visual radius (32px)
+            star_visual_radius = SUN_RADIUS_PX
+            
+        # Clamp: min=MIN_PLANET_PX, max=star_radius_px * 0.25
+        # This guarantees planets never visually exceed stars
+        visual_radius = max(MIN_PLANET_PX, min(visual_radius, star_visual_radius * 0.25))
         
         return visual_radius
     
@@ -1786,6 +1841,21 @@ class SolarSystemVisualizer:
             # NOW update the value
             body[key] = value
             
+            # If radius changed, update hitbox_radius to match new visual size
+            if key == "radius":
+                if body["type"] == "star":
+                    visual_radius = self.calculate_star_visual_radius(body)
+                    # ALSO update hitboxes of all planets orbiting this star, as their max clamp depends on star size
+                    for p in self.placed_bodies:
+                        if p.get("type") == "planet" and (p.get("parent") == body.get("name") or p.get("parent_id") == body.get("id")):
+                            p_visual_radius = self.calculate_planet_visual_radius(p, self.placed_bodies)
+                            p["hitbox_radius"] = float(self.calculate_hitbox_radius("planet", p_visual_radius))
+                elif body["type"] == "planet":
+                    visual_radius = self.calculate_planet_visual_radius(body, self.placed_bodies)
+                else:  # moon
+                    visual_radius = self.calculate_moon_visual_radius(body, self.placed_bodies)
+                body["hitbox_radius"] = float(self.calculate_hitbox_radius(body["type"], visual_radius))
+            
             # Verify the update only affected this body
             body_dict_id_after = id(body)
             if body_dict_id_before != body_dict_id_after:
@@ -2025,12 +2095,20 @@ class SolarSystemVisualizer:
         This is CRITICAL to prevent shared state bugs where changing one body affects others.
         """
         # CRITICAL: For planets, radius is stored in Earth radii (R⊕), not pixels
-        # For stars and moons, radius is stored in pixels (legacy)
+        # For stars, radius is stored in Solar radii (R☉)
+        # For moons, radius is stored in pixels (legacy)
         if obj_type == "planet":
             # Store in Earth radii: default_radius is already in R⊕ (1.0 = Earth's radius)
             body_radius = float(default_radius) if default_radius > 0 else 1.0
+        elif obj_type == "star":
+            # Store in Solar radii (R☉): default_radius is already in R☉
+            # Handle potential legacy values (if SUN_RADIUS_PX=32 was passed, convert to 1.0)
+            if default_radius >= 32.0:
+                body_radius = float(default_radius) / SUN_RADIUS_PX
+            else:
+                body_radius = float(default_radius) if default_radius > 0 else 1.0
         else:
-            # Stars and moons: store in pixels (legacy behavior)
+            # Moons: store in pixels (legacy behavior)
             body_radius = float(default_radius)
         
         # Determine default base_color based on type and name
@@ -2159,7 +2237,7 @@ class SolarSystemVisualizer:
             default_spectral = "G-type (Yellow, Sun)"
             default_luminosity = 1.0  # Solar luminosities
             default_name = params.get("name", "Sun")
-            default_radius = SUN_RADIUS_PX
+            default_radius = 1.0  # Solar radii (R☉)
             
             # Calculate position (center of screen for star)
             position = np.array([self.width/2, self.height/2], dtype=float)
@@ -2279,7 +2357,6 @@ class SolarSystemVisualizer:
                 body.update({
                     "actual_radius": float(1737.4),  # Actual radius in km (The Moon) - for dropdown logic
                     "radius": float(default_radius),  # Visual radius in pixels for display
-                    "hitbox_radius": float(self.calculate_hitbox_radius(obj_type, default_radius)),  # Update hitbox to match radius
                     "orbit_radius": float(orbit_radius),  # Orbital distance in pixels (calculated from position)
                     "orbit_angle": float(orbit_angle),  # Initial orbit angle
                     "orbit_speed": float(orbit_speed),  # Orbital speed
@@ -2295,7 +2372,6 @@ class SolarSystemVisualizer:
                 body.update({
                     "actual_radius": float(1737.4),
                     "radius": float(default_radius),
-                    "hitbox_radius": float(self.calculate_hitbox_radius(obj_type, default_radius)),  # Update hitbox to match radius
                     "orbit_radius": float(MOON_ORBIT_PX),  # Fallback orbital distance
                     "temperature": float(220),
                     "gravity": float(1.62),
@@ -2305,6 +2381,17 @@ class SolarSystemVisualizer:
         self.placed_bodies.append(body)
         # Register body by ID for guaranteed unique lookups
         self.bodies_by_id[body_id] = body
+        
+        # Calculate visual radius for hitbox based on type
+        if obj_type == "star":
+            visual_radius = self.calculate_star_visual_radius(body)
+        elif obj_type == "planet":
+            visual_radius = self.calculate_planet_visual_radius(body, self.placed_bodies)
+        else:  # moon
+            visual_radius = self.calculate_moon_visual_radius(body, self.placed_bodies)
+            
+        # Update hitbox_radius to match visual radius
+        body["hitbox_radius"] = float(self.calculate_hitbox_radius(obj_type, visual_radius))
         
         # CRITICAL: Hard assertion to detect shared state immediately
         self._assert_no_shared_state()
@@ -2437,6 +2524,9 @@ class SolarSystemVisualizer:
             
             # Camera controls (pan/zoom)
             if event.type == pygame.MOUSEWHEEL:
+                # Cancel focus mode on manual zoom
+                self.camera_focus["active"] = False
+                
                 mouse_x, mouse_y = pygame.mouse.get_pos()
                 world_before = self.screen_to_world((mouse_x, mouse_y))
                 if event.y > 0:
@@ -2458,6 +2548,8 @@ class SolarSystemVisualizer:
                 # Right-click start pan
                 self.is_panning = True
                 self.pan_start = event.pos
+                # Cancel focus mode on manual pan
+                self.camera_focus["active"] = False
                 continue
             if event.type == pygame.MOUSEBUTTONUP and event.button == 3:
                 self.is_panning = False
@@ -2475,11 +2567,7 @@ class SolarSystemVisualizer:
                 now = pygame.time.get_ticks()
                 if now - self.last_middle_click_time < 300:
                     # Double middle-click: reset view
-                    self.camera_zoom = 1.0
-                    self.camera_offset = [0.0, 0.0]
-                    self.orbit_screen_cache.clear()
-                    self.orbit_grid_screen_cache.clear()
-                    self.last_zoom_for_orbits = self.camera_zoom
+                    self.reset_camera()
                 self.last_middle_click_time = now
                 continue
 
@@ -2586,12 +2674,13 @@ class SolarSystemVisualizer:
                                                 if planet_name in SOLAR_SYSTEM_PLANET_PRESETS:
                                                     preset = SOLAR_SYSTEM_PLANET_PRESETS[planet_name]
                                                     planet_radius_re = preset["radius"]  # In Earth radii
-                                                    # Use NASA-style normalized visual radius for preview
-                                                    normalized_radius = planet_radius_re / SUN_RADIUS_R_EARTH
-                                                    visual_radius = BASE_PLANET_PX * (normalized_radius ** PLANET_SCALE_POWER)
-                                                    self.preview_radius = int(max(MIN_PLANET_PX, min(visual_radius, MAX_PLANET_PX)))
+                                                    # Use updated perceptual scaling for preview
+                                                    visual_radius = EARTH_RADIUS_PX * math.sqrt(planet_radius_re / SUN_RADIUS_R_EARTH)
+                                                    # Authoritative clamp: min=MIN_PLANET_PX, max=star_radius_px * 0.25
+                                                    # For preview, assume Sun-sized star if no star placed
+                                                    self.preview_radius = int(max(MIN_PLANET_PX, min(visual_radius, SUN_RADIUS_PX * 0.25)))
                                                 else:
-                                                    self.preview_radius = 10  # Default (approx Earth-like)
+                                                    self.preview_radius = int(MIN_PLANET_PX)  # New minimum Earth size
                                                 # Initialize preview position immediately at mouse cursor
                                                 self.preview_position = pygame.mouse.get_pos()
                                                 # Activate placement mode - preview position will be updated every frame
@@ -3375,8 +3464,6 @@ class SolarSystemVisualizer:
                                         if body:
                                             new_radius = max(5, min(20, radius / 100))  # Scale down and clamp
                                             self.update_selected_body_property("radius", new_radius, "radius")
-                                            # Update hitbox_radius to match new visual radius
-                                            body["hitbox_radius"] = float(self.calculate_hitbox_radius(body["type"], body["radius"]))
                                         self.show_custom_moon_radius_input = False
                                     self.moon_radius_dropdown_selected = radius_name
                                     self.moon_radius_dropdown_visible = False
@@ -3787,12 +3874,13 @@ class SolarSystemVisualizer:
                                                 if name in SOLAR_SYSTEM_PLANET_PRESETS:
                                                     preset = SOLAR_SYSTEM_PLANET_PRESETS[name]
                                                     planet_radius_re = preset["radius"]  # In Earth radii
-                                                    # Use NASA-style normalized visual radius for preview
-                                                    normalized_radius = planet_radius_re / SUN_RADIUS_R_EARTH
-                                                    visual_radius = BASE_PLANET_PX * (normalized_radius ** PLANET_SCALE_POWER)
-                                                    self.preview_radius = int(max(MIN_PLANET_PX, min(visual_radius, MAX_PLANET_PX)))
+                                                    # Use updated perceptual scaling for preview
+                                                    visual_radius = EARTH_RADIUS_PX * math.sqrt(planet_radius_re / SUN_RADIUS_R_EARTH)
+                                                    # Authoritative clamp: min=MIN_PLANET_PX, max=star_radius_px * 0.25
+                                                    # For preview, assume Sun-sized star if no star placed
+                                                    self.preview_radius = int(max(MIN_PLANET_PX, min(visual_radius, SUN_RADIUS_PX * 0.25)))
                                                 else:
-                                                    self.preview_radius = 10  # Default (approx Earth-like)
+                                                    self.preview_radius = int(MIN_PLANET_PX)  # New minimum Earth size
                                                 # Activate placement mode - preview position will be updated every frame
                                                 self.placement_mode_active = True
                                             # Keep dropdown open to show selection, but recreate surface to show highlight
@@ -3864,8 +3952,6 @@ class SolarSystemVisualizer:
                                             if body:
                                                 new_radius = max(5, min(20, value / 100))  # Scale down and clamp
                                                 self.update_selected_body_property("radius", new_radius, "radius")
-                                                # Update hitbox_radius to match new visual radius
-                                                body["hitbox_radius"] = float(self.calculate_hitbox_radius(body["type"], body["radius"]))
                                                 # Clear orbit points when radius changes
                                                 self.clear_orbit_points(body)
                                         else:
@@ -3950,8 +4036,6 @@ class SolarSystemVisualizer:
                                             body = self.get_selected_body()
                                             if body:
                                                 self.update_selected_body_property("radius", value, "radius")
-                                                # Update hitbox_radius to match new visual radius
-                                                body["hitbox_radius"] = float(self.calculate_hitbox_radius(body["type"], body["radius"]))
                                         else:
                                             self.show_custom_radius_input = True
                                             self.radius_input_active = True
@@ -4068,12 +4152,13 @@ class SolarSystemVisualizer:
                                         if preset_name in SOLAR_SYSTEM_PLANET_PRESETS:
                                             preset = SOLAR_SYSTEM_PLANET_PRESETS[preset_name]
                                             planet_radius_re = preset["radius"]  # In Earth radii
-                                            # Use NASA-style normalized visual radius for preview
-                                            normalized_radius = planet_radius_re / SUN_RADIUS_R_EARTH
-                                            visual_radius = BASE_PLANET_PX * (normalized_radius ** PLANET_SCALE_POWER)
-                                            self.preview_radius = int(max(MIN_PLANET_PX, min(visual_radius, MAX_PLANET_PX)))
+                                            # Use updated perceptual scaling for preview
+                                            visual_radius = EARTH_RADIUS_PX * math.sqrt(planet_radius_re / SUN_RADIUS_R_EARTH)
+                                            # Authoritative clamp: min=MIN_PLANET_PX, max=star_radius_px * 0.25
+                                            # For preview, assume Sun-sized star if no star placed
+                                            self.preview_radius = int(max(MIN_PLANET_PX, min(visual_radius, SUN_RADIUS_PX * 0.25)))
                                         else:
-                                            self.preview_radius = 10  # Default (approx Earth-like)
+                                            self.preview_radius = int(MIN_PLANET_PX)  # New minimum Earth size
                                         # Initialize preview position immediately at mouse cursor
                                         self.preview_position = pygame.mouse.get_pos()
                                         # Activate placement mode - preview position will be updated every frame
@@ -4163,7 +4248,8 @@ class SolarSystemVisualizer:
                             elif body["type"] == "moon":
                                 visual_radius = self.calculate_moon_visual_radius(body, self.placed_bodies)
                             else:
-                                visual_radius = body["radius"]
+                                # Stars: calculate visual radius using authoritative formula
+                                visual_radius = self.calculate_star_visual_radius(body)
                             
                             # Calculate hitbox with scale factor for clickability
                             hitbox_radius_px = self.calculate_hitbox_radius(body["type"], visual_radius)
@@ -4194,6 +4280,18 @@ class SolarSystemVisualizer:
                             # Select the clicked body (by both direct reference and stable ID)
                             self.selected_body = canonical_body
                             self.selected_body_id = clicked_id
+                            
+                            # Trigger Click-to-Focus camera mode
+                            self.camera_focus["active"] = True
+                            self.camera_focus["target_body_id"] = clicked_id
+                            self.camera_focus["target_world_pos"] = canonical_body["position"].copy()
+                            
+                            if canonical_body["type"] == "star":
+                                self.camera_focus["target_zoom"] = 0.6
+                            elif canonical_body["type"] == "planet":
+                                self.camera_focus["target_zoom"] = 1.0
+                            elif canonical_body["type"] == "moon":
+                                self.camera_focus["target_zoom"] = 1.5
                             
                             print(f"SELECTED body_id={clicked_id[:8]} name={canonical_body.get('name')} dict_id={id(canonical_body)}")
                             
@@ -4451,14 +4549,12 @@ class SolarSystemVisualizer:
                             
                             # --- Star radius dropdown selection logic ---
                             if self.selected_body.get('type') == 'star':
-                                radius_px = self.selected_body.get('radius', SUN_RADIUS_PX)
-                                # Convert from pixels to solar radii
-                                if hasattr(radius_px, 'item'):
-                                    radius_px = float(radius_px.item())
+                                radius_solar = self.selected_body.get('radius', 1.0)
+                                # Ensure radius_solar is a Python float
+                                if hasattr(radius_solar, 'item'):
+                                    radius_solar = float(radius_solar.item())
                                 else:
-                                    radius_px = float(radius_px)
-                                # Convert pixels to solar radii (SUN_RADIUS_PX pixels = 1 solar radius)
-                                radius_solar = radius_px / SUN_RADIUS_PX
+                                    radius_solar = float(radius_solar)
                                 found = False
                                 for name, preset_radius in self.radius_dropdown_options:
                                     if preset_radius is not None and abs(preset_radius - radius_solar) < 0.1:
@@ -4658,7 +4754,7 @@ class SolarSystemVisualizer:
                                     default_spectral = "G-type (Yellow, Sun)"
                                     default_luminosity = 1.0  # Solar luminosities
                                     default_name = "Sun"
-                                    default_radius = SUN_RADIUS_PX
+                                    default_radius = 1.0  # Solar radii (R☉)
                                 elif self.active_tab == "planet":
                                     # Require explicit planet selection - no default
                                     selected_planet_name = self.planet_dropdown_selected if hasattr(self, 'planet_dropdown_selected') else None
@@ -4743,7 +4839,6 @@ class SolarSystemVisualizer:
                                         body.update({
                                             "actual_radius": 1737.4,  # Actual radius in km (The Moon) - for dropdown logic
                                             "radius": default_radius,  # Visual radius in pixels for display
-                                            "hitbox_radius": self.calculate_hitbox_radius(self.active_tab, default_radius),  # Update hitbox to match radius
                                             "temperature": 220,  # Surface temperature in K (Earth's Moon)
                                             "gravity": 1.62,  # Surface gravity in m/s² (Earth's Moon)
                                             "orbital_period": 27.3,  # Orbital period in days (Earth's Moon)
@@ -4767,6 +4862,17 @@ class SolarSystemVisualizer:
                                     self.placed_bodies.append(body)
                                     # Register body by ID for guaranteed unique lookups
                                     self.bodies_by_id[body_id] = body
+                                    
+                                    # Calculate visual radius for hitbox based on type
+                                    if body["type"] == "star":
+                                        visual_radius = self.calculate_star_visual_radius(body)
+                                    elif body["type"] == "planet":
+                                        visual_radius = self.calculate_planet_visual_radius(body, self.placed_bodies)
+                                    else:  # moon
+                                        visual_radius = self.calculate_moon_visual_radius(body, self.placed_bodies)
+                                        
+                                    # Update hitbox_radius to match visual radius
+                                    body["hitbox_radius"] = float(self.calculate_hitbox_radius(body["type"], visual_radius))
                                     
                                     # CRITICAL: Hard assertion to detect shared state immediately
                                     self._assert_no_shared_state()
@@ -5109,17 +5215,22 @@ class SolarSystemVisualizer:
                         self.metallicity_input_text = self.metallicity_input_text[:-1]
                     elif event.unicode.isnumeric() or event.unicode == '.':
                         self.metallicity_input_text += event.unicode
-                if self.show_custom_radius_input and self.selected_body and self.selected_body.get('type') == 'planet':
+                if self.show_custom_radius_input and self.selected_body:
                     if event.key == pygame.K_RETURN:
                         radius = self._parse_input_value(self.radius_input_text)
-                        if radius is not None and 0.1 <= radius <= 20.0:  # Reasonable radius range in R⊕
-                            # CRITICAL: Store radius in Earth radii (R⊕), not pixels
-                            self.update_selected_body_property("radius", radius, "radius")
-                            # Hitbox will be computed from visual radius on render
-                            # No physics updates - radius affects visual only
-                            self.radius_input_text = ""
-                            self.show_custom_radius_input = False
-                            self.radius_input_active = False
+                        if radius is not None:
+                            if self.selected_body.get('type') == 'planet' and 0.1 <= radius <= 20.0:
+                                # Planet: radius in Earth radii (R⊕)
+                                self.update_selected_body_property("radius", radius, "radius")
+                                self.radius_input_text = ""
+                                self.show_custom_radius_input = False
+                                self.radius_input_active = False
+                            elif self.selected_body.get('type') == 'star' and self.radius_min <= radius <= self.radius_max:
+                                # Star: radius in Solar radii (R☉)
+                                self.update_selected_body_property("radius", radius, "radius")
+                                self.radius_input_text = ""
+                                self.show_custom_radius_input = False
+                                self.radius_input_active = False
                     elif event.key == pygame.K_BACKSPACE:
                         self.radius_input_text = self.radius_input_text[:-1]
                     elif event.key == pygame.K_ESCAPE:
@@ -5328,7 +5439,8 @@ class SolarSystemVisualizer:
             # This is handled separately in the dropdown selection code
             pass
         elif object_type == "star":
-            self.preview_radius = 20
+            # Default star size: 1.0 Solar radii = SUN_RADIUS_PX
+            self.preview_radius = SUN_RADIUS_PX
         elif object_type == "moon":
             self.preview_radius = 4  # Default moon size (matches calculate_moon_visual_radius fallback)
     
@@ -5600,6 +5712,9 @@ class SolarSystemVisualizer:
     
     def update_physics(self):
         """Update positions and velocities of all bodies"""
+        # Update camera focus interpolation
+        self.update_camera()
+        
         trace("BEGIN_FRAME")
         
         # Check for aliasing and duplicate names
@@ -6404,11 +6519,17 @@ class SolarSystemVisualizer:
                 elif self.spectral_class_dropdown_visible:
                     text = name  # Spectral class options already include temperature
                 elif self.radius_dropdown_visible:
-                    text = name  # Radius options already include the unit
+                    if "(Sun)" in name:
+                        text = f"Sun ({value:.2f} R☉)"
+                    else:
+                        text = f"{name} (" + self._format_value(value, 'R☉') + ")"
                 elif self.activity_dropdown_visible:
-                    text = name  # Activity options already include the unit
+                    if "(Sun)" in name:
+                        text = f"Sun ({value:.2f})"
+                    else:
+                        text = f"{name} (" + self._format_value(value, '') + ")"
                 elif self.metallicity_dropdown_visible:
-                    text = name  # Metallicity options already include the unit
+                    text = name  # Metallicity options already include the unit (e.g., "0.0 (Sun)")
                 elif self.planet_radius_dropdown_visible:
                     text = f"{name} (" + self._format_value(value, 'R🜨') + ")"
                 elif self.planet_temperature_dropdown_visible:
@@ -7750,8 +7871,9 @@ class SolarSystemVisualizer:
             
             if body["type"] == "star":
                 pos = self.world_to_screen(body["position"])
-                # Stars: radius is in pixels (legacy)
-                pygame.draw.circle(self.screen, color, (int(pos[0]), int(pos[1])), max(1, int(body["radius"] * self.camera_zoom)))
+                # Calculate visual radius using authoritative formula
+                visual_radius = self.calculate_star_visual_radius(body)
+                pygame.draw.circle(self.screen, color, (int(pos[0]), int(pos[1])), max(1, int(visual_radius * self.camera_zoom)))
             else:
                 self.draw_rotating_body(body, color)
             
@@ -7765,7 +7887,8 @@ class SolarSystemVisualizer:
                 elif body["type"] == "moon":
                     visual_radius = self.calculate_moon_visual_radius(body, self.placed_bodies)
                 else:
-                    visual_radius = body["radius"]
+                    # Stars: calculate visual radius using authoritative formula
+                    visual_radius = self.calculate_star_visual_radius(body)
                 pygame.draw.circle(self.screen, self.RED, (int(pos[0]), int(pos[1])), max(1, int((visual_radius + 5) * self.camera_zoom)), 2)
         
         # Update placement preview position EVERY FRAME (frame-driven, not event-driven)
@@ -8973,8 +9096,9 @@ class SolarSystemVisualizer:
             
             if body["type"] == "star":
                 pos = self.world_to_screen(body["position"])
-                # Stars: radius is in pixels (legacy)
-                pygame.draw.circle(self.screen, color, (int(pos[0]), int(pos[1])), max(1, int(body["radius"] * self.camera_zoom)))
+                # Calculate visual radius using authoritative formula
+                visual_radius = self.calculate_star_visual_radius(body)
+                pygame.draw.circle(self.screen, color, (int(pos[0]), int(pos[1])), max(1, int(visual_radius * self.camera_zoom)))
             else:
                 # Draw the rotating body
                 self.draw_rotating_body(body, color)
@@ -8989,7 +9113,8 @@ class SolarSystemVisualizer:
                 elif body["type"] == "moon":
                     visual_radius = self.calculate_moon_visual_radius(body, self.placed_bodies)
                 else:
-                    visual_radius = body["radius"]
+                    # Stars: calculate visual radius using authoritative formula
+                    visual_radius = self.calculate_star_visual_radius(body)
                 pygame.draw.circle(self.screen, self.RED, (int(pos[0]), int(pos[1])), max(1, int((visual_radius + 5) * self.camera_zoom)), 2)
         
         # Update placement preview position EVERY FRAME (frame-driven, not event-driven)
