@@ -102,17 +102,18 @@ def run_orbit_unit_test():
 
 # Visual scaling constants (for sandbox view)
 AU_TO_PX = 160            # Slightly wider spacing
-SUN_RADIUS_PX = 32        # Sun smaller for cleaner layout
-EARTH_RADIUS_PX = 14      # Good
-MOON_RADIUS_PX = 6        # FIXED (scientific & UX approved)
+SUN_RADIUS_PX = 48        # Increased for better clickability (was 32)
+EARTH_RADIUS_PX = 21      # Increased for better clickability (was 14)
+MOON_RADIUS_PX = 9        # Increased for better clickability (was 6)
 MOON_ORBIT_AU = 0.00257   # Scientifically correct
-MOON_ORBIT_PX = 40        # Great for UX
+MOON_ORBIT_PX = 60        # Increased for better clickability (was 40)
 TIME_SCALE = 0.3           # Smooth & readable orbit motion (increased for visible movement)
 
 # Planet visual scaling constants (NASA-style perceptual compression)
 SUN_RADIUS_R_EARTH = 109.0  # Sun radius in Earth radii (R⊕) per NASA standards
-MIN_PLANET_PX = 4.0         # Minimum planet size for visibility
+MIN_PLANET_PX = 6.0         # Increased for better clickability (was 4.0)
 PLANET_SCALE_POWER = 0.5    # Square root scaling (updated from 0.65)
+PLANET_DISTANCE_SCALE_POWER = 0.5 # Same scaling method for AU distances as requested
 
 # Helper function to convert hex color string to RGB tuple
 def hex_to_rgb(hex_string: str) -> Tuple[int, int, int]:
@@ -166,7 +167,7 @@ SOLAR_SYSTEM_PLANET_PRESETS = {
         "temperature": 440.0,  # K (equilibrium temperature, no greenhouse)
         "equilibrium_temperature": 440.0,  # K
         "gravity": 3.7,  # m/s²
-        "eccentricity": 0.205,
+        "eccentricity": 0.2056,
         "orbital_period": 88.0,  # days
         "stellarFlux": 6.67,  # Earth flux units
         "density": 5.43,  # g/cm³
@@ -180,7 +181,7 @@ SOLAR_SYSTEM_PLANET_PRESETS = {
         "temperature": 737.0,  # K (T_eq + greenhouse)
         "equilibrium_temperature": 237.0,  # K
         "gravity": 8.87,
-        "eccentricity": 0.007,
+        "eccentricity": 0.0068,
         "orbital_period": 225.0,
         "stellarFlux": 1.91,
         "density": 5.24,
@@ -194,7 +195,7 @@ SOLAR_SYSTEM_PLANET_PRESETS = {
         "temperature": 288.0,  # K
         "equilibrium_temperature": 255.0,  # K
         "gravity": 9.81,
-        "eccentricity": 0.017,
+        "eccentricity": 0.0167,
         "orbital_period": 365.25,
         "stellarFlux": 1.0,
         "density": 5.51,
@@ -208,7 +209,7 @@ SOLAR_SYSTEM_PLANET_PRESETS = {
         "temperature": 210.0,  # K
         "equilibrium_temperature": 200.0,  # K
         "gravity": 3.7,
-        "eccentricity": 0.093,
+        "eccentricity": 0.0934,
         "orbital_period": 687.0,
         "stellarFlux": 0.43,
         "density": 3.93,
@@ -222,7 +223,7 @@ SOLAR_SYSTEM_PLANET_PRESETS = {
         "temperature": 165.0,  # K
         "equilibrium_temperature": 95.0,  # K
         "gravity": 24.79,
-        "eccentricity": 0.048,
+        "eccentricity": 0.0484,
         "orbital_period": 4333.0,
         "stellarFlux": 0.037,
         "density": 1.33,
@@ -236,7 +237,7 @@ SOLAR_SYSTEM_PLANET_PRESETS = {
         "temperature": 134.0,  # K
         "equilibrium_temperature": 64.0,  # K
         "gravity": 10.44,
-        "eccentricity": 0.056,
+        "eccentricity": 0.0539,
         "orbital_period": 10759.0,
         "stellarFlux": 0.011,
         "density": 0.69,
@@ -250,7 +251,7 @@ SOLAR_SYSTEM_PLANET_PRESETS = {
         "temperature": 76.0,  # K
         "equilibrium_temperature": 6.0,  # K
         "gravity": 8.69,
-        "eccentricity": 0.046,
+        "eccentricity": 0.0473,
         "orbital_period": 30687.0,
         "stellarFlux": 0.0029,
         "density": 1.27,
@@ -264,7 +265,7 @@ SOLAR_SYSTEM_PLANET_PRESETS = {
         "temperature": 72.0,  # K
         "equilibrium_temperature": 2.0,  # K
         "gravity": 11.15,
-        "eccentricity": 0.009,
+        "eccentricity": 0.0086,
         "orbital_period": 60190.0,
         "stellarFlux": 0.0015,
         "density": 1.64,
@@ -517,13 +518,13 @@ class SolarSystemVisualizer:
         self.planet_gravity_dropdown_active = False
         self.planet_gravity_dropdown_options = [
             ("Mercury", 3.7),
-            ("Mars", 3.7),
             ("Venus", 8.87),
             ("Earth", 9.81),
+            ("Mars", 3.7),
+            ("Jupiter", 24.79),
+            ("Saturn", 10.44),
             ("Uranus", 8.69),
             ("Neptune", 11.15),
-            ("Saturn", 10.44),
-            ("Jupiter", 24.79),
             ("Custom", None)
         ]
         self.planet_gravity_dropdown_selected = "Earth"  # Default to Earth
@@ -549,8 +550,10 @@ class SolarSystemVisualizer:
         self.moon_dropdown_selected = "Moon"
         self.moon_dropdown_visible = False
         self.show_custom_moon_mass_input = False
-        
-        # Moon age dropdown properties
+        self.moon_mass_input_text = ""
+        self.show_custom_moon_radius_input = False
+        self.moon_radius_input_text = ""
+        self.moon_gravity_input_text = ""
         self.moon_age_dropdown_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 180,
                                                 self.customization_panel_width - 100, 30)
         self.moon_age_dropdown_active = False
@@ -569,12 +572,12 @@ class SolarSystemVisualizer:
         self.moon_radius_dropdown_options = [
             ("Deimos", 6.2),
             ("Phobos", 11.3),
-            ("Europa", 1560.8),
             ("Enceladus", 252.1),
+            ("Europa", 1560.8),
+            ("Moon", 1737.4),
+            ("Callisto", 2410.3),
             ("Titan", 2574.7),
             ("Ganymede", 2634.1),
-            ("Callisto", 2410.3),
-            ("Moon", 1737.4),
             ("Custom", None)
         ]
         self.moon_radius_dropdown_selected = "Moon"
@@ -588,12 +591,12 @@ class SolarSystemVisualizer:
         self.moon_orbital_distance_dropdown_options = [
             ("Phobos", 9378),
             ("Deimos", 23460),
-            ("Europa", 670900),
             ("Enceladus", 237950),
-            ("Titan", 1221870),
-            ("Ganymede", 1070400),
-            ("Callisto", 1882700),
             ("Moon", 384400),
+            ("Europa", 670900),
+            ("Ganymede", 1070400),
+            ("Titan", 1221870),
+            ("Callisto", 1882700),
             ("Custom", None)
         ]
         self.moon_orbital_distance_dropdown_selected = "Moon"
@@ -607,10 +610,10 @@ class SolarSystemVisualizer:
         self.moon_orbital_period_dropdown_options = [
             ("Phobos", 0.32),
             ("Deimos", 1.26),
-            ("Europa", 3.55),
             ("Enceladus", 1.37),
-            ("Titan", 15.95),
+            ("Europa", 3.55),
             ("Ganymede", 7.15),
+            ("Titan", 15.95),
             ("Callisto", 16.69),
             ("Moon", 27.3),
             ("Custom", None)
@@ -624,11 +627,11 @@ class SolarSystemVisualizer:
                                                         self.customization_panel_width - 100, 30)
         self.moon_temperature_dropdown_active = False
         self.moon_temperature_dropdown_options = [
-            ("Europa", 102),
             ("Enceladus", 75),
+            ("Titan", 94),
+            ("Europa", 102),
             ("Ganymede", 110),
             ("Callisto", 134),
-            ("Titan", 94),
             ("Moon", 220),
             ("Custom", None)
         ]
@@ -644,10 +647,10 @@ class SolarSystemVisualizer:
             ("Deimos", 0.003),
             ("Phobos", 0.0057),
             ("Enceladus", 0.113),
+            ("Callisto", 1.235),
             ("Europa", 1.314),
             ("Titan", 1.352),
             ("Ganymede", 1.428),
-            ("Callisto", 1.235),
             ("Moon", 1.62),
             ("Custom", None)
         ]
@@ -655,8 +658,6 @@ class SolarSystemVisualizer:
         self.moon_gravity_dropdown_visible = False
         self.show_custom_moon_gravity_input = False
         self.moon_gravity_input_text = ""
-        
-        # Close button for customization panel
         self.close_button_size = 20
         self.close_button = pygame.Rect(self.width - self.close_button_size - 10, 10, 
                                       self.close_button_size, self.close_button_size)
@@ -847,11 +848,16 @@ class SolarSystemVisualizer:
         self.planet_orbital_eccentricity_dropdown_active = False
         self.planet_orbital_eccentricity_dropdown_options = [
             ("Circular Orbit", 0.0),
+            ("Mercury", 0.2056),
+            ("Venus", 0.0068),
             ("Earth", 0.0167),
-            ("Mars", 0.093),
-            ("Mercury", 0.205),
-            ("Pluto", 0.248),
+            ("Mars", 0.0934),
+            ("Jupiter", 0.0484),
+            ("Saturn", 0.0539),
+            ("Uranus", 0.0473),
+            ("Neptune", 0.0086),
             ("Custom", None)
+        
         ]
         self.planet_orbital_eccentricity_dropdown_selected = "Earth"
         self.planet_orbital_eccentricity_dropdown_visible = False
@@ -925,6 +931,23 @@ class SolarSystemVisualizer:
         self.planet_density_input_text = ""
         self.planet_density_min = 0.1
         self.planet_density_max = 20.0
+        
+        # --- NEW CUSTOM INPUT MODAL STATE ---
+        self.pending_custom_field = None      # e.g., "mass", "radius", "semi_major_axis", "star_mass"
+        self.pending_custom_body_id = None    # ID of the body being edited
+        self.pending_custom_value = None      # Validated value to be applied
+        self.show_custom_modal = False        # Whether to show the modal
+        self.custom_modal_text = ""           # Current text in the input box
+        self.custom_modal_error = None        # Error message if validation fails
+        self.custom_modal_title = ""          # Title of the modal
+        self.custom_modal_helper = ""         # Helper text with bounds
+        self.custom_modal_min = 0.0           # Physical minimum
+        self.custom_modal_max = 100.0         # Physical maximum
+        self.custom_modal_unit = ""           # Unit label (e.g., M⊕, AU, M☉)
+        self.previous_dropdown_selection = None # Store selection before 'Custom' was chosen
+        self.apply_btn_rect = pygame.Rect(0,0,0,0)  # Initialize to avoid hasattr issues
+        self.cancel_btn_rect = pygame.Rect(0,0,0,0) # Initialize to avoid hasattr issues
+        # ------------------------------------
         
         # Initialize sandbox with auto-spawn (after all properties are initialized)
         self.initSandbox()
@@ -1396,12 +1419,17 @@ class SolarSystemVisualizer:
             Hitbox radius in pixels (visual_radius * scale_factor)
         """
         scale_factors = {
-            "star": 1.2,
-            "planet": 1.4,
-            "moon": 1.8
+            "star": 1.3,
+            "planet": 1.8,
+            "moon": 6.0  # Increased significantly for better clickability
         }
         scale_factor = scale_factors.get(obj_type, 1.0)
-        return visual_radius * scale_factor
+        hitbox_radius = visual_radius * scale_factor
+        
+        # Ensure a minimum hitbox size for moons (minimum 15px radius / 30px diameter)
+        if obj_type == "moon":
+            return max(hitbox_radius, 15.0)
+        return hitbox_radius
     
     def calculate_star_visual_radius(self, star_body: dict) -> float:
         """
@@ -1417,6 +1445,40 @@ class SolarSystemVisualizer:
         stellar_radius_solar = star_body.get("radius", 1.0)
         # Authoritative Formula: star_radius_px = BASE_STAR_RADIUS_PX * stellar_radius_solar
         return SUN_RADIUS_PX * stellar_radius_solar
+
+    def get_visual_orbit_radius(self, semi_major_axis_au: float) -> float:
+        """
+        Calculate visual orbit radius in pixels using perceptual scaling.
+        This matches the scaling method used for planet radii (square root).
+        
+        Formula: visual_radius_px = AU_TO_PX * sqrt(semi_major_axis_au)
+        
+        Args:
+            semi_major_axis_au: Orbital distance in Astronomical Units (AU)
+            
+        Returns:
+            Visual orbit radius in pixels for rendering
+        """
+        return float(AU_TO_PX * math.sqrt(max(0.0, semi_major_axis_au)))
+
+    def get_visual_moon_orbit_radius(self, semi_major_axis_au: float) -> float:
+        """
+        Calculate visual orbit radius for a moon using perceptual scaling.
+        Matches the planet scaling method (square root) but normalized to Moon standards.
+        
+        Formula: visual_radius_px = MOON_ORBIT_PX * sqrt(semi_major_axis_au / MOON_ORBIT_AU)
+        
+        Args:
+            semi_major_axis_au: Orbital distance in Astronomical Units (AU)
+            
+        Returns:
+            Visual orbit radius in pixels relative to parent planet
+        """
+        if semi_major_axis_au <= 0:
+            return 0.0
+        # Normalize to MOON_ORBIT_AU so Earth-Moon distance is always MOON_ORBIT_PX
+        normalization = semi_major_axis_au / MOON_ORBIT_AU
+        return float(MOON_ORBIT_PX * math.sqrt(normalization))
 
     def calculate_planet_visual_radius(self, planet_body: dict, placed_bodies: list) -> float:
         """
@@ -1500,15 +1562,16 @@ class SolarSystemVisualizer:
             # Get parent planet radius in Earth radii
             parent_radius_R_earth = parent_planet.get("radius", 1.0)  # Parent radius in R⊕
             
-            # Calculate moon size relative to parent planet
-            moon_relative_size = moon_radius_R_earth / parent_radius_R_earth
+            # Calculate moon size relative to parent planet using perceptual scaling
+            # Matches the planet-star relationship: MoonRadiusPx = ParentVisualRadius * sqrt(MoonRadius / ParentRadius)
+            moon_relative_size = math.sqrt(moon_radius_R_earth / parent_radius_R_earth)
             visual_radius = parent_visual_radius * moon_relative_size
             
-            # Ensure moon is always smaller than parent and at least 2px for visibility
-            visual_radius = max(2, min(visual_radius, parent_visual_radius * 0.9))
+            # Ensure moon is always smaller than parent and at least 3px for visibility
+            visual_radius = max(3, min(visual_radius, parent_visual_radius * 0.9))
         else:
             # No parent planet found, use default moon size (but smaller than default planet)
-            visual_radius = max(2, min(moon_radius_px, 4))
+            visual_radius = max(3, min(moon_radius_px, 6))
         
         return visual_radius
     
@@ -1661,7 +1724,7 @@ class SolarSystemVisualizer:
                 self.planet_orbital_distance_dropdown_selected = "Custom"
             
             # Sync eccentricity dropdown
-            eccentricity = body.get('eccentricity', 0.017)
+            eccentricity = body.get('eccentricity', 0.0167)
             if hasattr(eccentricity, 'item'):
                 eccentricity = float(eccentricity.item())
             else:
@@ -1841,8 +1904,8 @@ class SolarSystemVisualizer:
             # NOW update the value
             body[key] = value
             
-            # If radius changed, update hitbox_radius to match new visual size
-            if key == "radius":
+            # If radius or actual_radius changed, update hitbox_radius to match new visual size
+            if key == "radius" or key == "actual_radius":
                 if body["type"] == "star":
                     visual_radius = self.calculate_star_visual_radius(body)
                     # ALSO update hitboxes of all planets orbiting this star, as their max clamp depends on star size
@@ -1852,8 +1915,16 @@ class SolarSystemVisualizer:
                             p["hitbox_radius"] = float(self.calculate_hitbox_radius("planet", p_visual_radius))
                 elif body["type"] == "planet":
                     visual_radius = self.calculate_planet_visual_radius(body, self.placed_bodies)
+                    # ALSO update visual radius and hitboxes of all moons orbiting this planet
+                    for m in self.placed_bodies:
+                        if m.get("type") == "moon" and (m.get("parent") == body.get("name") or m.get("parent_id") == body.get("id")):
+                            m_visual_radius = self.calculate_moon_visual_radius(m, self.placed_bodies)
+                            m["radius"] = float(m_visual_radius)
+                            m["hitbox_radius"] = float(self.calculate_hitbox_radius("moon", m_visual_radius))
                 else:  # moon
                     visual_radius = self.calculate_moon_visual_radius(body, self.placed_bodies)
+                    # Sync legacy visual radius field for moons to ensure real-time UI updates
+                    body["radius"] = float(visual_radius)
                 body["hitbox_radius"] = float(self.calculate_hitbox_radius(body["type"], visual_radius))
             
             # Verify the update only affected this body
@@ -1894,23 +1965,29 @@ class SolarSystemVisualizer:
             
             # CRITICAL: Recompute orbit parameters when physics-affecting parameters change
             # This ensures each body has independent physics calculations
-            # CRITICAL: radius is NOT a physics-affecting key
+            # CRITICAL: radius/actual_radius is NOT a physics-affecting key
             # Radius affects visual size only, never physics (orbit, mass, AU, etc.)
             physics_affecting_keys = ["mass", "semiMajorAxis", "orbit_radius", "eccentricity"]
             if key in physics_affecting_keys:
-                # CRITICAL: For planets, if semiMajorAxis changes, immediately update position
-                if key == "semiMajorAxis" and body["type"] == "planet":
-                    parent_star = body.get("parent_obj")
-                    if parent_star is None and body.get("parent"):
-                        parent_star = next((b for b in self.placed_bodies if b["name"] == body.get("parent")), None)
-                    if parent_star:
+                # CRITICAL: If semiMajorAxis changes, immediately update position/target
+                if key == "semiMajorAxis":
+                    parent_obj = body.get("parent_obj")
+                    if parent_obj is None and body.get("parent"):
+                        parent_obj = next((b for b in self.placed_bodies if b["name"] == body.get("parent")), None)
+                    if parent_obj:
                         # Calculate new target position based on updated AU
                         new_au = float(value)
-                        new_orbit_radius_px = new_au * AU_TO_PX
+                        if body["type"] == "planet":
+                            new_orbit_radius_px = self.get_visual_orbit_radius(new_au)
+                        elif body["type"] == "moon":
+                            new_orbit_radius_px = self.get_visual_moon_orbit_radius(new_au)
+                        else:
+                            new_orbit_radius_px = new_au * AU_TO_PX
+                        
                         current_angle = body.get("orbit_angle", 0.0)
                         new_target_pos = np.array([
-                            parent_star["position"][0] + new_orbit_radius_px * math.cos(current_angle),
-                            parent_star["position"][1] + new_orbit_radius_px * math.sin(current_angle)
+                            parent_obj["position"][0] + new_orbit_radius_px * math.cos(current_angle),
+                            parent_obj["position"][1] + new_orbit_radius_px * math.sin(current_angle)
                         ], dtype=float)
                         
                         # Start orbital correction animation
@@ -1925,7 +2002,7 @@ class SolarSystemVisualizer:
                                 "duration": self.correction_animation_duration,
                                 "start_pos": body["position"].copy(),
                                 "target_pos": new_target_pos.copy(),
-                                "parent_star_pos": parent_star["position"].copy(),
+                                "parent_star_pos": parent_obj["position"].copy(),
                                 "position_history": [body["position"].copy()]  # Track position history for trail
                             }
                 
@@ -2010,9 +2087,9 @@ class SolarSystemVisualizer:
         if stars:
             parent_star = min(stars, key=lambda s: np.linalg.norm(s["position"] - spawn_position))
         
-        # Calculate correct orbital position from AU
+        # Calculate correct orbital position from AU using visual scaling
         orbit_radius_au = preset.get("semiMajorAxis", 1.0)
-        orbit_radius_px = orbit_radius_au * AU_TO_PX
+        orbit_radius_px = self.get_visual_orbit_radius(orbit_radius_au)
         orbit_angle = float(random.uniform(0, 2 * np.pi))
         
         # Target position based on physics (AU)
@@ -2041,7 +2118,7 @@ class SolarSystemVisualizer:
             "gravity": float(preset.get("gravity", 9.81)),
             "semiMajorAxis": float(orbit_radius_au),  # Authoritative AU value
             "orbit_radius_au": float(orbit_radius_au),  # Store AU explicitly
-            "eccentricity": float(preset.get("eccentricity", 0.017)),
+            "eccentricity": float(preset.get("eccentricity", 0.0167)),
             "orbital_period": float(preset.get("orbital_period", 365.25)),
             "stellarFlux": float(preset.get("stellarFlux", 1.0)),
             "temperature": float(preset.get("temperature", 288.0)),
@@ -2249,9 +2326,10 @@ class SolarSystemVisualizer:
             # For planets, default_radius is in Earth radii (R⊕), not pixels
             default_radius = 1.0  # 1.0 R⊕ = Earth's radius
             
-            # Calculate position based on semi_major_axis
+            # Calculate position based on semi_major_axis using visual scaling
             semi_major_axis = params.get("semi_major_axis", 1.0)
-            position = np.array([self.width/2 + AU_TO_PX * semi_major_axis, self.height/2], dtype=float)
+            orbit_radius_px = self.get_visual_orbit_radius(semi_major_axis)
+            position = np.array([self.width/2 + orbit_radius_px, self.height/2], dtype=float)
         else:  # moon
             # Luna-like defaults
             default_mass = 1.0  # Earth's Moon mass (1 lunar mass)
@@ -2300,7 +2378,7 @@ class SolarSystemVisualizer:
             body.update({
                 "gravity": float(9.81),  # Earth's gravity in m/s²
                 "semiMajorAxis": float(semi_major_axis),  # Orbital distance (AU)
-                "eccentricity": float(0.017),  # Default orbital eccentricity (Earth-like)
+                "eccentricity": float(0.0167),  # Default orbital eccentricity (Earth-like)
                 "orbital_period": float(365.25),  # Default orbital period (days) - Earth's value
                 "stellarFlux": float(1.0),  # Default stellar flux (Earth units)
                 "temperature": float(default_T_surface),  # Surface temperature with greenhouse effect
@@ -2485,6 +2563,34 @@ class SolarSystemVisualizer:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return False
+            
+            # --- CUSTOM MODAL EVENT HANDLING (BLOCKS OTHER INPUT) ---
+            if self.show_custom_modal:
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if hasattr(self, 'apply_btn_rect') and self.apply_btn_rect.collidepoint(event.pos):
+                        if not self.custom_modal_error and self.custom_modal_text:
+                            self.apply_custom_value()
+                        continue
+                    if hasattr(self, 'cancel_btn_rect') and self.cancel_btn_rect.collidepoint(event.pos):
+                        self.cancel_custom_modal()
+                        continue
+                
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        self.cancel_custom_modal()
+                    elif event.key == pygame.K_RETURN:
+                        if not self.custom_modal_error and self.custom_modal_text:
+                            self.apply_custom_value()
+                    elif event.key == pygame.K_BACKSPACE:
+                        self.custom_modal_text = self.custom_modal_text[:-1]
+                        self.validate_custom_modal_input()
+                    else:
+                        # Allow numeric input
+                        if event.unicode.isdigit() or event.unicode in ".-e+":
+                            self.custom_modal_text += event.unicode
+                            self.validate_custom_modal_input()
+                continue
+            # --------------------------------------------------------
             
             # Handle Reset View button click (UI only, screen space) - check before other handlers
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -2703,14 +2809,24 @@ class SolarSystemVisualizer:
                                         if option_rect.collidepoint(event.pos):
                                             print(f"PLANET DROPDOWN CLICK (path 1): planet_name={planet_name}, mass={mass}, selected_body_id={self.selected_body_id}", flush=True)
                                             if planet_name == "Custom":
-                                                self.show_custom_mass_input = True
-                                                self.mass_input_active = True
-                                                # CRITICAL: Read mass from registry, not from selected_body reference
+                                                # Trigger custom modal instead of showing inline input
                                                 body = self.get_selected_body()
+                                                self.previous_dropdown_selection = body.get("planet_dropdown_selected") if body else None
+                                                
+                                                self.show_custom_modal = True
+                                                self.custom_modal_title = "Set Custom Planet Mass"
+                                                self.custom_modal_helper = "Enter mass in Earth masses (M⊕). Allowed: 0.01 – 500"
+                                                self.custom_modal_min = 0.01
+                                                self.custom_modal_max = 500.0
+                                                self.custom_modal_unit = "M⊕"
+                                                self.pending_custom_field = "mass"
+                                                self.pending_custom_body_id = self.selected_body_id
+                                                
                                                 if body:
-                                                    self.mass_input_text = self._format_value(body.get('mass', 1.0), '', for_dropdown=False)
+                                                    self.custom_modal_text = str(body.get('mass', 1.0))
                                                 else:
-                                                    self.mass_input_text = "1.0"
+                                                    self.custom_modal_text = "1.0"
+                                                self.validate_custom_modal_input()
                                             else:
                                                 # CRITICAL: Use update_selected_body_property to ensure we update ONLY the selected body
                                                 # This prevents cross-body mutations by always using ID-based registry lookup
@@ -2772,9 +2888,24 @@ class SolarSystemVisualizer:
                                 )
                                 if option_rect.collidepoint(event.pos):
                                     if age_name == "Custom":
-                                        self.show_custom_age_input = True
-                                        self.age_input_active = True
-                                        self.age_input_text = self._format_value(self.selected_body.get('age', 0.0), '', for_dropdown=False)
+                                        # Trigger custom modal for planet age
+                                        body = self.get_selected_body()
+                                        self.previous_dropdown_selection = body.get("planet_age_dropdown_selected") if body else None
+                                        
+                                        self.show_custom_modal = True
+                                        self.custom_modal_title = "Set Custom Planet Age"
+                                        self.custom_modal_helper = "Enter age in Gigayears (Gyr). Allowed: 0.1 – 13.8"
+                                        self.custom_modal_min = 0.1
+                                        self.custom_modal_max = 13.8
+                                        self.custom_modal_unit = "Gyr"
+                                        self.pending_custom_field = "age"
+                                        self.pending_custom_body_id = self.selected_body_id
+                                        
+                                        if body:
+                                            self.custom_modal_text = self._format_value(body.get('age', 0.0), '', for_dropdown=False)
+                                        else:
+                                            self.custom_modal_text = "4.5"
+                                        self.validate_custom_modal_input()
                                     else:
                                         # Ensure we're updating the correct selected body
                                         self.update_selected_body_property("age", age, "age")
@@ -2814,15 +2945,24 @@ class SolarSystemVisualizer:
                                 )
                                 if option_rect.collidepoint(event.pos):
                                     if radius_name == "Custom":
-                                        self.show_custom_radius_input = True
-                                        self.radius_input_active = True
-                                        # Initialize input text with current radius in R⊕
+                                        # Trigger custom modal for planet radius
                                         body = self.get_selected_body()
+                                        self.previous_dropdown_selection = body.get("planet_radius_dropdown_selected") if body else None
+                                        
+                                        self.show_custom_modal = True
+                                        self.custom_modal_title = "Set Custom Planet Radius"
+                                        self.custom_modal_helper = "Enter radius in Earth radii (R⊕). Allowed: 0.1 – 20"
+                                        self.custom_modal_min = 0.1
+                                        self.custom_modal_max = 20.0
+                                        self.custom_modal_unit = "R⊕"
+                                        self.pending_custom_field = "radius"
+                                        self.pending_custom_body_id = self.selected_body_id
+                                        
                                         if body:
-                                            current_radius = body.get('radius', 1.0)
-                                            self.radius_input_text = self._format_value(current_radius, '', for_dropdown=False)
+                                            self.custom_modal_text = str(body.get('radius', 1.0))
                                         else:
-                                            self.radius_input_text = "1.0"
+                                            self.custom_modal_text = "1.0"
+                                        self.validate_custom_modal_input()
                                     else:
                                         # CRITICAL: radius is in Earth radii (R⊕), store directly
                                         # No conversion needed - radius dropdown value IS in R⊕
@@ -3072,15 +3212,30 @@ class SolarSystemVisualizer:
                                 )
                                 if option_rect.collidepoint(event.pos):
                                     if dist_name == "Custom":
-                                        self.show_custom_orbital_distance_input = True
-                                        self.orbital_distance_input_active = True
-                                        self.orbital_distance_input_text = f"{self.selected_body.get('semiMajorAxis', 1.0):.2f}"
+                                        # Trigger custom modal for planet orbital distance
+                                        body = self.get_selected_body()
+                                        self.previous_dropdown_selection = body.get("planet_orbital_distance_dropdown_selected") if body else None
+                                        
+                                        self.show_custom_modal = True
+                                        self.custom_modal_title = "Set Orbital Distance"
+                                        self.custom_modal_helper = "Enter orbital distance in AU. Allowed: 0.01 – 100"
+                                        self.custom_modal_min = 0.01
+                                        self.custom_modal_max = 100.0
+                                        self.custom_modal_unit = "AU"
+                                        self.pending_custom_field = "semi_major_axis"
+                                        self.pending_custom_body_id = self.selected_body_id
+                                        
+                                        if body:
+                                            self.custom_modal_text = str(body.get('semiMajorAxis', 1.0))
+                                        else:
+                                            self.custom_modal_text = "1.0"
+                                        self.validate_custom_modal_input()
                                     else:
                                         body = self.get_selected_body()
                                         if body:
                                             self.update_selected_body_property("semiMajorAxis", dist, "semiMajorAxis")
                                             # CRITICAL: Update position using centralized function
-                                            # This ensures position is derived from semiMajorAxis * AU_TO_PX
+                                            # This ensures position is derived from semiMajorAxis via visual scaling
                                             parent_star = next((b for b in self.placed_bodies if b["name"] == body.get("parent")), None)
                                             if parent_star is None and body.get("parent_obj"):
                                                 parent_star = body["parent_obj"]
@@ -3121,7 +3276,7 @@ class SolarSystemVisualizer:
                                     if ecc_name == "Custom":
                                         self.show_custom_orbital_eccentricity_input = True
                                         self.orbital_eccentricity_input_active = True
-                                        self.orbital_eccentricity_input_text = f"{self.selected_body.get('eccentricity', 0.017):.3f}"
+                                        self.orbital_eccentricity_input_text = f"{self.selected_body.get('eccentricity', 0.0167):.3f}"
                                     else:
                                         self.update_selected_body_property("eccentricity", ecc, "eccentricity")
                                         self.show_custom_orbital_eccentricity_input = False
@@ -3357,14 +3512,24 @@ class SolarSystemVisualizer:
                                 )
                                 if option_rect.collidepoint(event.pos):
                                     if moon_name == "Custom":
-                                        self.show_custom_moon_mass_input = True
-                                        self.mass_input_active = True
-                                        # CRITICAL: Read mass from registry, not from selected_body reference
+                                        # Trigger custom modal for moon mass
                                         body = self.get_selected_body()
+                                        self.previous_dropdown_selection = body.get("moon_dropdown_selected") if body else None
+                                        
+                                        self.show_custom_modal = True
+                                        self.custom_modal_title = "Set Custom Moon Mass"
+                                        self.custom_modal_helper = "Enter mass in Lunar masses (M🌕). Allowed: 0.0001 – 10"
+                                        self.custom_modal_min = 0.0001
+                                        self.custom_modal_max = 10.0
+                                        self.custom_modal_unit = "M🌕"
+                                        self.pending_custom_field = "mass"
+                                        self.pending_custom_body_id = self.selected_body_id
+                                        
                                         if body:
-                                            self.mass_input_text = self._format_value(body.get('mass', 1.0), '', for_dropdown=False)
+                                            self.custom_modal_text = str(body.get('mass', 1.0))
                                         else:
-                                            self.mass_input_text = "1.0"
+                                            self.custom_modal_text = "1.0"
+                                        self.validate_custom_modal_input()
                                     else:
                                         # Ensure we're updating the correct selected body and mass is stored as a Python float
                                         if self.selected_body:
@@ -3456,14 +3621,30 @@ class SolarSystemVisualizer:
                                 )
                                 if option_rect.collidepoint(event.pos):
                                     if radius_name == "Custom":
-                                        self.show_custom_moon_radius_input = True
+                                        # Trigger custom modal for moon radius
+                                        body = self.get_selected_body()
+                                        self.previous_dropdown_selection = body.get("moon_radius_dropdown_selected") if body else None
+                                        
+                                        self.show_custom_modal = True
+                                        self.custom_modal_title = "Set Custom Moon Radius"
+                                        self.custom_modal_helper = "Enter radius in kilometers (km). Allowed: 1 – 10000"
+                                        self.custom_modal_min = 1
+                                        self.custom_modal_max = 10000
+                                        self.custom_modal_unit = "km"
+                                        self.pending_custom_field = "radius"
+                                        self.pending_custom_body_id = self.selected_body_id
+                                        
+                                        if body:
+                                            self.custom_modal_text = str(body.get('actual_radius', 1737.4))
+                                        else:
+                                            self.custom_modal_text = "1737.4"
+                                        self.validate_custom_modal_input()
                                     else:
-                                        # Scale the radius for visual display (convert km to appropriate pixel size)
-                                        # Use a reasonable scale factor for moons
+                                        # Update the moon's physical radius in km
+                                        # Visual radius is recomputed in real-time by calculate_moon_visual_radius
                                         body = self.get_selected_body()
                                         if body:
-                                            new_radius = max(5, min(20, radius / 100))  # Scale down and clamp
-                                            self.update_selected_body_property("radius", new_radius, "radius")
+                                            self.update_selected_body_property("actual_radius", float(radius), "actual_radius")
                                         self.show_custom_moon_radius_input = False
                                     self.moon_radius_dropdown_selected = radius_name
                                     self.moon_radius_dropdown_visible = False
@@ -3494,14 +3675,35 @@ class SolarSystemVisualizer:
                                 )
                                 if option_rect.collidepoint(event.pos):
                                     if distance_name == "Custom":
-                                        self.show_custom_moon_orbital_distance_input = True
+                                        # Trigger custom modal for moon orbital distance
+                                        body = self.get_selected_body()
+                                        self.previous_dropdown_selection = body.get("moon_orbital_distance_dropdown_selected") if body else None
+                                        
+                                        self.show_custom_modal = True
+                                        self.custom_modal_title = "Set Orbital Distance"
+                                        self.custom_modal_helper = "Enter orbital distance in kilometers (km). Allowed: 1000 – 2000000"
+                                        self.custom_modal_min = 1000
+                                        self.custom_modal_max = 2000000
+                                        self.custom_modal_unit = "km"
+                                        self.pending_custom_field = "semi_major_axis"
+                                        self.pending_custom_body_id = self.selected_body_id
+                                        
+                                        if body:
+                                            # Convert AU back to km for display
+                                            AU_TO_KM = 149597870.7
+                                            self.custom_modal_text = str(body.get('semiMajorAxis', 0.00257) * AU_TO_KM)
+                                        else:
+                                            self.custom_modal_text = "384400"
+                                        self.validate_custom_modal_input()
                                     else:
-                                        # Scale the orbital distance for visual display
+                                        # Update the moon's semi-major axis in AU (converting from km)
                                         body = self.get_selected_body()
                                         if body:
-                                            new_orbit_radius = max(50, min(200, distance / 1000))  # Scale down and clamp
-                                            self.update_selected_body_property("orbit_radius", new_orbit_radius, "orbit_radius")
-                                            # Clear orbit points when orbit radius changes
+                                            KM_TO_AU = 6.68459e-9
+                                            distance_au = float(distance) * KM_TO_AU
+                                            self.update_selected_body_property("semiMajorAxis", distance_au, "semiMajorAxis")
+                                            # Visual orbit_radius and physics are recomputed automatically
+                                            self.recompute_orbit_parameters(body, force_recompute=True)
                                             self.clear_orbit_points(body)
                                         # Regenerate orbit grid with new radius
                                         self.generate_orbit_grid(self.selected_body)
@@ -3750,14 +3952,25 @@ class SolarSystemVisualizer:
                                 )
                                 if option_rect.collidepoint(event.pos):
                                     if mass_name == "Custom":
-                                        self.show_custom_star_mass_input = True
-                                        self.mass_input_active = True
-                                        # CRITICAL: Read mass from registry, not from selected_body reference
+                                        # Trigger custom modal for star mass
                                         body = self.get_selected_body()
+                                        self.previous_dropdown_selection = body.get("star_mass_dropdown_selected") if body else None
+                                        
+                                        self.show_custom_modal = True
+                                        self.custom_modal_title = "Set Custom Star Mass"
+                                        self.custom_modal_helper = "Enter stellar mass in Solar masses (M☉). Allowed: 0.08 – 150"
+                                        self.custom_modal_min = 0.08
+                                        self.custom_modal_max = 150.0
+                                        self.custom_modal_unit = "M☉"
+                                        self.pending_custom_field = "mass"
+                                        self.pending_custom_body_id = self.selected_body_id
+                                        
                                         if body:
-                                            self.mass_input_text = self._format_value(body.get('mass', 1.0), '', for_dropdown=False)
+                                            # Convert internal mass (Earth masses) to Solar masses for display
+                                            self.custom_modal_text = str(body.get('mass', 333000.0) / 333000.0)
                                         else:
-                                            self.mass_input_text = "1.0"
+                                            self.custom_modal_text = "1.0"
+                                        self.validate_custom_modal_input()
                                     else:
                                         # Ensure we're updating the correct selected body and mass is stored as a Python float
                                         if self.selected_body:
@@ -3946,14 +4159,12 @@ class SolarSystemVisualizer:
                                     elif self.moon_radius_dropdown_visible:
                                         name, value = self.moon_radius_dropdown_options[i]
                                         if value is not None:
-                                            # Scale the radius for visual display (convert km to appropriate pixel size)
-                                            # Use a reasonable scale factor for moons
+                                            # Update the moon's physical radius in km
+                                            # Visual radius is recomputed in real-time by calculate_moon_visual_radius
                                             body = self.get_selected_body()
                                             if body:
-                                                new_radius = max(5, min(20, value / 100))  # Scale down and clamp
-                                                self.update_selected_body_property("radius", new_radius, "radius")
-                                                # Clear orbit points when radius changes
-                                                self.clear_orbit_points(body)
+                                                self.update_selected_body_property("actual_radius", float(value), "actual_radius")
+                                            self.show_custom_moon_radius_input = False
                                         else:
                                             self.show_custom_moon_radius_input = True
                                         self.moon_radius_dropdown_selected = name
@@ -3962,13 +4173,13 @@ class SolarSystemVisualizer:
                                     elif self.moon_orbital_distance_dropdown_visible:
                                         name, value = self.moon_orbital_distance_dropdown_options[i]
                                         if value is not None:
-                                            # Scale the orbital distance for visual display
+                                            # Update the moon's semi-major axis in AU (converting from km)
                                             body = self.get_selected_body()
                                             if body:
-                                                new_orbit_radius = max(50, min(200, value / 1000))  # Scale down and clamp
-                                                self.update_selected_body_property("orbit_radius", new_orbit_radius, "orbit_radius")
-                                            # Clear orbit points when orbit radius changes
-                                            self.clear_orbit_points(self.selected_body)
+                                                KM_TO_AU = 6.68459e-9
+                                                distance_au = float(value) * KM_TO_AU
+                                                self.update_selected_body_property("semiMajorAxis", distance_au, "semiMajorAxis")
+                                                self.clear_orbit_points(body)
                                             # Regenerate orbit grid with new radius
                                             self.generate_orbit_grid(self.selected_body)
                                         else:
@@ -4072,7 +4283,7 @@ class SolarSystemVisualizer:
                                             if parent_star is None and body and body.get("parent_obj"):
                                                 parent_star = body["parent_obj"]
                                             if parent_star and body:
-                                                # Use centralized function to ensure position is derived from semiMajorAxis * AU_TO_PX
+                                                # Use centralized function to ensure position is derived from semiMajorAxis via visual scaling
                                                 self.compute_planet_position(body, parent_star)
                                             if body:
                                                 self.generate_orbit_grid(body)
@@ -4094,7 +4305,7 @@ class SolarSystemVisualizer:
                                             self.show_custom_orbital_eccentricity_input = True
                                             self.orbital_eccentricity_input_active = True
                                             self.orbital_eccentricity_input_text = f"{self.selected_body.get('eccentricity', 0.0167):.3f}"
-                                        self.planet_orbital_eccentricity_dropdown_selected = ecc_name
+                                        self.planet_orbital_eccentricity_dropdown_selected = name
                                         self.planet_orbital_eccentricity_dropdown_visible = False
                                         self.planet_orbital_eccentricity_dropdown_active = False
                                         break
@@ -4427,7 +4638,7 @@ class SolarSystemVisualizer:
                             
                             # --- Planet orbital eccentricity dropdown selection logic ---
                             if self.selected_body.get('type') == 'planet':
-                                eccentricity = self.selected_body.get('eccentricity', 0.017)
+                                eccentricity = self.selected_body.get('eccentricity', 0.0167)
                                 # Ensure eccentricity is a Python float
                                 if hasattr(eccentricity, 'item'):
                                     eccentricity = float(eccentricity.item())
@@ -4627,15 +4838,18 @@ class SolarSystemVisualizer:
                                     self.moon_radius_dropdown_selected = "Custom"
                                 
                                 # --- Moon orbital distance dropdown selection logic ---
-                                orbit_radius = self.selected_body.get('orbit_radius', 384400)
+                                semi_major_axis = self.selected_body.get('semiMajorAxis', 0.00257)
+                                # Convert AU to km for dropdown comparison
+                                AU_TO_KM = 149597870.7
+                                distance_km = semi_major_axis * AU_TO_KM
                                 found = False
                                 for name, preset_distance in self.moon_orbital_distance_dropdown_options:
-                                    if preset_distance is not None and abs(preset_distance - orbit_radius) < 1:
+                                    if preset_distance is not None and abs(preset_distance - distance_km) < 100:  # Larger tolerance for km
                                         self.moon_orbital_distance_dropdown_selected = name
                                         found = True
                                         break
                                 if not found:
-                                    self.moon_orbital_distance_dropdown_selected = "Moon"  # Default to Moon instead of Custom
+                                    self.moon_orbital_distance_dropdown_selected = "Custom"
                                 
                                 # --- Moon orbital period dropdown selection logic ---
                                 orbital_period = self.selected_body.get('orbital_period', 27.3)
@@ -4888,17 +5102,21 @@ class SolarSystemVisualizer:
                                         if planets:
                                             # Find nearest planet to the moon's cursor position
                                             nearest_planet = min(planets, key=lambda p: np.linalg.norm(p["position"] - body["position"]))
-                                            # Calculate orbit radius from cursor position
-                                            orbit_radius = np.linalg.norm(nearest_planet["position"] - body["position"])
+                                            # Calculate orbit radius in AU from cursor position using reverse visual scaling
+                                            # Formula: AU = MOON_ORBIT_AU * (orbit_radius_px / MOON_ORBIT_PX)^2
+                                            orbit_radius_px = np.linalg.norm(nearest_planet["position"] - body["position"])
                                             # Ensure minimum orbit radius
-                                            if orbit_radius < MOON_ORBIT_PX:
-                                                orbit_radius = MOON_ORBIT_PX
+                                            if orbit_radius_px < MOON_ORBIT_PX * 0.5:
+                                                orbit_radius_px = MOON_ORBIT_PX * 0.5
                                             
-                                            # Set parent and orbit radius - use ID for explicit parent-child relationship
+                                            orbit_radius_au = MOON_ORBIT_AU * (orbit_radius_px / MOON_ORBIT_PX)**2
+                                            
+                                            # Set parent and orbital distance in AU
                                             body["parent"] = nearest_planet["name"]
                                             body["parent_id"] = nearest_planet["id"]  # Use UUID for parent lookup
                                             body["parent_obj"] = nearest_planet  # Set permanent parent reference for faster lookups
-                                            body["orbit_radius"] = float(orbit_radius)
+                                            body["semiMajorAxis"] = float(orbit_radius_au)
+                                            body["orbit_radius"] = float(self.get_visual_moon_orbit_radius(orbit_radius_au))
                                             
                                             # Calculate initial orbit angle from cursor position
                                             dx = body["position"][0] - nearest_planet["position"][0]
@@ -5280,6 +5498,21 @@ class SolarSystemVisualizer:
                     elif event.unicode.isnumeric() or event.unicode == '.' or event.unicode == '-' or event.unicode == '+':
                         # Allow numbers, decimal point, and signs for ΔT
                         self.planet_atmosphere_input_text += event.unicode
+                if self.show_custom_moon_radius_input and self.selected_body and self.selected_body.get('type') == 'moon':
+                    if event.key == pygame.K_RETURN:
+                        radius = self._parse_input_value(self.moon_radius_input_text)
+                        if radius is not None and 1 <= radius <= 10000:
+                            self.update_selected_body_property("actual_radius", radius, "actual_radius")
+                            self.moon_radius_input_text = ""
+                            self.show_custom_moon_radius_input = False
+                    elif event.key == pygame.K_BACKSPACE:
+                        self.moon_radius_input_text = self.moon_radius_input_text[:-1]
+                    elif event.key == pygame.K_ESCAPE:
+                        self.show_custom_moon_radius_input = False
+                        self.moon_radius_input_text = ""
+                    elif event.unicode.isnumeric() or event.unicode == '.':
+                        self.moon_radius_input_text += event.unicode
+
                 if self.show_custom_moon_gravity_input and self.selected_body and self.selected_body.get('type') == 'moon':
                     if event.key == pygame.K_RETURN:
                         gravity = self._parse_input_value(self.moon_gravity_input_text)
@@ -5297,14 +5530,17 @@ class SolarSystemVisualizer:
                         self.moon_gravity_input_text += event.unicode
                 if self.show_custom_moon_orbital_distance_input and self.selected_body and self.selected_body.get('type') == 'moon':
                     if event.key == pygame.K_RETURN:
-                        distance = self._parse_input_value(self.orbital_distance_input_text)
-                        if distance is not None and 1000 <= distance <= 10000000:  # Reasonable orbital distance range for moons (km)
-                            # Scale the orbital distance for visual display
-                            new_orbit_radius = max(50, min(200, distance / 1000))
-                            self.update_selected_body_property("orbit_radius", new_orbit_radius, "orbit_radius")
+                        distance_km = self._parse_input_value(self.orbital_distance_input_text)
+                        if distance_km is not None and 1000 <= distance_km <= 10000000:  # Reasonable orbital distance range for moons (km)
+                            # Convert km to AU
+                            AU_TO_KM = 149597870.7
+                            distance_au = distance_km / AU_TO_KM
+                            self.update_selected_body_property("semiMajorAxis", distance_au, "semiMajorAxis")
+                            
                             body = self.get_selected_body()
                             if body:
-                                # Clear orbit points when orbit radius changes
+                                # Visual orbit_radius and physics are recomputed automatically
+                                self.recompute_orbit_parameters(body, force_recompute=True)
                                 self.clear_orbit_points(body)
                                 # Regenerate orbit grid with new radius
                                 self.generate_orbit_grid(body)
@@ -5329,7 +5565,7 @@ class SolarSystemVisualizer:
                             if parent_star is None and self.selected_body.get("parent_obj"):
                                 parent_star = self.selected_body["parent_obj"]
                             if parent_star:
-                                # Use centralized function to ensure position is derived from semiMajorAxis * AU_TO_PX
+                                # Use centralized function to ensure position is derived from semiMajorAxis via visual scaling
                                 self.compute_planet_position(self.selected_body, parent_star)
                                 self.selected_body["position"][1] = parent_star["position"][1]
                             self.generate_orbit_grid(self.selected_body)
@@ -5488,15 +5724,17 @@ class SolarSystemVisualizer:
         Position is ALWAYS derived from:
         - parent_star.position
         - planet.orbit_angle
-        - planet.semiMajorAxis * AU_TO_PX
+        - visual_orbit_radius (scaled AU_TO_PX * sqrt(semiMajorAxis))
         
-        This ensures AU is the single source of truth for planetary distance.
+        This ensures AU is the single source of truth for planetary distance,
+        while applying perceptual scaling for a more compact UX.
         """
         if planet["type"] != "planet" or parent_star is None:
             return
         
-        # CRITICAL: orbit_radius_px MUST equal semiMajorAxis * AU_TO_PX
-        orbit_radius_px = planet.get("semiMajorAxis", 1.0) * AU_TO_PX
+        # Apply perceptual scaling to AU distance (sqrt scaling)
+        semi_major_axis_au = planet.get("semiMajorAxis", 1.0)
+        orbit_radius_px = self.get_visual_orbit_radius(semi_major_axis_au)
         
         # Compute position from parent position, orbit_angle, and orbit_radius_px
         x = parent_star["position"][0] + orbit_radius_px * math.cos(planet["orbit_angle"])
@@ -5508,6 +5746,34 @@ class SolarSystemVisualizer:
         # Update orbit_radius for backwards compatibility (derived from semiMajorAxis)
         planet["orbit_radius"] = float(orbit_radius_px)
     
+    def compute_moon_position(self, moon, parent_planet):
+        """
+        MANDATORY: Centralized function to compute moon position from semiMajorAxis.
+        Position is ALWAYS derived from:
+        - parent_planet.position
+        - moon.orbit_angle (relative to planet)
+        - visual_moon_orbit_radius (scaled MOON_ORBIT_PX * sqrt(semiMajorAxis/MOON_ORBIT_AU))
+        
+        This ensures moon distance is the single source of truth,
+        while applying the same hierarchical stability as planets.
+        """
+        if moon["type"] != "moon" or parent_planet is None:
+            return
+            
+        # Get visual orbit radius from semiMajorAxis (AU)
+        semi_major_axis_au = moon.get("semiMajorAxis", MOON_ORBIT_AU)
+        orbit_radius_px = self.get_visual_moon_orbit_radius(semi_major_axis_au)
+        
+        # Compute position relative to parent planet
+        x = parent_planet["position"][0] + orbit_radius_px * math.cos(moon["orbit_angle"])
+        y = parent_planet["position"][1] + orbit_radius_px * math.sin(moon["orbit_angle"])
+        
+        # Update position
+        moon["position"] = np.array([x, y], dtype=float)
+        
+        # Update orbit_radius for backwards compatibility
+        moon["orbit_radius"] = float(orbit_radius_px)
+
     def recompute_orbit_parameters(self, body, force_recompute=False):
         """
         Recompute orbital parameters for a single body based on its current mass and parent.
@@ -5542,12 +5808,12 @@ class SolarSystemVisualizer:
         body["parent_obj"] = parent
         body["parent"] = parent["name"]
         
-        # CRITICAL: For planets, orbit_radius MUST be derived from semiMajorAxis * AU_TO_PX
+        # CRITICAL: For planets, orbit_radius MUST be derived using visual scaling
         # Position is derived, never stored. AU is the single source of truth.
         if body["type"] == "planet":
-            # For planets: orbit_radius is ALWAYS semiMajorAxis * AU_TO_PX
+            # For planets: orbit_radius uses perceptual sqrt scaling
             semi_major_axis = body.get("semiMajorAxis", 1.0)
-            orbit_radius = semi_major_axis * AU_TO_PX
+            orbit_radius = self.get_visual_orbit_radius(semi_major_axis)
             body["orbit_radius"] = float(orbit_radius)
             
             # Initialize orbit_angle if not set
@@ -5559,23 +5825,26 @@ class SolarSystemVisualizer:
             # CRITICAL: Update position immediately using centralized function
             self.compute_planet_position(body, parent)
         else:
-            # For moons: calculate orbit radius from current position (or use existing)
-            if force_recompute or body.get("orbit_radius", 0.0) == 0.0:
-                orbit_radius = np.linalg.norm(parent["position"] - body["position"])
-                body["orbit_radius"] = float(orbit_radius)
-                
-                # CRITICAL: Initialize orbit_angle randomly to ensure independent orbital phase
-                existing_angle = body.get("orbit_angle", 0.0)
-                if existing_angle == 0.0:
-                    body["orbit_angle"] = float(random.uniform(0, 2 * np.pi))
-                    print(f"ORBIT_ANGLE_INIT body_id={body.get('id', 'unknown')} name={body.get('name', 'unknown')} "
-                          f"random_angle={body['orbit_angle']:.6f}")
+            # For moons: calculate orbit radius from semiMajorAxis using visual scaling
+            # Fallback to current distance if semiMajorAxis not set
+            if body.get("semiMajorAxis"):
+                orbit_radius = self.get_visual_moon_orbit_radius(body["semiMajorAxis"])
             else:
-                orbit_radius = body.get("orbit_radius", 0.0)
-                if body.get("orbit_angle", 0.0) == 0.0:
-                    body["orbit_angle"] = float(random.uniform(0, 2 * np.pi))
-                    print(f"ORBIT_ANGLE_INIT body_id={body.get('id', 'unknown')} name={body.get('name', 'unknown')} "
-                          f"random_angle={body['orbit_angle']:.6f}")
+                if force_recompute or body.get("orbit_radius", 0.0) == 0.0:
+                    orbit_radius = np.linalg.norm(parent["position"] - body["position"])
+                else:
+                    orbit_radius = body.get("orbit_radius", 0.0)
+            
+            body["orbit_radius"] = float(orbit_radius)
+            
+            # CRITICAL: Initialize orbit_angle randomly to ensure independent orbital phase
+            if body.get("orbit_angle", 0.0) == 0.0:
+                body["orbit_angle"] = float(random.uniform(0, 2 * np.pi))
+                print(f"ORBIT_ANGLE_INIT body_id={body.get('id', 'unknown')} name={body.get('name', 'unknown')} "
+                      f"random_angle={body['orbit_angle']:.6f}")
+            
+            # CRITICAL: Update position immediately using centralized function
+            self.compute_moon_position(body, parent)
         
         # CRITICAL: Recalculate orbital speed using BOTH parent mass AND body mass
         # Standard gravitational parameter: μ = G * (M_parent + M_body)
@@ -5584,7 +5853,20 @@ class SolarSystemVisualizer:
             parent_mass = float(parent.get("mass", 0.0))
             body_mass = float(body.get("mass", 0.0))
             mu = self.G * (parent_mass + body_mass)  # Combined mass for gravitational parameter
-            base_speed = np.sqrt(mu / (orbit_radius ** 3))
+            
+            # For speed calculation, use the ACTUAL physical radius (linear)
+            # This ensures orbital periods remain scientifically correct for the given AU
+            if body["type"] == "planet":
+                physics_radius = body.get("semiMajorAxis", 1.0) * AU_TO_PX
+            elif body["type"] == "moon" and body.get("semiMajorAxis"):
+                # Use a specific physics scale for moons to keep their orbital speeds stable
+                # Maps MOON_ORBIT_AU to MOON_ORBIT_PX (~40 units) for tuned kinematic physics
+                MOON_PHYSICS_SCALE = MOON_ORBIT_PX / MOON_ORBIT_AU
+                physics_radius = body["semiMajorAxis"] * MOON_PHYSICS_SCALE
+            else:
+                physics_radius = orbit_radius # Fallback for old bodies
+                
+            base_speed = np.sqrt(mu / (physics_radius ** 3))
             
             # Store mu per-body for verification
             body["mu"] = float(mu)
@@ -5657,10 +5939,11 @@ class SolarSystemVisualizer:
                 # Parameters already set, just ensure parent is set
                 body["parent"] = parent["name"]
             
-            # CRITICAL: For planets, orbit_radius MUST equal semiMajorAxis * AU_TO_PX
-            # For moons, use existing orbit_radius
+            # CRITICAL: For planets and moons, orbit_radius is derived from semiMajorAxis via visual scaling
             if body["type"] == "planet":
-                orbit_radius = body.get("semiMajorAxis", 1.0) * AU_TO_PX
+                orbit_radius = self.get_visual_orbit_radius(body.get("semiMajorAxis", 1.0))
+            elif body["type"] == "moon" and body.get("semiMajorAxis"):
+                orbit_radius = self.get_visual_moon_orbit_radius(body["semiMajorAxis"])
             else:
                 orbit_radius = body.get("orbit_radius", 0.0)
             
@@ -5808,6 +6091,11 @@ class SolarSystemVisualizer:
                     if parent_star:
                         self.compute_planet_position(body, parent_star)
                         body["visual_position"] = body["position"].copy()
+                elif body["type"] == "moon":
+                    parent_planet = body.get("parent_obj")
+                    if parent_planet:
+                        self.compute_moon_position(body, parent_planet)
+                        body["visual_position"] = body["position"].copy()
                 
                 bodies_to_remove_from_correction.append(body_id)
         
@@ -5884,9 +6172,12 @@ class SolarSystemVisualizer:
                 if body.get("parent_obj") is None or body["parent_obj"] != parent:
                     body["parent_obj"] = parent
                 
-                # CRITICAL: For planets, orbit_radius is derived from semiMajorAxis * AU_TO_PX
+                # CRITICAL: For planets and moons, orbit_radius is derived from semiMajorAxis via visual scaling
                 if body["type"] == "planet":
-                    orbit_radius = body.get("semiMajorAxis", 1.0) * AU_TO_PX
+                    orbit_radius = self.get_visual_orbit_radius(body.get("semiMajorAxis", 1.0))
+                    body["orbit_radius"] = float(orbit_radius)
+                elif body["type"] == "moon" and body.get("semiMajorAxis"):
+                    orbit_radius = self.get_visual_moon_orbit_radius(body["semiMajorAxis"])
                     body["orbit_radius"] = float(orbit_radius)
                 else:
                     orbit_radius = body.get("orbit_radius", 0.0)
@@ -5899,7 +6190,7 @@ class SolarSystemVisualizer:
                     self.generate_orbit_grid(body)
                     # Re-get values after regeneration
                     if body["type"] == "planet":
-                        orbit_radius = body.get("semiMajorAxis", 1.0) * AU_TO_PX
+                        orbit_radius = self.get_visual_orbit_radius(body.get("semiMajorAxis", 1.0))
                     else:
                         orbit_radius = body.get("orbit_radius", 0.0)
                     orbit_speed = body.get("orbit_speed", 0.0)
@@ -5928,7 +6219,7 @@ class SolarSystemVisualizer:
                           f"mu={body.get('mu', 0.0):.6f} orbit_radius={body.get('orbit_radius', 0.0):.6f} "
                           f"orbit_angle={body.get('orbit_angle', 0.0):.6f}")
                 
-                # CRITICAL: For planets, position MUST be computed from semiMajorAxis * AU_TO_PX
+                # CRITICAL: For planets, position MUST be computed from semiMajorAxis via visual scaling
                 # Use centralized function to ensure AU is single source of truth
                 # BUT: Skip position update if orbital correction animation is active
                 if p is not None:
@@ -6055,19 +6346,15 @@ class SolarSystemVisualizer:
                 # Formula: moon.position = planet.position + [r * cos(angle), r * sin(angle)]
                 # This ensures moon stays locked to planet's current position
                 # CRITICAL: This MUST happen every frame, BEFORE any rendering
+                # BUT: Skip position update if orbital correction animation is active
                 if orbit_radius > 0.0 and not np.isnan(orbit_radius) and p is not None:
-                    # Calculate orbital offset from parent (in parent's coordinate frame)
-                    moon_offset_x = orbit_radius * math.cos(body["orbit_angle"])
-                    moon_offset_y = orbit_radius * math.sin(body["orbit_angle"])
-                    
-                    # Set position RELATIVE to parent (hierarchical orbit)
-                    # Use parent_obj for direct reference - ensures we use the actual parent object
-                    trace(f"PRE_WRITE {body['name']} pos={body['position'].copy()} source=update_physics_moon parent_pos={p['position'].copy()}")
-                    body["position"][0] = p["position"][0] + moon_offset_x
-                    body["position"][1] = p["position"][1] + moon_offset_y
-                    # Ensure position is float array
-                    body["position"] = np.array(body["position"], dtype=float)
-                    trace(f"POST_WRITE {body['name']} pos={body['position'].copy()} source=update_physics_moon")
+                    if not body.get("is_correcting_orbit", False):
+                        trace(f"PRE_WRITE {body['name']} pos={body['position'].copy()} source=update_physics_moon parent_pos={p['position'].copy()}")
+                        self.compute_moon_position(body, p)
+                        trace(f"POST_WRITE {body['name']} pos={body['position'].copy()} source=update_physics_moon")
+                        # Update visual_position to match position when not animating
+                        if "visual_position" in body:
+                            body["visual_position"] = body["position"].copy()
                     
                     # Verification: Log moon position relative to planet (every 60 frames to avoid spam)
                     actual_distance = np.linalg.norm(body["position"] - p["position"])
@@ -6951,69 +7238,44 @@ class SolarSystemVisualizer:
                 pygame.draw.rect(self.screen, self.BLUE if self.star_mass_dropdown_active else self.GRAY, 
                                self.star_mass_dropdown_rect, 1)
                 dropdown_text = "Select Star Mass"
-                if self.star_mass_dropdown_selected:
-                    selected = next(((name, value) for name, value in self.star_mass_dropdown_options if name == self.star_mass_dropdown_selected), None)
+                
+                body = self.get_selected_body()
+                body_dropdown_selected = body.get("star_mass_dropdown_selected", self.star_mass_dropdown_selected) if body else self.star_mass_dropdown_selected
+                
+                if body_dropdown_selected:
+                    selected = next(((name, value) for name, value in self.star_mass_dropdown_options if name == body_dropdown_selected), None)
                     if selected:
                         name, value = selected
                         if value is not None and "(Sun)" in name:
                             dropdown_text = f"Sun ({value:.2f} M☉)"
                         else:
                             dropdown_text = name
+                    else:
+                        dropdown_text = body_dropdown_selected
+
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.star_mass_dropdown_rect.left + 5, self.star_mass_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
-
-                # Show custom mass input if "Custom Mass" is selected
-                if self.show_custom_star_mass_input:
-                    custom_mass_label = self.subtitle_font.render("Enter Custom Mass (M☉):", True, self.BLACK)
-                    custom_mass_label_rect = custom_mass_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 165))
-                    self.screen.blit(custom_mass_label, custom_mass_label_rect)
-                    
-                    pygame.draw.rect(self.screen, self.WHITE, self.mass_input_rect, 2)
-                    pygame.draw.rect(self.screen, self.BLUE if self.mass_input_active else self.GRAY, 
-                                   self.mass_input_rect, 1)
-                    # CRITICAL: Read mass from registry to ensure we get the correct body
-                    body = self.get_selected_body()
-                    if body:
-                        if body.get('type') == 'moon':
-                            # For moons, mass is already in Lunar masses
-                            lunar_mass = body.get('mass', 1.0)
-                            if self.mass_input_active:
-                                text_surface = self.subtitle_font.render(self.mass_input_text, True, self.BLACK)
-                            else:
-                                text_surface = self.subtitle_font.render(self._format_value(lunar_mass, '', for_dropdown=False), True, self.BLACK)
-                        else:
-                            if self.mass_input_active:
-                                text_surface = self.subtitle_font.render(self.mass_input_text, True, self.BLACK)
-                            else:
-                                text_surface = self.subtitle_font.render(self._format_value(body.get('mass', 1.0), '', for_dropdown=False), True, self.BLACK)
-                    else:
-                        text_surface = self.subtitle_font.render("N/A", True, self.BLACK)
-                    text_rect = text_surface.get_rect(midleft=(self.mass_input_rect.left + 5, 
-                                                             self.mass_input_rect.centery))
-                    self.screen.blit(text_surface, text_rect)
+                
+                # REMOVED: Inline custom mass input (now handled by modal)
             else:
-                # For non-planets, show the mass input box
+                # For non-planets (moons/stars), show the mass input box
+                # UNIFIED: Use modal for custom input everywhere
                 pygame.draw.rect(self.screen, self.WHITE, self.mass_input_rect, 2)
                 pygame.draw.rect(self.screen, self.BLUE if self.mass_input_active else self.GRAY, 
                                self.mass_input_rect, 1)
-                if self.selected_body.get('type') == 'moon':
-                    # For moons, mass is already in Lunar masses
-                    lunar_mass = self.selected_body.get('mass', 1.0)
-                    if self.mass_input_active:
-                        text_surface = self.subtitle_font.render(self.mass_input_text, True, self.BLACK)
+                
+                body = self.get_selected_body()
+                if body:
+                    # Show value or label
+                    label = body.get("mass_dropdown_selected" if body["type"] == "moon" else "star_mass_dropdown_selected")
+                    if label:
+                        text_surface = self.subtitle_font.render(label, True, self.BLACK)
                     else:
-                        text_surface = self.subtitle_font.render(self._format_value(lunar_mass, '', for_dropdown=False), True, self.BLACK)
+                        text_surface = self.subtitle_font.render(self._format_value(body.get('mass', 1.0), '', for_dropdown=False), True, self.BLACK)
                 else:
-                    if self.mass_input_active:
-                        text_surface = self.subtitle_font.render(self.mass_input_text, True, self.BLACK)
-                    else:
-                        # CRITICAL: Read mass from registry
-                        body = self.get_selected_body()
-                        if body:
-                            text_surface = self.subtitle_font.render(self._format_value(body.get('mass', 1.0), '', for_dropdown=False), True, self.BLACK)
-                        else:
-                            text_surface = self.subtitle_font.render("N/A", True, self.BLACK)
+                    text_surface = self.subtitle_font.render("N/A", True, self.BLACK)
+                
                 text_rect = text_surface.get_rect(midleft=(self.mass_input_rect.left + 5, self.mass_input_rect.centery))
                 self.screen.blit(text_surface, text_rect)
             
@@ -7110,18 +7372,7 @@ class SolarSystemVisualizer:
                                                          self.moon_radius_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
 
-                # Show custom radius input if "Custom" is selected
-                if self.show_custom_moon_radius_input:
-                    custom_radius_label = self.subtitle_font.render("Enter Custom Radius (km):", True, self.BLACK)
-                    custom_radius_label_rect = custom_radius_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 285))
-                    self.screen.blit(custom_radius_label, custom_radius_label_rect)
-                    
-                    custom_radius_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 315, self.customization_panel_width - 100, 30)
-                    pygame.draw.rect(self.screen, self.WHITE, custom_radius_input_rect, 2)
-                    pygame.draw.rect(self.screen, self.BLUE, custom_radius_input_rect, 1)
-                    text_surface = self.subtitle_font.render(self.moon_gravity_input_text, True, self.BLACK)
-                    text_rect = text_surface.get_rect(midleft=(custom_radius_input_rect.left + 5, custom_radius_input_rect.centery))
-                    self.screen.blit(text_surface, text_rect)
+                # REMOVED: Inline custom radius input (now handled by modal)
                 
                 # ORBITAL DISTANCE SECTION (only for moons)
                 orbital_distance_label = self.subtitle_font.render("Orbital Distance (km)", True, self.BLACK)
@@ -7146,18 +7397,7 @@ class SolarSystemVisualizer:
                                                          self.moon_orbital_distance_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
 
-                # Show custom orbital distance input if "Custom" is selected
-                if self.show_custom_moon_orbital_distance_input:
-                    custom_distance_label = self.subtitle_font.render("Enter Custom Distance (km):", True, self.BLACK)
-                    custom_distance_label_rect = custom_distance_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 345))
-                    self.screen.blit(custom_distance_label, custom_distance_label_rect)
-                    
-                    custom_distance_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 375, self.customization_panel_width - 100, 30)
-                    pygame.draw.rect(self.screen, self.WHITE, custom_distance_input_rect, 2)
-                    pygame.draw.rect(self.screen, self.BLUE, custom_distance_input_rect, 1)
-                    text_surface = self.subtitle_font.render(self.moon_gravity_input_text, True, self.BLACK)
-                    text_rect = text_surface.get_rect(midleft=(custom_distance_input_rect.left + 5, custom_distance_input_rect.centery))
-                    self.screen.blit(text_surface, text_rect)
+                # REMOVED: Inline custom orbital distance input (now handled by modal)
                 
                 # ORBITAL PERIOD SECTION (only for moons)
                 orbital_period_label = self.subtitle_font.render("Orbital Period (days)", True, self.BLACK)
@@ -7191,7 +7431,7 @@ class SolarSystemVisualizer:
                     custom_period_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 435, self.customization_panel_width - 100, 30)
                     pygame.draw.rect(self.screen, self.WHITE, custom_period_input_rect, 2)
                     pygame.draw.rect(self.screen, self.BLUE, custom_period_input_rect, 1)
-                    text_surface = self.subtitle_font.render(self.moon_gravity_input_text, True, self.BLACK)
+                    text_surface = self.subtitle_font.render(self.orbital_period_input_text, True, self.BLACK)
                     text_rect = text_surface.get_rect(midleft=(custom_period_input_rect.left + 5, custom_period_input_rect.centery))
                     self.screen.blit(text_surface, text_rect)
                 
@@ -7227,7 +7467,7 @@ class SolarSystemVisualizer:
                     custom_temp_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 495, self.customization_panel_width - 100, 30)
                     pygame.draw.rect(self.screen, self.WHITE, custom_temp_input_rect, 2)
                     pygame.draw.rect(self.screen, self.BLUE, custom_temp_input_rect, 1)
-                    text_surface = self.subtitle_font.render(self.moon_gravity_input_text, True, self.BLACK)
+                    text_surface = self.subtitle_font.render(self.planet_temperature_input_text, True, self.BLACK)
                     text_rect = text_surface.get_rect(midleft=(custom_temp_input_rect.left + 5, custom_temp_input_rect.centery))
                     self.screen.blit(text_surface, text_rect)
                 
@@ -7480,17 +7720,7 @@ class SolarSystemVisualizer:
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.planet_orbital_period_dropdown_rect.left + 5, self.planet_orbital_period_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
-                # Show custom orbital period input if "Custom" is selected, just below dropdown
-                if self.show_custom_orbital_period_input:
-                    custom_period_label = self.subtitle_font.render("Enter Custom Period (days):", True, self.BLACK)
-                    custom_period_label_rect = custom_period_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 565))
-                    self.screen.blit(custom_period_label, custom_period_label_rect)
-                    custom_period_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 595, self.customization_panel_width - 100, 30)
-                    pygame.draw.rect(self.screen, self.WHITE, custom_period_input_rect, 2)
-                    pygame.draw.rect(self.screen, self.BLUE, custom_period_input_rect, 1)
-                    text_surface = self.subtitle_font.render(self.orbital_period_input_text, True, self.BLACK)
-                    text_rect = text_surface.get_rect(midleft=(custom_period_input_rect.left + 5, custom_period_input_rect.centery))
-                    self.screen.blit(text_surface, text_rect)
+                # REMOVED: Inline custom orbital period input (now handled by modal)
                 # Stellar Flux dropdown
                 stellar_flux_label = self.subtitle_font.render("Stellar Flux (Earth Units)", True, self.BLACK)
                 stellar_flux_label_rect = stellar_flux_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 645))
@@ -7947,6 +8177,9 @@ class SolarSystemVisualizer:
         if self.preview_position and self.preview_radius and self.preview_radius > 0 and not should_hide_preview:
             self.draw_placement_preview()
 
+        # Draw the custom modal last if active
+        self.draw_custom_modal()
+
         pygame.display.flip()
     
     def draw_placement_preview(self):
@@ -8070,9 +8303,9 @@ class SolarSystemVisualizer:
         inner_HZ_AU = np.sqrt(luminosity / 1.1)
         outer_HZ_AU = np.sqrt(luminosity / 0.53)
         
-        # Convert to pixels
-        inner_HZ_px = int(inner_HZ_AU * AU_TO_PX)
-        outer_HZ_px = int(outer_HZ_AU * AU_TO_PX)
+        # Convert to pixels using perceptual scaling
+        inner_HZ_px = int(self.get_visual_orbit_radius(inner_HZ_AU))
+        outer_HZ_px = int(self.get_visual_orbit_radius(outer_HZ_AU))
         
         if outer_HZ_px <= 0:
             return None
@@ -8403,18 +8636,7 @@ class SolarSystemVisualizer:
                                                          self.moon_radius_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
 
-                # Show custom radius input if "Custom" is selected
-                if self.show_custom_moon_radius_input:
-                    custom_radius_label = self.subtitle_font.render("Enter Custom Radius (km):", True, self.BLACK)
-                    custom_radius_label_rect = custom_radius_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 285))
-                    self.screen.blit(custom_radius_label, custom_radius_label_rect)
-                    
-                    custom_radius_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 315, self.customization_panel_width - 100, 30)
-                    pygame.draw.rect(self.screen, self.WHITE, custom_radius_input_rect, 2)
-                    pygame.draw.rect(self.screen, self.BLUE, custom_radius_input_rect, 1)
-                    text_surface = self.subtitle_font.render(self.moon_gravity_input_text, True, self.BLACK)
-                    text_rect = text_surface.get_rect(midleft=(custom_radius_input_rect.left + 5, custom_radius_input_rect.centery))
-                    self.screen.blit(text_surface, text_rect)
+                # REMOVED: Inline custom radius input (now handled by modal)
                 
                 # ORBITAL DISTANCE SECTION (only for moons)
                 orbital_distance_label = self.subtitle_font.render("Orbital Distance (km)", True, self.BLACK)
@@ -8439,18 +8661,7 @@ class SolarSystemVisualizer:
                                                          self.moon_orbital_distance_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
 
-                # Show custom orbital distance input if "Custom" is selected
-                if self.show_custom_moon_orbital_distance_input:
-                    custom_distance_label = self.subtitle_font.render("Enter Custom Distance (km):", True, self.BLACK)
-                    custom_distance_label_rect = custom_distance_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 345))
-                    self.screen.blit(custom_distance_label, custom_distance_label_rect)
-                    
-                    custom_distance_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 375, self.customization_panel_width - 100, 30)
-                    pygame.draw.rect(self.screen, self.WHITE, custom_distance_input_rect, 2)
-                    pygame.draw.rect(self.screen, self.BLUE, custom_distance_input_rect, 1)
-                    text_surface = self.subtitle_font.render(self.moon_gravity_input_text, True, self.BLACK)
-                    text_rect = text_surface.get_rect(midleft=(custom_distance_input_rect.left + 5, custom_distance_input_rect.centery))
-                    self.screen.blit(text_surface, text_rect)
+                # REMOVED: Inline custom orbital distance input (now handled by modal)
                 
                 # ORBITAL PERIOD SECTION (only for moons)
                 orbital_period_label = self.subtitle_font.render("Orbital Period (days)", True, self.BLACK)
@@ -8484,7 +8695,7 @@ class SolarSystemVisualizer:
                     custom_period_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 435, self.customization_panel_width - 100, 30)
                     pygame.draw.rect(self.screen, self.WHITE, custom_period_input_rect, 2)
                     pygame.draw.rect(self.screen, self.BLUE, custom_period_input_rect, 1)
-                    text_surface = self.subtitle_font.render(self.moon_gravity_input_text, True, self.BLACK)
+                    text_surface = self.subtitle_font.render(self.orbital_period_input_text, True, self.BLACK)
                     text_rect = text_surface.get_rect(midleft=(custom_period_input_rect.left + 5, custom_period_input_rect.centery))
                     self.screen.blit(text_surface, text_rect)
                 
@@ -8520,7 +8731,7 @@ class SolarSystemVisualizer:
                     custom_temp_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 495, self.customization_panel_width - 100, 30)
                     pygame.draw.rect(self.screen, self.WHITE, custom_temp_input_rect, 2)
                     pygame.draw.rect(self.screen, self.BLUE, custom_temp_input_rect, 1)
-                    text_surface = self.subtitle_font.render(self.moon_gravity_input_text, True, self.BLACK)
+                    text_surface = self.subtitle_font.render(self.planet_temperature_input_text, True, self.BLACK)
                     text_rect = text_surface.get_rect(midleft=(custom_temp_input_rect.left + 5, custom_temp_input_rect.centery))
                     self.screen.blit(text_surface, text_rect)
                 
@@ -8783,17 +8994,7 @@ class SolarSystemVisualizer:
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.planet_orbital_period_dropdown_rect.left + 5, self.planet_orbital_period_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
-                # Show custom orbital period input if "Custom" is selected, just below dropdown
-                if self.show_custom_orbital_period_input:
-                    custom_period_label = self.subtitle_font.render("Enter Custom Period (days):", True, self.BLACK)
-                    custom_period_label_rect = custom_period_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 565))
-                    self.screen.blit(custom_period_label, custom_period_label_rect)
-                    custom_period_input_rect = pygame.Rect(self.width - self.customization_panel_width + 50, 595, self.customization_panel_width - 100, 30)
-                    pygame.draw.rect(self.screen, self.WHITE, custom_period_input_rect, 2)
-                    pygame.draw.rect(self.screen, self.BLUE, custom_period_input_rect, 1)
-                    text_surface = self.subtitle_font.render(self.orbital_period_input_text, True, self.BLACK)
-                    text_rect = text_surface.get_rect(midleft=(custom_period_input_rect.left + 5, custom_period_input_rect.centery))
-                    self.screen.blit(text_surface, text_rect)
+                # REMOVED: Inline custom orbital period input (now handled by modal)
                 # Stellar Flux dropdown
                 stellar_flux_label = self.subtitle_font.render("Stellar Flux (Earth Units)", True, self.BLACK)
                 stellar_flux_label_rect = stellar_flux_label.get_rect(midleft=(self.width - self.customization_panel_width + 50, 645))
@@ -9142,19 +9343,6 @@ class SolarSystemVisualizer:
                     # This is acceptable as it's a visual state change (mouse leaving area)
                     self.preview_position = None
         
-        # Draw instructions if a tab is active
-        if self.active_tab:
-            if self.active_tab == "planet" and self.planet_dropdown_selected:
-                instruction_text = self.subtitle_font.render(f"Click in the space to place {self.planet_dropdown_selected}", True, self.WHITE)
-            else:
-                instruction_text = self.subtitle_font.render(f"Click in the space to place a {self.active_tab}", True, self.WHITE)
-            instruction_rect = instruction_text.get_rect(center=(self.width//2, self.tab_height + self.tab_margin))
-            self.screen.blit(instruction_text, instruction_rect)
-        else:
-            instruction_text = self.subtitle_font.render("Select a tab to place celestial bodies", True, self.WHITE)
-            instruction_rect = instruction_text.get_rect(center=(self.width//2, self.tab_height + self.tab_margin))
-            self.screen.blit(instruction_text, instruction_rect)
-        
         # Draw instruction to add at least one star and one planet
         if len(self.placed_bodies) > 0:
             stars = [b for b in self.placed_bodies if b["type"] == "star"]
@@ -9201,6 +9389,9 @@ class SolarSystemVisualizer:
                 print(f"DEBUG: Planet selected but preview not drawing. preview_position={self.preview_position}, preview_radius={self.preview_radius}, planet_dropdown_selected={self.planet_dropdown_selected}, placement_mode_active={self.placement_mode_active}")
                 self._last_preview_debug = time.time()
         
+        # Draw the custom modal last if active
+        self.draw_custom_modal()
+        
         pygame.display.flip()
 
     def render(self, engine: SimulationEngine):
@@ -9214,6 +9405,209 @@ class SolarSystemVisualizer:
             self.render_simulation(engine)
         
         pygame.display.flip() 
+
+    def validate_custom_modal_input(self):
+        """Validate the input text against physical bounds."""
+        if not self.custom_modal_text:
+            self.custom_modal_error = None
+            return
+
+        try:
+            value = float(self.custom_modal_text)
+            if value < self.custom_modal_min or value > self.custom_modal_max:
+                self.custom_modal_error = f"Value outside physical limits: {self.custom_modal_min} - {self.custom_modal_max}"
+                self.pending_custom_value = None
+            else:
+                self.custom_modal_error = None
+                self.pending_custom_value = value
+        except ValueError:
+            self.custom_modal_error = "Invalid numeric value"
+            self.pending_custom_value = None
+
+    def apply_custom_value(self):
+        """Apply the validated custom value to the target body and update visuals."""
+        if self.pending_custom_value is None:
+            return
+
+        body = self.bodies_by_id.get(self.pending_custom_body_id) if self.pending_custom_body_id else self.get_selected_body()
+        if not body:
+            self.show_custom_modal = False
+            return
+
+        field = self.pending_custom_field
+        value = self.pending_custom_value
+        
+        # Determine internal field name and apply conversions
+        internal_field = field
+        if field == "mass":
+            if body["type"] == "star":
+                value *= 333000.0  # Solar masses to Earth masses
+        elif field == "semi_major_axis":
+            internal_field = "semiMajorAxis"
+            if body["type"] == "moon":
+                value /= 149597870.7  # km to AU
+        elif field == "radius":
+            if body["type"] == "moon":
+                internal_field = "actual_radius"
+        
+        # Update the property using the safe registry update
+        if self.update_selected_body_property(internal_field, value, internal_field):
+            # Track custom overrides
+            if "custom_overrides" not in body:
+                body["custom_overrides"] = {}
+            body["custom_overrides"][field] = self.pending_custom_value # Original custom value
+            
+            # Clear preset type to indicate custom state
+            body["preset_type"] = None
+            
+            # Update the dropdown selection label to show the value
+            unit = self.custom_modal_unit
+            field_display = field.replace("_", " ").capitalize()
+            if field == "semi_major_axis":
+                field_display = "AU" if body["type"] == "planet" else "Dist"
+            
+            # Use appropriate unit label for the display
+            display_unit = unit
+            if field == "mass":
+                if body["type"] == "planet": display_unit = "M⊕"
+                elif body["type"] == "star": display_unit = "M☉"
+                elif body["type"] == "moon": display_unit = "M🌕"
+            
+            label = f"{field_display}: {self.pending_custom_value} {display_unit}"
+            
+            if field == "mass":
+                if body["type"] == "planet":
+                    body["planet_dropdown_selected"] = label
+                elif body["type"] == "star":
+                    body["star_mass_dropdown_selected"] = label
+                elif body["type"] == "moon":
+                    body["moon_dropdown_selected"] = label
+            elif field == "semi_major_axis":
+                if body["type"] == "planet":
+                    body["planet_orbital_distance_dropdown_selected"] = label
+                elif body["type"] == "moon":
+                    body["moon_orbital_distance_dropdown_selected"] = label
+            elif field == "radius":
+                if body["type"] == "planet":
+                    body["planet_radius_dropdown_selected"] = label
+                elif body["type"] == "moon":
+                    body["moon_radius_dropdown_selected"] = label
+            
+            # For semi-major axis, also update position and orbit grid
+            if internal_field == "semiMajorAxis":
+                parent_star = next((b for b in self.placed_bodies if b["name"] == body.get("parent")), None)
+                if parent_star is None and body.get("parent_obj"):
+                    parent_star = body["parent_obj"]
+                if parent_star:
+                    self.compute_planet_position(body, parent_star)
+                self.generate_orbit_grid(body)
+
+            print(f"Applied custom {field}={value} (internal {internal_field}) to body ID={body.get('id')}")
+
+        self.show_custom_modal = False
+        self.pending_custom_field = None
+        self.pending_custom_body_id = None
+        self.pending_custom_value = None
+
+    def cancel_custom_modal(self):
+        """Revert dropdown selection and close modal."""
+        self.show_custom_modal = False
+        
+        # Revert dropdown to previous selection
+        if self.previous_dropdown_selection and self.pending_custom_field:
+            body = self.bodies_by_id.get(self.pending_custom_body_id) if self.pending_custom_body_id else self.get_selected_body()
+            if body:
+                field = self.pending_custom_field
+                if field == "mass":
+                    if body["type"] == "planet": body["planet_dropdown_selected"] = self.previous_dropdown_selection
+                    elif body["type"] == "star": body["star_mass_dropdown_selected"] = self.previous_dropdown_selection
+                    elif body["type"] == "moon": body["moon_dropdown_selected"] = self.previous_dropdown_selection
+                elif field == "semi_major_axis":
+                    if body["type"] == "planet": body["planet_orbital_distance_dropdown_selected"] = self.previous_dropdown_selection
+                    elif body["type"] == "moon": body["moon_orbital_distance_dropdown_selected"] = self.previous_dropdown_selection
+                elif field == "radius":
+                    if body["type"] == "planet": body["planet_radius_dropdown_selected"] = self.previous_dropdown_selection
+                    elif body["type"] == "moon": body["moon_radius_dropdown_selected"] = self.previous_dropdown_selection
+                elif field == "age":
+                    if body["type"] == "planet": body["planet_age_dropdown_selected"] = self.previous_dropdown_selection
+                    elif body["type"] == "star": body["star_age_dropdown_selected"] = self.previous_dropdown_selection
+                    elif body["type"] == "moon": body["moon_age_dropdown_selected"] = self.previous_dropdown_selection
+
+        self.pending_custom_field = None
+        self.pending_custom_body_id = None
+        self.pending_custom_value = None
+        self.previous_dropdown_selection = None
+
+    def draw_custom_modal(self):
+        """Draw the centered custom value input modal."""
+        if not self.show_custom_modal:
+            return
+
+        # Modal dimensions
+        modal_width = 400
+        modal_height = 250
+        modal_rect = pygame.Rect((self.width - modal_width) // 2, (self.height - modal_height) // 2, modal_width, modal_height)
+
+        # Draw semi-transparent overlay
+        overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 150))
+        self.screen.blit(overlay, (0, 0))
+
+        # Draw modal background
+        pygame.draw.rect(self.screen, self.WHITE, modal_rect, border_radius=10)
+        pygame.draw.rect(self.screen, self.BLUE, modal_rect, 2, border_radius=10)
+
+        # Title
+        title_surf = self.font.render(self.custom_modal_title, True, self.BLACK)
+        title_rect = title_surf.get_rect(midtop=(modal_rect.centerx, modal_rect.top + 20))
+        self.screen.blit(title_surf, title_rect)
+
+        # Helper text
+        helper_surf = self.subtitle_font.render(self.custom_modal_helper, True, self.GRAY)
+        helper_rect = helper_surf.get_rect(midtop=(modal_rect.centerx, title_rect.bottom + 10))
+        self.screen.blit(helper_surf, helper_rect)
+
+        # Input field
+        input_rect = pygame.Rect(modal_rect.left + 50, helper_rect.bottom + 20, modal_width - 100, 40)
+        pygame.draw.rect(self.screen, self.LIGHT_GRAY, input_rect, border_radius=5)
+        pygame.draw.rect(self.screen, self.BLUE, input_rect, 1, border_radius=5)
+        
+        # Input text
+        display_text = self.custom_modal_text + ("|" if (pygame.time.get_ticks() // 500) % 2 == 0 else "")
+        text_surf = self.font.render(display_text, True, self.BLACK)
+        text_rect = text_surf.get_rect(midleft=(input_rect.left + 10, input_rect.centery))
+        self.screen.blit(text_surf, text_rect)
+
+        # Unit label
+        if self.custom_modal_unit:
+            unit_surf = self.subtitle_font.render(self.custom_modal_unit, True, self.BLACK)
+            unit_rect = unit_surf.get_rect(midleft=(input_rect.right + 5, input_rect.centery))
+            self.screen.blit(unit_surf, unit_rect)
+
+        # Error message
+        if self.custom_modal_error:
+            error_surf = self.subtitle_font.render(self.custom_modal_error, True, self.RED)
+            error_rect = error_surf.get_rect(midtop=(modal_rect.centerx, input_rect.bottom + 10))
+            self.screen.blit(error_surf, error_rect)
+
+        # Buttons
+        button_width = 100
+        button_height = 40
+        
+        # Apply button
+        apply_btn_rect = pygame.Rect(modal_rect.centerx - 110, modal_rect.bottom - 60, button_width, button_height)
+        apply_color = self.BLUE if not self.custom_modal_error and self.custom_modal_text else self.GRAY
+        pygame.draw.rect(self.screen, apply_color, apply_btn_rect, border_radius=5)
+        apply_text = self.subtitle_font.render("Apply", True, self.WHITE)
+        self.screen.blit(apply_text, apply_text.get_rect(center=apply_btn_rect.center))
+        self.apply_btn_rect = apply_btn_rect # Store for click detection
+
+        # Cancel button
+        cancel_btn_rect = pygame.Rect(modal_rect.centerx + 10, modal_rect.bottom - 60, button_width, button_height)
+        pygame.draw.rect(self.screen, self.RED, cancel_btn_rect, border_radius=5)
+        cancel_text = self.subtitle_font.render("Cancel", True, self.WHITE)
+        self.screen.blit(cancel_text, cancel_text.get_rect(center=cancel_btn_rect.center))
+        self.cancel_btn_rect = cancel_btn_rect # Store for click detection
 
     def _parse_input_value(self, input_text):
         """Parse input text that can be in decimal or scientific notation, with optional units."""
