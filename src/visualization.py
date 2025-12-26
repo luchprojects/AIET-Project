@@ -109,11 +109,38 @@ MOON_ORBIT_AU = 0.00257   # Scientifically correct
 MOON_ORBIT_PX = 40        # Great for UX
 TIME_SCALE = 0.3           # Smooth & readable orbit motion (increased for visible movement)
 
+# Planet visual scaling constants (NASA-style perceptual compression)
+SUN_RADIUS_R_EARTH = 109.0  # Sun radius in Earth radii (R⊕) per NASA standards
+BASE_PLANET_PX = 200        # Base planet pixel size for scaling calculation
+MIN_PLANET_PX = 6           # Minimum planet size for clickability (inner planets)
+MAX_PLANET_PX = 28          # Maximum planet size (must be < SUN_RADIUS_PX = 32)
+PLANET_SCALE_POWER = 0.65   # Power for perceptual scaling (0.65 preserves more differences than sqrt)
+
 # Helper function to convert hex color string to RGB tuple
 def hex_to_rgb(hex_string: str) -> Tuple[int, int, int]:
     """Convert hex color string (e.g., '#FDB813') to RGB tuple (e.g., (253, 184, 19))"""
     hex_string = hex_string.lstrip('#')
     return tuple(int(hex_string[i:i+2], 16) for i in (0, 2, 4))
+
+def desaturate_color(rgb: Tuple[int, int, int], saturation: float = 0.6) -> Tuple[int, int, int]:
+    """
+    Desaturate an RGB color by mixing it with gray.
+    
+    Args:
+        rgb: RGB tuple (r, g, b)
+        saturation: Saturation factor (0.0 = fully gray, 1.0 = original color). Default 0.6 for slight desaturation.
+    
+    Returns:
+        Desaturated RGB tuple
+    """
+    r, g, b = rgb
+    # Calculate grayscale value (luminance)
+    gray = int(0.299 * r + 0.587 * g + 0.114 * b)
+    # Mix original color with gray
+    r_desat = int(r * saturation + gray * (1.0 - saturation))
+    g_desat = int(g * saturation + gray * (1.0 - saturation))
+    b_desat = int(b * saturation + gray * (1.0 - saturation))
+    return (r_desat, g_desat, b_desat)
 
 # Celestial body base colors (scientifically motivated, UX-friendly)
 # Colors represent dominant surface or atmospheric class, not literal imagery
@@ -327,6 +354,10 @@ class SolarSystemVisualizer:
         self.orbital_corrections = {}  # {body_id: {"target_radius_px": float, "start_time": float, "duration": float, "start_pos": np.array, "target_pos": np.array}}
         self.correction_animation_duration = 0.8  # seconds
         
+        # Placement Trajectory Line System
+        self.ARRIVAL_EPSILON = 5.0  # Pixels
+        self.PLACEMENT_LINE_FADE_DURATION = 1.0  # Seconds
+        
         # Preview state for placement
         self.preview_position = None  # Mouse position for preview
         self.preview_radius = None  # Preview radius based on object type
@@ -348,8 +379,8 @@ class SolarSystemVisualizer:
         # Camera state
         self.camera_zoom = 1.0
         self.camera_offset = [0.0, 0.0]
-        self.camera_zoom_min = 0.3
-        self.camera_zoom_max = 5.0
+        self.camera_zoom_min = 0.01
+        self.camera_zoom_max = 10.0
         self.is_panning = False
         self.pan_start = None
         self.last_zoom_for_orbits = 1.0
@@ -1222,6 +1253,81 @@ class SolarSystemVisualizer:
         text_rect = label.get_rect(center=self.reset_view_button.center)
         self.screen.blit(label, text_rect)
     
+    def draw_scale_indicator(self):
+        """Draw a zoom-aware distance scale indicator in the bottom-left corner."""
+        # Calculate pixels per AU at current zoom
+        pixels_per_au = self.scale * self.camera_zoom
+        
+        # Target width range: 80 to 120 pixels for the scale bar
+        target_min = 80
+        target_max = 120
+        
+        # Standard astronomical unit scales (1, 2, 5 pattern for readability)
+        candidate_scales = []
+        for i in range(-5, 6): # from 10^-5 to 10^5 AU
+            base = 10**i
+            candidate_scales.extend([base, base * 2, base * 5])
+        candidate_scales.sort()
+        
+        # Find the best scale that fits our target pixel width
+        selected_au = candidate_scales[0]
+        for au in candidate_scales:
+            width_px = au * pixels_per_au
+            if width_px >= target_min:
+                selected_au = au
+                # If this scale is already too big, check if the previous one was better
+                if width_px > target_max:
+                    prev_au = candidate_scales[max(0, candidate_scales.index(au)-1)]
+                    prev_width = prev_au * pixels_per_au
+                    target_mid = (target_min + target_max) / 2
+                    if abs(prev_width - target_mid) < abs(width_px - target_mid):
+                        selected_au = prev_au
+                break
+            selected_au = au
+            
+        width_px = selected_au * pixels_per_au
+        
+        # Position: Bottom-left corner with margins
+        margin_x = 25
+        margin_y = 25
+        
+        # Adjust Y position to be above the instruction text if it's visible at the bottom
+        y_pos = self.height - margin_y - 45
+        x_start = margin_x
+        
+        # Prepare label text
+        if selected_au >= 1000:
+            label_text = f"{selected_au:,.0f} AU"
+        elif selected_au >= 1:
+            label_text = f"{selected_au:g} AU"
+        else:
+            # Use scientific notation for very small values, or just :g
+            label_text = f"{selected_au:g} AU"
+            
+        # UI Rendering
+        tick_height = 6
+        label_surface = self.subtitle_font.render(label_text, True, self.WHITE)
+        label_rect = label_surface.get_rect(midtop=(x_start + width_px/2, y_pos + tick_height + 4))
+        
+        # Draw background for readability
+        bg_rect = label_rect.inflate(16, 8)
+        scale_rect = pygame.Rect(x_start - 8, y_pos - tick_height - 4, width_px + 16, tick_height * 2 + 8)
+        bg_rect = bg_rect.union(scale_rect)
+        
+        bg_surface = pygame.Surface(bg_rect.size, pygame.SRCALPHA)
+        bg_surface.fill((0, 0, 0, 140)) # Semi-transparent black
+        self.screen.blit(bg_surface, bg_rect.topleft)
+        
+        # Draw scale bar (white line with end ticks)
+        line_color = self.WHITE
+        line_thickness = 2
+        pygame.draw.line(self.screen, line_color, (x_start, y_pos), (x_start + width_px, y_pos), line_thickness)
+        pygame.draw.line(self.screen, line_color, (x_start, y_pos - tick_height), (x_start, y_pos + tick_height), line_thickness)
+        pygame.draw.line(self.screen, line_color, (x_start + width_px, y_pos - tick_height), (x_start + width_px, y_pos + tick_height), line_thickness)
+        
+        # Draw label
+        self.screen.blit(label_surface, label_rect)
+
     def calculate_hitbox_radius(self, obj_type: str, visual_radius: float) -> float:
         """
         Calculate hitbox radius for a celestial object based on its type and visual radius.
@@ -1240,6 +1346,116 @@ class SolarSystemVisualizer:
         }
         scale_factor = scale_factors.get(obj_type, 1.0)
         return visual_radius * scale_factor
+    
+    def calculate_planet_visual_radius(self, planet_body: dict, placed_bodies: list) -> float:
+        """
+        Calculate normalized visual radius for a planet using NASA-style perceptual scaling.
+        
+        This function normalizes planet radius relative to parent star and applies
+        square-root scaling to preserve ordering while compressing range. This ensures
+        Jupiter (11 R⊕) always appears smaller than the Sun (109 R⊕) while maintaining
+        scientifically accurate relative ratios.
+        
+        Core principle: Physics data (radius in R⊕) remains unchanged; only visual
+        representation is perceptually compressed for UX.
+        
+        Args:
+            planet_body: Planet body dictionary with "radius" in Earth radii (R⊕)
+            placed_bodies: List of all placed bodies to find parent star
+            
+        Returns:
+            Visual radius in pixels (clamped between MIN_PLANET_PX and MAX_PLANET_PX)
+        """
+        # Get planet radius in Earth radii (R⊕)
+        planet_radius_R_earth = planet_body.get("radius", 1.0)
+        
+        # Find parent star
+        parent_star = planet_body.get("parent_obj")
+        if parent_star is None:
+            # Fallback: find nearest star
+            stars = [b for b in placed_bodies if b.get("type") == "star"]
+            if stars:
+                # Find nearest star by position
+                planet_pos = planet_body.get("position", np.array([0, 0]))
+                parent_star = min(stars, key=lambda s: np.linalg.norm(s.get("position", np.array([0, 0])) - planet_pos))
+        
+        # Get star radius in Earth radii (R⊕)
+        if parent_star:
+            # Stars store radius in pixels, convert to Earth radii
+            # For Sun: SUN_RADIUS_PX pixels = 32 pixels, but actual Sun = 109 R⊕
+            # Use scientific value: Sun = 109 R⊕ per NASA standards
+            star_radius_R_earth = SUN_RADIUS_R_EARTH  # Default to Sun's radius
+            # TODO: For other stars, could calculate from mass or use stored value
+            # For now, use Sun's radius as reference (most common case)
+        else:
+            # No parent star found, use Sun as default reference
+            star_radius_R_earth = SUN_RADIUS_R_EARTH
+        
+        # Normalize planet radius relative to star
+        normalized_radius = planet_radius_R_earth / star_radius_R_earth
+        
+        # Apply perceptual scaling with power 0.65 to preserve relative differences
+        # This ensures:
+        # - Jupiter (11.2/109 ≈ 0.103) scales to 0.103^0.65 ≈ 0.195 → ~29px (bigger than Earth)
+        # - Earth (1/109 ≈ 0.009) scales to 0.009^0.65 ≈ 0.033 → ~5px (baseline)
+        # - Mercury (0.383/109 ≈ 0.0035) scales to 0.0035^0.65 ≈ 0.015 → ~2.25px (clamped to MIN)
+        visual_radius = BASE_PLANET_PX * (normalized_radius ** PLANET_SCALE_POWER)
+        
+        # Clamp to min/max for UX (prevent tiny planets from being unclickable)
+        visual_radius = max(MIN_PLANET_PX, min(visual_radius, MAX_PLANET_PX))
+        
+        return visual_radius
+    
+    def calculate_moon_visual_radius(self, moon_body: dict, placed_bodies: list) -> float:
+        """
+        Calculate normalized visual radius for a moon relative to its parent planet.
+        
+        Moons are stored in pixels (legacy), but we need to scale them relative to
+        their parent planet to maintain correct size relationships.
+        
+        Args:
+            moon_body: Moon body dictionary with "radius" in pixels and "parent_obj" reference
+            placed_bodies: List of all placed bodies to find parent planet
+            
+        Returns:
+            Visual radius in pixels (scaled relative to parent planet)
+        """
+        # Get moon's stored radius in pixels (legacy format)
+        moon_radius_px = moon_body.get("radius", MOON_RADIUS_PX)
+        
+        # Find parent planet
+        parent_planet = moon_body.get("parent_obj")
+        if parent_planet is None:
+            # Fallback: find nearest planet
+            planets = [b for b in placed_bodies if b.get("type") == "planet"]
+            if planets:
+                moon_pos = moon_body.get("position", np.array([0, 0]))
+                parent_planet = min(planets, key=lambda p: np.linalg.norm(p.get("position", np.array([0, 0])) - moon_pos))
+        
+        if parent_planet:
+            # Get parent planet's visual radius (already normalized and scaled)
+            parent_visual_radius = self.calculate_planet_visual_radius(parent_planet, placed_bodies)
+            
+            # Calculate moon radius in Earth radii
+            # Use actual_radius in km if available, otherwise use default (Earth's Moon = 1737.4 km)
+            EARTH_RADIUS_KM = 6371.0  # Earth's radius in km
+            moon_actual_radius_km = moon_body.get("actual_radius", 1737.4)  # Default to Earth's Moon
+            moon_radius_R_earth = moon_actual_radius_km / EARTH_RADIUS_KM
+            
+            # Get parent planet radius in Earth radii
+            parent_radius_R_earth = parent_planet.get("radius", 1.0)  # Parent radius in R⊕
+            
+            # Calculate moon size relative to parent planet
+            moon_relative_size = moon_radius_R_earth / parent_radius_R_earth
+            visual_radius = parent_visual_radius * moon_relative_size
+            
+            # Ensure moon is always smaller than parent and at least 2px for visibility
+            visual_radius = max(2, min(visual_radius, parent_visual_radius * 0.9))
+        else:
+            # No parent planet found, use default moon size (but smaller than default planet)
+            visual_radius = max(2, min(moon_radius_px, 4))
+        
+        return visual_radius
     
     def apply_planet_preset(self, preset_name: str):
         """
@@ -1628,7 +1844,6 @@ class SolarSystemVisualizer:
                         ], dtype=float)
                         
                         # Start orbital correction animation
-                        import time
                         body_id = body.get("id")
                         if body_id:
                             body["is_correcting_orbit"] = True
@@ -1641,6 +1856,7 @@ class SolarSystemVisualizer:
                                 "start_pos": body["position"].copy(),
                                 "target_pos": new_target_pos.copy(),
                                 "parent_star_pos": parent_star["position"].copy(),
+                                "position_history": [body["position"].copy()]  # Track position history for trail
                             }
                 
                 self.recompute_orbit_parameters(body, force_recompute=True)
@@ -1768,6 +1984,14 @@ class SolarSystemVisualizer:
             "visual_position": np.array(spawn_position, dtype=float).copy(),  # Temporary visual position
             "target_position": target_position.copy(),  # Physics-determined position
             "is_correcting_orbit": True,  # Flag to trigger animation
+            "is_placing": True,  # Track placement lifecycle
+            "placement_line": {
+                "start": np.array(spawn_position, dtype=float).copy(),
+                "end": target_position.copy(),
+                "alpha": 255,
+                "fade_start_time": None,
+                "fade_duration": self.PLACEMENT_LINE_FADE_DURATION
+            }
         })
         
         # Set parent if star exists
@@ -1777,14 +2001,13 @@ class SolarSystemVisualizer:
             body["parent_obj"] = parent_star
         
         # Initialize orbit correction animation
-        import time
         self.orbital_corrections[body_id] = {
             "target_radius_px": orbit_radius_px,
             "start_time": time.time(),
             "duration": self.correction_animation_duration,
             "start_pos": np.array(spawn_position, dtype=float).copy(),
             "target_pos": target_position.copy(),
-            "parent_star_pos": parent_star["position"].copy() if parent_star else None,
+            "position_history": [np.array(spawn_position, dtype=float).copy()]  # Track position history for trail
         }
         
         # Log creation
@@ -2363,9 +2586,12 @@ class SolarSystemVisualizer:
                                                 if planet_name in SOLAR_SYSTEM_PLANET_PRESETS:
                                                     preset = SOLAR_SYSTEM_PLANET_PRESETS[planet_name]
                                                     planet_radius_re = preset["radius"]  # In Earth radii
-                                                    self.preview_radius = int(planet_radius_re * EARTH_RADIUS_PX)
+                                                    # Use NASA-style normalized visual radius for preview
+                                                    normalized_radius = planet_radius_re / SUN_RADIUS_R_EARTH
+                                                    visual_radius = BASE_PLANET_PX * (normalized_radius ** PLANET_SCALE_POWER)
+                                                    self.preview_radius = int(max(MIN_PLANET_PX, min(visual_radius, MAX_PLANET_PX)))
                                                 else:
-                                                    self.preview_radius = 15  # Default
+                                                    self.preview_radius = 10  # Default (approx Earth-like)
                                                 # Initialize preview position immediately at mouse cursor
                                                 self.preview_position = pygame.mouse.get_pos()
                                                 # Activate placement mode - preview position will be updated every frame
@@ -3561,9 +3787,12 @@ class SolarSystemVisualizer:
                                                 if name in SOLAR_SYSTEM_PLANET_PRESETS:
                                                     preset = SOLAR_SYSTEM_PLANET_PRESETS[name]
                                                     planet_radius_re = preset["radius"]  # In Earth radii
-                                                    self.preview_radius = int(planet_radius_re * EARTH_RADIUS_PX)
+                                                    # Use NASA-style normalized visual radius for preview
+                                                    normalized_radius = planet_radius_re / SUN_RADIUS_R_EARTH
+                                                    visual_radius = BASE_PLANET_PX * (normalized_radius ** PLANET_SCALE_POWER)
+                                                    self.preview_radius = int(max(MIN_PLANET_PX, min(visual_radius, MAX_PLANET_PX)))
                                                 else:
-                                                    self.preview_radius = 15  # Default
+                                                    self.preview_radius = 10  # Default (approx Earth-like)
                                                 # Activate placement mode - preview position will be updated every frame
                                                 self.placement_mode_active = True
                                             # Keep dropdown open to show selection, but recreate surface to show highlight
@@ -3839,9 +4068,12 @@ class SolarSystemVisualizer:
                                         if preset_name in SOLAR_SYSTEM_PLANET_PRESETS:
                                             preset = SOLAR_SYSTEM_PLANET_PRESETS[preset_name]
                                             planet_radius_re = preset["radius"]  # In Earth radii
-                                            self.preview_radius = int(planet_radius_re * EARTH_RADIUS_PX)
+                                            # Use NASA-style normalized visual radius for preview
+                                            normalized_radius = planet_radius_re / SUN_RADIUS_R_EARTH
+                                            visual_radius = BASE_PLANET_PX * (normalized_radius ** PLANET_SCALE_POWER)
+                                            self.preview_radius = int(max(MIN_PLANET_PX, min(visual_radius, MAX_PLANET_PX)))
                                         else:
-                                            self.preview_radius = 15  # Default
+                                            self.preview_radius = 10  # Default (approx Earth-like)
                                         # Initialize preview position immediately at mouse cursor
                                         self.preview_position = pygame.mouse.get_pos()
                                         # Activate placement mode - preview position will be updated every frame
@@ -3924,9 +4156,12 @@ class SolarSystemVisualizer:
                         for body in self.placed_bodies:
                             body_screen = self.world_to_screen(body["position"])
                             # CRITICAL: Compute hitbox from visual radius
-                            # For planets, compute visual radius from R⊕
+                            # For planets, use NASA-style normalized visual radius
+                            # For moons, scale relative to parent planet
                             if body["type"] == "planet":
-                                visual_radius = body["radius"] * EARTH_RADIUS_PX
+                                visual_radius = self.calculate_planet_visual_radius(body, self.placed_bodies)
+                            elif body["type"] == "moon":
+                                visual_radius = self.calculate_moon_visual_radius(body, self.placed_bodies)
                             else:
                                 visual_radius = body["radius"]
                             
@@ -5095,7 +5330,7 @@ class SolarSystemVisualizer:
         elif object_type == "star":
             self.preview_radius = 20
         elif object_type == "moon":
-            self.preview_radius = 10
+            self.preview_radius = 4  # Default moon size (matches calculate_moon_visual_radius fallback)
     
     def update_ambient_colors(self):
         """Update the ambient colors for the title"""
@@ -5385,7 +5620,6 @@ class SolarSystemVisualizer:
             effective_dt = self.base_time_step * self.time_scale
         
         # Update orbital correction animations
-        import time
         current_time = time.time()
         bodies_to_remove_from_correction = []
         
@@ -5412,11 +5646,46 @@ class SolarSystemVisualizer:
                 
                 # Update visual position for rendering
                 body["visual_position"] = np.array(current_pos, dtype=float)
+                
+                # Track position history for trail (keep last ~30 positions)
+                if "position_history" not in correction_data:
+                    correction_data["position_history"] = [start_pos.copy()]
+                
+                # Add current position to history
+                position_history = correction_data["position_history"]
+                position_history.append(current_pos.copy())
+                # Keep only last 30 positions for smooth trail
+                if len(position_history) > 30:
+                    position_history.pop(0)
+                
+                # Update placement trajectory line (Step 1)
+                if body.get("is_placing"):
+                    dx = body["position"][0] - target_pos[0]
+                    dy = body["position"][1] - target_pos[1]
+                    distance = math.hypot(dx, dy)
+                    
+                    if distance < self.ARRIVAL_EPSILON:
+                        body["is_placing"] = False
+                        if body.get("placement_line"):
+                            body["placement_line"]["fade_start_time"] = current_time
+                
+                # CRITICAL: Prevent persistent orbit point accumulation during placement animation
+                # This stops a second "straight line" from appearing behind the planet
+                if body.get("is_correcting_orbit") and "orbit_points" in body:
+                    body["orbit_points"].clear()
             else:
                 # Animation complete - snap to final position and compute from physics
                 body["position"] = np.array(correction_data["target_pos"], dtype=float)
                 body["visual_position"] = np.array(correction_data["target_pos"], dtype=float)
                 body["is_correcting_orbit"] = False
+                
+                # Clear orbit points accumulated during animation to prevent a "straight line" trail
+                if "orbit_points" in body:
+                    body["orbit_points"].clear()
+                
+                # Clear position history when animation completes to prevent lingering trails
+                if "position_history" in correction_data:
+                    correction_data["position_history"].clear()
                 
                 # After animation, ensure position is computed from physics (AU)
                 if body["type"] == "planet":
@@ -7316,6 +7585,37 @@ class SolarSystemVisualizer:
         # Update physics
         self.update_physics()
         
+        # Update and Draw placement trajectory lines (Step 2 & 3)
+        current_time = time.time()
+        for body in self.placed_bodies:
+            line = body.get("placement_line")
+            if line:
+                # Step 2: Fade the line over time
+                if line["fade_start_time"] is not None:
+                    t = current_time - line["fade_start_time"]
+                    fade_progress = min(t / line["fade_duration"], 1.0)
+                    line["alpha"] = int(255 * (1.0 - fade_progress))
+                    
+                    if line["alpha"] <= 0:
+                        body["placement_line"] = None
+                        continue
+                
+                # Step 3: Render with alpha
+                # Only draw if the line exists and alpha > 0
+                if body.get("placement_line"):
+                    alpha = line["alpha"]
+                    color = (255, 255, 255, alpha)
+                    
+                    # Shrink from the back: start follows the planet, end is fixed at target
+                    # This makes the trajectory ahead of the planet shrink as it moves
+                    current_body_pos = body.get("visual_position", body["position"])
+                    start_screen = self.world_to_screen(current_body_pos)
+                    end_screen = self.world_to_screen(line["end"])
+                    
+                    # Only draw if there's actual length
+                    if np.linalg.norm(np.array(start_screen) - np.array(end_screen)) > 1.0:
+                        pygame.draw.line(self.screen, color, start_screen, end_screen, 1)
+
         # Draw orbit grid lines first (so they appear behind the bodies)
         for body in self.placed_bodies:
             if body["type"] != "star" and body["name"] in self.orbit_grid_points:
@@ -7340,6 +7640,94 @@ class SolarSystemVisualizer:
         # for body in self.placed_bodies:
         #     if body.get("type") == "star":
         #         self.draw_habitable_zone(self.screen, body)
+        
+        # Draw motion trails FIRST (behind everything) for planets during orbital correction
+        for body in self.placed_bodies:
+            if body.get("is_correcting_orbit", False) and body["type"] == "planet":
+                body_id = body.get("id")
+                if body_id and body_id in self.orbital_corrections:
+                    correction = self.orbital_corrections[body_id]
+                    current_time = time.time()
+                    elapsed = current_time - correction["start_time"]
+                    progress = min(elapsed / correction["duration"], 1.0)
+                    
+                    # Check if planet has reached target and is orbiting
+                    target_pos = correction.get("target_pos")
+                    current_pos = body.get("position", body.get("visual_position"))
+                    distance_to_target = np.linalg.norm(current_pos - target_pos) if target_pos is not None else float('inf')
+                    position_threshold = 5.0
+                    is_at_target = distance_to_target < position_threshold
+                    orbit_speed = body.get("orbit_speed", 0.0)
+                    is_orbiting = orbit_speed > 0.0
+                    is_still_moving = (not is_at_target) or (not is_orbiting)
+                    
+                    # Draw trail if animation is in progress and planet is moving
+                    if progress < 1.0 and is_still_moving and "position_history" in correction:
+                        position_history = correction["position_history"]
+                        if len(position_history) > 1:
+                            # Calculate total distance traveled
+                            total_distance = 0.0
+                            for i in range(1, len(position_history)):
+                                total_distance += np.linalg.norm(position_history[i] - position_history[i-1])
+                            
+                            if total_distance > 1.0:
+                                # Get planet color
+                                base_color_hex = body.get("base_color")
+                                if base_color_hex:
+                                    planet_color = hex_to_rgb(base_color_hex)
+                                else:
+                                    planet_color = hex_to_rgb(CELESTIAL_BODY_COLORS.get(body.get("name", "Earth"), "#2E7FFF"))
+                                
+                                # Trail length: 15% of distance traveled
+                                trail_length_ratio = 0.15
+                                target_trail_distance = total_distance * trail_length_ratio
+                                
+                                # Find positions that make up the trail
+                                trail_positions = []
+                                accumulated_distance = 0.0
+                                current_pos = body.get("position", body.get("visual_position", position_history[-1]))
+                                trail_positions.append(current_pos)
+                                
+                                # Work backwards through position history
+                                for i in range(len(position_history) - 1, 0, -1):
+                                    segment_distance = np.linalg.norm(position_history[i] - position_history[i-1])
+                                    if accumulated_distance + segment_distance <= target_trail_distance:
+                                        trail_positions.insert(0, position_history[i-1])
+                                        accumulated_distance += segment_distance
+                                    else:
+                                        remaining = target_trail_distance - accumulated_distance
+                                        if remaining > 0 and segment_distance > 0:
+                                            t = remaining / segment_distance
+                                            interpolated_pos = position_history[i-1] + (position_history[i] - position_history[i-1]) * t
+                                            trail_positions.insert(0, interpolated_pos)
+                                        break
+                                    if accumulated_distance >= target_trail_distance:
+                                        break
+                                
+                                # Draw trail if we have at least 2 points
+                                if len(trail_positions) >= 2:
+                                    # Calculate fade
+                                    fade_progress = progress
+                                    eased_fade = 1.0 - ((1.0 - fade_progress) ** 3)
+                                    trail_alpha = int(255 * (1.0 - eased_fade))
+                                    
+                                    if trail_alpha > 10:
+                                        # Desaturate planet color for trail
+                                        trail_color = desaturate_color(planet_color, saturation=0.6)
+                                        
+                                        # Convert positions to screen coordinates
+                                        screen_positions = [self.world_to_screen(pos) for pos in trail_positions]
+                                        
+                                        # Draw soft trail line with alpha blending
+                                        trail_surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+                                        for i in range(3):
+                                            line_width = max(1, 3 - i)
+                                            line_alpha = max(0, trail_alpha - (i * 60))
+                                            if line_alpha > 0:
+                                                trail_color_alpha = (*trail_color, line_alpha)
+                                                pygame.draw.lines(trail_surface, trail_color_alpha, False, screen_positions, line_width)
+                                        
+                                        self.screen.blit(trail_surface, (0, 0))
         
         # Draw orbit lines and bodies
         for body in self.placed_bodies:
@@ -7370,9 +7758,12 @@ class SolarSystemVisualizer:
             # Highlight selected body (compare object identity, not name, to ensure only the clicked object is highlighted)
             if self.selected_body is body:
                 pos = self.world_to_screen(body["position"])
-                # CRITICAL: For planets, compute visual radius from R⊕
+                # CRITICAL: For planets, use NASA-style normalized visual radius
+                # For moons, scale relative to parent planet
                 if body["type"] == "planet":
-                    visual_radius = body["radius"] * EARTH_RADIUS_PX
+                    visual_radius = self.calculate_planet_visual_radius(body, self.placed_bodies)
+                elif body["type"] == "moon":
+                    visual_radius = self.calculate_moon_visual_radius(body, self.placed_bodies)
                 else:
                     visual_radius = body["radius"]
                 pygame.draw.circle(self.screen, self.RED, (int(pos[0]), int(pos[1])), max(1, int((visual_radius + 5) * self.camera_zoom)), 2)
@@ -7411,6 +7802,9 @@ class SolarSystemVisualizer:
         # Draw Reset View button (UI layer, screen space)
         self.draw_reset_button()
         
+        # Draw Zoom-Aware Distance Scale Indicator
+        self.draw_scale_indicator()
+        
         # Render dropdown menu last, so it appears on top of everything
         self.render_dropdown()
         
@@ -7446,9 +7840,13 @@ class SolarSystemVisualizer:
             print(f"WARNING: Invalid preview_radius: {self.preview_radius}")
             return
         
+        scaled_preview_radius = int(self.preview_radius * self.camera_zoom)
+        if scaled_preview_radius <= 0:
+            scaled_preview_radius = 1
+        
         # Debug: Print once per second when drawing preview
         if not hasattr(self, '_last_draw_debug') or time.time() - self._last_draw_debug > 1.0:
-            print(f"DEBUG: Drawing preview at {self.preview_position}, radius={self.preview_radius}, planet={self.planet_dropdown_selected}")
+            print(f"DEBUG: Drawing preview at {self.preview_position}, radius={self.preview_radius}, scaled={scaled_preview_radius}, planet={self.planet_dropdown_selected}")
             self._last_draw_debug = time.time()
         
         # Determine preview color and glow color based on object type
@@ -7484,28 +7882,28 @@ class SolarSystemVisualizer:
         center_x, center_y = int(self.preview_position[0]), int(self.preview_position[1])
         
         # Draw glow outline (outer ring) - multiple circles for smoother glow effect
-        glow_radius = self.preview_radius + 3
+        glow_radius = scaled_preview_radius + 3
         for i in range(3):
             alpha = 64 - i * 15
             if alpha > 0:
                 glow_surface = pygame.Surface((glow_radius * 2 + 6, glow_radius * 2 + 6), pygame.SRCALPHA)
                 pygame.draw.circle(glow_surface, (*glow_color, alpha), 
                                   (glow_surface.get_width() // 2, glow_surface.get_height() // 2), 
-                                  glow_radius - i, 2)
+                                  max(1, glow_radius - i), 2)
                 self.screen.blit(glow_surface, (center_x - glow_surface.get_width() // 2, 
                                                center_y - glow_surface.get_height() // 2))
         
         # Draw main preview circle (semi-transparent)
-        preview_surface = pygame.Surface((self.preview_radius * 2 + 4, self.preview_radius * 2 + 4), pygame.SRCALPHA)
+        preview_surface = pygame.Surface((scaled_preview_radius * 2 + 4, scaled_preview_radius * 2 + 4), pygame.SRCALPHA)
         preview_center = (preview_surface.get_width() // 2, preview_surface.get_height() // 2)
         # Use alpha 180 for better visibility (was 128)
-        pygame.draw.circle(preview_surface, (*preview_color, 180), preview_center, self.preview_radius)
+        pygame.draw.circle(preview_surface, (*preview_color, 180), preview_center, scaled_preview_radius)
         self.screen.blit(preview_surface, (center_x - preview_surface.get_width() // 2,
                                           center_y - preview_surface.get_height() // 2))
         
         # Draw outer outline for better visibility
-        outline_surface = pygame.Surface((self.preview_radius * 2 + 4, self.preview_radius * 2 + 4), pygame.SRCALPHA)
-        pygame.draw.circle(outline_surface, (*glow_color, 255), preview_center, self.preview_radius, 2)
+        outline_surface = pygame.Surface((scaled_preview_radius * 2 + 4, scaled_preview_radius * 2 + 4), pygame.SRCALPHA)
+        pygame.draw.circle(outline_surface, (*glow_color, 255), preview_center, scaled_preview_radius, 2)
         self.screen.blit(outline_surface, (center_x - outline_surface.get_width() // 2,
                                           center_y - outline_surface.get_height() // 2))
         
@@ -7516,7 +7914,7 @@ class SolarSystemVisualizer:
         else:
             tooltip_text = "Click to confirm placement."
         tooltip_surface = self.subtitle_font.render(tooltip_text, True, self.WHITE)
-        tooltip_rect = tooltip_surface.get_rect(center=(center_x, center_y + self.preview_radius + 25))
+        tooltip_rect = tooltip_surface.get_rect(center=(center_x, center_y + scaled_preview_radius + 25))
         
         # Draw tooltip background for better visibility
         tooltip_bg_rect = tooltip_rect.inflate(10, 5)
@@ -7628,15 +8026,23 @@ class SolarSystemVisualizer:
     def draw_rotating_body(self, body, color):
         """Draw a celestial body with rotation"""
         # CRITICAL: For planets, radius is in Earth radii (R⊕), compute visual radius
-        # For stars and moons, radius is in pixels (legacy)
+        # For stars, radius is in pixels (legacy)
+        # For moons, scale relative to parent planet
         if body["type"] == "planet":
-            # Compute visual radius: planet["radius"] * EARTH_RADIUS_PX
-            visual_radius = body["radius"] * EARTH_RADIUS_PX
+            # Use NASA-style normalized visual radius with perceptual scaling
+            visual_radius = self.calculate_planet_visual_radius(body, self.placed_bodies)
+        elif body["type"] == "moon":
+            # Scale moon relative to parent planet
+            visual_radius = self.calculate_moon_visual_radius(body, self.placed_bodies)
         else:
-            # Stars and moons: radius is already in pixels
+            # Stars: radius is already in pixels
             visual_radius = body["radius"]
         
         radius = max(1, int(visual_radius * self.camera_zoom))
+        
+        # Use visual_position if correcting orbit, otherwise use position
+        render_pos = body.get("visual_position", body["position"])
+        
         surface_size = radius * 2 + 4  # Add some padding
         surface = pygame.Surface((surface_size, surface_size), pygame.SRCALPHA)
         
@@ -7649,37 +8055,10 @@ class SolarSystemVisualizer:
         end_y = radius + 2 + radius * 0.8 * np.sin(rotation_angle)
         pygame.draw.line(surface, self.WHITE, (radius + 2, radius + 2), (end_x, end_y), 2)
         
-        # Use visual_position if correcting orbit, otherwise use position
-        render_pos = body.get("visual_position", body["position"])
+        # render_pos is already defined above for trail calculation
         pos = self.world_to_screen(render_pos)
         self.screen.blit(surface, (pos[0] - radius - 2, pos[1] - radius - 2))
         
-        # Draw orbital correction guide if animating
-        if body.get("is_correcting_orbit", False) and body["type"] == "planet":
-            body_id = body.get("id")
-            if body_id and body_id in self.orbital_corrections:
-                correction = self.orbital_corrections[body_id]
-                parent_star = body.get("parent_obj")
-                if parent_star:
-                    star_pos = self.world_to_screen(parent_star["position"])
-                    planet_pos = self.world_to_screen(render_pos)
-                    target_pos = self.world_to_screen(correction["target_pos"])
-                    
-                    # Draw faint radial guide line from star to target
-                    guide_color = (200, 200, 200, 128)  # Semi-transparent gray
-                    pygame.draw.line(self.screen, guide_color[:3], star_pos, target_pos, 1)
-                    
-                    # Draw small label near planet
-                    au_value = body.get("orbit_radius_au", body.get("semiMajorAxis", 1.0))
-                    label_text = f"Moving to {au_value:.2f} AU"
-                    label_surface = self.subtitle_font.render(label_text, True, (255, 255, 255, 180))
-                    label_rect = label_surface.get_rect(center=(planet_pos[0], planet_pos[1] - radius - 15))
-                    # Draw semi-transparent background for label
-                    bg_rect = label_rect.inflate(10, 5)
-                    bg_surface = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
-                    bg_surface.fill((0, 0, 0, 128))
-                    self.screen.blit(bg_surface, bg_rect)
-                    self.screen.blit(label_surface, label_rect)
     
     def render_simulation_builder(self):
         """Render the simulation builder screen with tabs and space area"""
@@ -8523,6 +8902,37 @@ class SolarSystemVisualizer:
         # Draw spacetime grid in the space area
         self.draw_spacetime_grid()
         
+        # Update and Draw placement trajectory lines (Step 2 & 3)
+        current_time = time.time()
+        for body in self.placed_bodies:
+            line = body.get("placement_line")
+            if line:
+                # Step 2: Fade the line over time
+                if line["fade_start_time"] is not None:
+                    t = current_time - line["fade_start_time"]
+                    fade_progress = min(t / line["fade_duration"], 1.0)
+                    line["alpha"] = int(255 * (1.0 - fade_progress))
+                    
+                    if line["alpha"] <= 0:
+                        body["placement_line"] = None
+                        continue
+                
+                # Step 3: Render with alpha
+                # Only draw if the line exists and alpha > 0
+                if body.get("placement_line"):
+                    alpha = line["alpha"]
+                    color = (255, 255, 255, alpha)
+                    
+                    # Shrink from the back: start follows the planet, end is fixed at target
+                    # This makes the trajectory ahead of the planet shrink as it moves
+                    current_body_pos = body.get("visual_position", body["position"])
+                    start_screen = self.world_to_screen(current_body_pos)
+                    end_screen = self.world_to_screen(line["end"])
+                    
+                    # Only draw if there's actual length
+                    if np.linalg.norm(np.array(start_screen) - np.array(end_screen)) > 1.0:
+                        pygame.draw.line(self.screen, color, start_screen, end_screen, 1)
+
         # Draw orbit grid lines first (so they appear behind the bodies)
         for body in self.placed_bodies:
             if body["type"] != "star" and body["name"] in self.orbit_grid_points:
@@ -8572,9 +8982,12 @@ class SolarSystemVisualizer:
             # Highlight selected body (compare object identity, not name, to ensure only the clicked object is highlighted)
             if self.selected_body is body:
                 pos = self.world_to_screen(body["position"])
-                # CRITICAL: For planets, compute visual radius from R⊕
+                # CRITICAL: For planets, use NASA-style normalized visual radius
+                # For moons, scale relative to parent planet
                 if body["type"] == "planet":
-                    visual_radius = body["radius"] * EARTH_RADIUS_PX
+                    visual_radius = self.calculate_planet_visual_radius(body, self.placed_bodies)
+                elif body["type"] == "moon":
+                    visual_radius = self.calculate_moon_visual_radius(body, self.placed_bodies)
                 else:
                     visual_radius = body["radius"]
                 pygame.draw.circle(self.screen, self.RED, (int(pos[0]), int(pos[1])), max(1, int((visual_radius + 5) * self.camera_zoom)), 2)
@@ -8635,6 +9048,9 @@ class SolarSystemVisualizer:
         
         # Draw Reset View button (UI layer, screen space)
         self.draw_reset_button()
+        
+        # Draw Zoom-Aware Distance Scale Indicator
+        self.draw_scale_indicator()
         
         # Render dropdown menu last, so it appears on top of everything
         self.render_dropdown()
