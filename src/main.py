@@ -69,15 +69,8 @@ def main():
         if visualizer.show_simulation:
             engine.step()
         
-        # Render based on current state
-        if visualizer.show_home_screen:
-            visualizer.render_home_screen()
-        elif visualizer.show_simulation_builder:
-            visualizer.render_simulation_builder()
-        elif visualizer.show_simulation:
-            visualizer.render_simulation(engine)
-        
-        pygame.display.flip()
+        # Render using the main render method (handles all states and tooltips)
+        visualizer.render(engine)
     
     pygame.quit()
 

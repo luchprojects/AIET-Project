@@ -3,6 +3,7 @@ import torch.nn as nn
 import joblib
 import numpy as np
 import os
+import sys
 
 class HabitabilityModel(nn.Module):
     def __init__(self, input_size):
@@ -20,10 +21,18 @@ class HabitabilityModel(nn.Module):
 
 class MLHabitabilityCalculator:
     def __init__(self, model_path=None, scaler_path=None):
+        # Handle PyInstaller bundled paths
+        if getattr(sys, 'frozen', False):
+            # Running as compiled exe
+            base_path = sys._MEIPASS
+        else:
+            # Running as script
+            base_path = os.path.join(os.path.dirname(__file__), '..')
+        
         if model_path is None:
-            model_path = os.path.join(os.path.dirname(__file__), '..', 'ml_calibration', 'hab_net_v1.pth')
+            model_path = os.path.join(base_path, 'ml_calibration', 'hab_net_v1.pth')
         if scaler_path is None:
-            scaler_path = os.path.join(os.path.dirname(__file__), '..', 'ml_calibration', 'scaler_v1.joblib')
+            scaler_path = os.path.join(base_path, 'ml_calibration', 'scaler_v1.joblib')
             
         self.feature_cols = [
             "pl_rade", "pl_masse", "pl_orbper", "pl_orbeccen",

@@ -982,6 +982,7 @@ class SolarSystemVisualizer:
         self.pending_custom_value = None      # Validated value to be applied
         self.show_custom_modal = False        # Whether to show the modal
         self.active_tooltip = None           # Current tooltip text to render
+        self.active_tooltip_anchor = None    # Optional anchor position for tooltip (for climate icon)
         self.climate_info_icon_rect = None   # Rect for climate/axial info (i) icon
         self.climate_info_pinned = False     # Whether the climate tooltip is pinned open
         self.custom_modal_text = ""           # Current text in the input box
@@ -3538,17 +3539,21 @@ class SolarSystemVisualizer:
                     continue  # Consume event to prevent other handlers
                 
                 # Climate/axial info icon click handling (pin/unpin tooltip)
+                # MUST check this BEFORE customization panel handler to avoid being consumed
                 # Use a slightly inflated hitbox so it's easy to click.
-                if hasattr(self, "climate_info_icon_rect") and self.climate_info_icon_rect:
-                    expanded_info_rect = self.climate_info_icon_rect.inflate(6, 6)
+                icon_clicked = False
+                if (hasattr(self, "climate_info_icon_rect") and self.climate_info_icon_rect and 
+                    self.show_customization_panel):
+                    expanded_info_rect = self.climate_info_icon_rect.inflate(10, 10)
                     if expanded_info_rect.collidepoint(event.pos):
                         # Toggle pinned state when clicking the (i) icon
                         self.climate_info_pinned = not getattr(self, "climate_info_pinned", False)
+                        icon_clicked = True
                         continue  # Consume click so it doesn't trigger other UI beneath
-                    else:
-                        # If clicking anywhere else, unpin the tooltip (if it was pinned)
-                        if getattr(self, "climate_info_pinned", False):
-                            self.climate_info_pinned = False
+                
+                # If clicking anywhere else (and not on the icon), unpin the tooltip (if it was pinned)
+                if not icon_clicked and getattr(self, "climate_info_pinned", False):
+                    self.climate_info_pinned = False
             
             # Time control interactions (⏪ ⏸/▶ ⏩) – handle before other UI (simulation only)
             handled_tc = False
@@ -3638,6 +3643,15 @@ class SolarSystemVisualizer:
                     if self.show_customization_panel and self.customization_panel.collidepoint(event.pos):
                         print(f'DEBUG: Mouse click at {event.pos}')
                         print(f'DEBUG: Orbital distance rect: {self.planet_orbital_distance_dropdown_rect}')
+                        
+                        # Check climate info icon FIRST (before other panel elements)
+                        if hasattr(self, "climate_info_icon_rect") and self.climate_info_icon_rect:
+                            expanded_info_rect = self.climate_info_icon_rect.inflate(10, 10)
+                            if expanded_info_rect.collidepoint(event.pos):
+                                # Toggle pinned state when clicking the (i) icon
+                                self.climate_info_pinned = not getattr(self, "climate_info_pinned", False)
+                                continue  # Consume click so it doesn't trigger other UI beneath
+                        
                         # Check if close button was clicked
                         if self.close_button.collidepoint(event.pos):
                             self.show_customization_panel = False
@@ -9032,11 +9046,18 @@ class SolarSystemVisualizer:
                 info_icon_size = 16
                 self.climate_info_icon_rect = pygame.Rect(badge_x, badge_y, info_icon_size, info_icon_size)
                 
-                # Draw info icon (circle with 'i')
-                pygame.draw.circle(self.screen, (100, 150, 255), self.climate_info_icon_rect.center, info_icon_size // 2, 1)
-                info_text = self.tiny_font.render("i", True, (100, 150, 255))
+                # Draw info icon (circle with 'i') - make it more visible and clickable
+                # Draw filled circle background for better visibility
+                pygame.draw.circle(self.screen, (200, 220, 255), self.climate_info_icon_rect.center, info_icon_size // 2)
+                # Draw border
+                pygame.draw.circle(self.screen, (100, 150, 255), self.climate_info_icon_rect.center, info_icon_size // 2, 2)
+                info_text = self.tiny_font.render("i", True, (50, 100, 200))
                 info_text_rect = info_text.get_rect(center=self.climate_info_icon_rect.center)
                 self.screen.blit(info_text, info_text_rect)
+                
+                # Debug: Draw hitbox outline (remove in production)
+                # expanded_debug = self.climate_info_icon_rect.inflate(6, 6)
+                # pygame.draw.rect(self.screen, (255, 0, 0), expanded_debug, 1)
                 
                 # Build tooltip content from current body state
                 body = self.get_selected_body()
@@ -9055,10 +9076,17 @@ class SolarSystemVisualizer:
                     ]
                     
                     # Show tooltip on hover or if pinned
+                    # Use slightly expanded hitbox for easier hover detection
                     mouse_pos = pygame.mouse.get_pos()
-                    hovering_icon = self.climate_info_icon_rect.collidepoint(mouse_pos)
-                    if hovering_icon or getattr(self, "climate_info_pinned", False):
+                    expanded_hover_rect = self.climate_info_icon_rect.inflate(10, 10)
+                    hovering_icon = expanded_hover_rect.collidepoint(mouse_pos)
+                    is_pinned = getattr(self, "climate_info_pinned", False)
+                    if hovering_icon or is_pinned:
+                        # Store tooltip data with anchor position (bottom-right of icon)
+                        icon_anchor = (self.climate_info_icon_rect.right + 5, self.climate_info_icon_rect.bottom)
                         self.active_tooltip = tooltip_lines
+                        self.active_tooltip_anchor = icon_anchor  # Store anchor position for climate tooltip
+                    # Don't clear tooltip here - let it persist if pinned, or let render() handle clearing
                 
                 # (Magnetosphere and internal heating warnings removed from UI per design:
                 #  only dropdowns and sandbox visuals should respond to parameter changes.)
@@ -10683,7 +10711,9 @@ class SolarSystemVisualizer:
 
     def render(self, engine: SimulationEngine):
         """Main render function"""
-        self.active_tooltip = None  # Reset tooltip for this frame
+        # Reset tooltip at start of frame (will be set during rendering if needed)
+        self.active_tooltip = None
+        self.active_tooltip_anchor = None
         
         # Home screen removed - start directly in sandbox
         # if self.show_home_screen:
@@ -10694,9 +10724,11 @@ class SolarSystemVisualizer:
             self.render_simulation(engine)
             self.render_info_panel() # Render popover last
         
-        # Draw active tooltip if any
+        # Draw active tooltip if any (set during rendering above)
         if self.active_tooltip:
-            self._render_generic_tooltip(self.active_tooltip, self.screen)
+            # Use anchor position if available (for climate tooltip), otherwise use mouse position
+            anchor = getattr(self, "active_tooltip_anchor", None)
+            self._render_generic_tooltip(self.active_tooltip, self.screen, anchor_pos=anchor)
         
         pygame.display.flip() 
 
@@ -11012,15 +11044,25 @@ class SolarSystemVisualizer:
         tooltip_rect = tooltip_surface.get_rect(midleft=(rect.left + 5, rect.centery))
         self.screen.blit(tooltip_surface, tooltip_rect)
     
-    def _render_generic_tooltip(self, text, surface=None):
-        """Render a generic floating tooltip at the mouse position. Supports multi-line text."""
+    def _render_generic_tooltip(self, text, surface=None, anchor_pos=None):
+        """Render a generic floating tooltip. Supports multi-line text.
+        
+        Args:
+            text: Text to display (string or list of strings)
+            surface: Surface to render on (defaults to self.screen)
+            anchor_pos: Optional (x, y) position to anchor tooltip to. If None, uses mouse position.
+        """
         if not text:
             return
         
         if surface is None:
             surface = self.screen
             
-        mouse_pos = pygame.mouse.get_pos()
+        # Use anchor position if provided, otherwise use mouse position
+        if anchor_pos:
+            pos = anchor_pos
+        else:
+            pos = pygame.mouse.get_pos()
         padding = 6
         
         # Handle multi-line text
@@ -11049,12 +11091,12 @@ class SolarSystemVisualizer:
         # Create background rect
         bg_rect = pygame.Rect(0, 0, max_width + padding * 2, total_height + padding * 2)
         
-        # Position slightly offset from mouse
-        bg_rect.topleft = (mouse_pos[0] + 12, mouse_pos[1] - bg_rect.height // 2)
+        # Position slightly offset from anchor/mouse position
+        bg_rect.topleft = (pos[0] + 12, pos[1] - bg_rect.height // 2)
         
         # Ensure tooltip stays on screen
         if bg_rect.right > self.width:
-            bg_rect.right = mouse_pos[0] - 12
+            bg_rect.right = pos[0] - 12
         if bg_rect.bottom > self.height:
             bg_rect.bottom = self.height - 5
         if bg_rect.top < 0:
