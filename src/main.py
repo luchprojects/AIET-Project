@@ -42,7 +42,9 @@ def create_solar_system() -> SimulationEngine:
         velocity=np.array([0.0, 1.5, 0.0]),  # Circular orbit
         temperature=210,  # Kelvin
         atmosphere={"CO2": 0.95, "N2": 0.027, "Ar": 0.016},
-        type="planet"
+        type="planet",
+        orbper=687.0,
+        orbeccen=0.0934
     )
     engine.add_body(mars)
     
