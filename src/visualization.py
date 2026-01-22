@@ -5,6 +5,7 @@ import time
 import traceback
 import math
 import random
+import copy
 from typing import List, Tuple
 from uuid import uuid4
 from simulation_engine import CelestialBody, SimulationEngine
@@ -129,6 +130,18 @@ SUN_RADIUS_R_EARTH = 109.0  # Sun radius in Earth radii (R⊕) per NASA standard
 MIN_PLANET_PX = 6.0         # Minimum visual size
 PLANET_SCALE_POWER = 0.5    # Size scaling
 PLANET_DISTANCE_SCALE_POWER = 0.85 # Higher power pushes Earth further out to avoid Moon collisions
+
+# Star visual scaling constants (perceptual compression to prevent overlap)
+STAR_RADIUS_SCALE_POWER = 0.60  # Power law for star visual radius (lower = more compression, prevents overlap)
+STAR_MAX_ORBIT_FRACTION = 0.40  # Default clamp fraction (small stars use max 40% of closest orbit)
+STAR_MAX_ORBIT_FRACTION_LARGE = 0.45  # Clamp fraction when near physical engulfment (45% of orbit)
+STAR_MAX_ORBIT_FRACTION_HUGE = 0.70  # Clamp fraction for very large stars (200+ solar radii) - allows larger stars while preventing overlap
+STAR_HUGE_STAR_THRESHOLD = 200.0  # Solar radii - stars above this can use more orbit space
+STAR_CLAMP_SAFE_RATIO = 0.25  # Star can occupy up to 25% of closest orbit before clamping engages (prevents normal stars from shrinking when inner planets are added)
+STAR_SMALL_STAR_EXEMPTION = 5.0  # Stars <= 5.0 R☉ skip clamping entirely (Sun-like stars never need orbit-based clamping)
+
+# Physical constants for engulfment detection
+RSUN_TO_AU = 0.00465047  # Solar radius in AU (for physical engulfment check)
 
 # Helper function to convert hex color string to RGB tuple
 def hex_to_rgb(hex_string: str) -> Tuple[int, int, int]:
@@ -994,6 +1007,22 @@ class SolarSystemVisualizer:
         self.custom_modal_unit = ""           # Unit label (e.g., M⊕, AU, M☉)
         self.previous_dropdown_selection = None # Store selection before 'Custom' was chosen
         self.apply_btn_rect = pygame.Rect(0,0,0,0)  # Initialize to avoid hasattr issues
+        
+        # Engulfment confirmation modal state (star radius changes)
+        self.show_engulfment_modal = False    # Whether to show engulfment confirmation modal
+        self.engulfment_modal_star_id = None  # Star ID for the pending radius change
+        self.engulfment_modal_new_radius = None  # New radius value (R☉)
+        self.engulfment_modal_engulfed_planets = []  # List of planets that would be engulfed: [{"name": str, "orbit_au": float}, ...]
+        self.engulfment_modal_delete_planets = False  # Checkbox: delete engulfed planets permanently
+        self.engulfment_modal_star_radius_au = None  # Star radius in AU for display
+
+        # Placement engulfment modal state (planet placement into oversized star)
+        self.show_placement_engulfment_modal = False
+        self.placement_engulfment_planet_id = None
+        self.placement_engulfment_star_id = None
+        self.placement_engulfment_star_radius_au = None
+        self.placement_engulfment_planet_orbit_au = None
+        self._placement_engulfment_prev_selected_body_id = None
         self.cancel_btn_rect = pygame.Rect(0,0,0,0) # Initialize to avoid hasattr issues
         # ------------------------------------
         
@@ -1418,20 +1447,68 @@ class SolarSystemVisualizer:
             return max(hitbox_radius, 15.0)
         return hitbox_radius
     
-    def calculate_star_visual_radius(self, star_body: dict) -> float:
+    def calculate_star_visual_radius(self, star_body: dict, placed_bodies: list = None) -> float:
         """
-        Calculate visual radius in pixels for a star based on its stellar radius (R☉).
-        Formula: star_radius_px = SUN_RADIUS_PX * stellar_radius_solar
+        Calculate visual radius in pixels for a star using perceptual scaling (power law)
+        and clamping to prevent visual overlap with planets.
+        
+        Formula: star_radius_px = SUN_RADIUS_PX * (stellar_radius_solar ^ STAR_RADIUS_SCALE_POWER)
+        Clamped to: min(calculated, (min_orbit_px * orbit_fraction) - min_gap_px)
+        
+        Physical engulfment is checked separately and does not affect visual scaling.
         
         Args:
             star_body: Star body dictionary with "radius" in Solar radii (R☉)
+            placed_bodies: List of all placed bodies (optional, for orbit clamping)
             
         Returns:
-            Visual radius in pixels
+            Visual radius in pixels (clamped to prevent planet overlap)
         """
         stellar_radius_solar = star_body.get("radius", 1.0)
-        # Authoritative Formula: star_radius_px = BASE_STAR_RADIUS_PX * stellar_radius_solar
-        return SUN_RADIUS_PX * stellar_radius_solar
+        
+        # Step 1: Perceptual scaling using power law (more compression for large stars).
+        # IMPORTANT UX RULE: Star visual radius is determined ONLY by its own radius,
+        # never by the positions of its planets. Adding or moving planets must NOT
+        # cause the star to shrink visually; users should zoom out instead.
+        visual_radius = SUN_RADIUS_PX * (stellar_radius_solar ** STAR_RADIUS_SCALE_POWER)
+        
+        # Step 2: Optionally compute engulfment metadata for UI badges, but do NOT
+        # modify the visual radius based on planet orbits.
+        if placed_bodies is not None:
+            star_id = star_body.get("id")
+            star_name = star_body.get("name")
+            planets_orbiting_star = []
+            
+            for body in placed_bodies:
+                if body.get("type") == "planet":
+                    parent_id = body.get("parent_id")
+                    parent_name = body.get("parent")
+                    parent_obj = body.get("parent_obj")
+                    
+                    if (parent_id == star_id or 
+                        parent_name == star_name or 
+                        (parent_obj and parent_obj.get("id") == star_id)):
+                        planets_orbiting_star.append(body)
+            
+            if planets_orbiting_star:
+                closest_planet_au = float('inf')
+                for planet in planets_orbiting_star:
+                    semi_major_axis_au = planet.get("semiMajorAxis", 1.0)
+                    closest_planet_au = min(closest_planet_au, semi_major_axis_au)
+                
+                # Physical engulfment metadata (for warnings/badges only)
+                stellar_radius_au = stellar_radius_solar * RSUN_TO_AU
+                engulfment_ratio = stellar_radius_au / closest_planet_au if closest_planet_au > 0 else 0.0
+                is_physically_engulfed = stellar_radius_au >= closest_planet_au
+                is_near_engulfment = engulfment_ratio >= 0.3
+                
+                # Store for UI; DO NOT change visual_radius here.
+                star_body["_engulfment_ratio"] = engulfment_ratio
+                star_body["_is_physically_engulfed"] = is_physically_engulfed
+                star_body["_is_near_engulfment"] = is_near_engulfment
+                star_body["_closest_planet_au"] = closest_planet_au
+        
+        return visual_radius
 
     def get_visual_orbit_radius(self, semi_major_axis_au: float) -> float:
         """
@@ -1500,7 +1577,7 @@ class SolarSystemVisualizer:
                 parent_star = min(stars, key=lambda s: np.linalg.norm(s.get("position", np.array([0, 0])) - planet_pos))
         
         if parent_star:
-            star_visual_radius = self.calculate_star_visual_radius(parent_star)
+            star_visual_radius = self.calculate_star_visual_radius(parent_star, placed_bodies)
         else:
             # Fallback to Sun-sized star visual radius (48px)
             star_visual_radius = SUN_RADIUS_PX
@@ -1794,6 +1871,8 @@ class SolarSystemVisualizer:
             self._update_derived_parameters(body)
             # Update visual size
             self._update_visual_size(body)
+            # Update dropdown labels to show new value and recalculated dependent variables
+            self._sync_all_dropdown_labels(body)
 
         elif parameter == "temperature":
             # Temperature Change -> Recompute Luminosity if Star
@@ -1940,11 +2019,17 @@ class SolarSystemVisualizer:
 
     def _update_derived_parameters(self, body):
         """Update density and gravity based on current mass and radius"""
+        # CRITICAL: Assertion guard to prevent type confusion
+        body_type = body.get("type")
+        assert body_type in ("star", "planet", "moon"), f"Invalid body type: {body_type} (body_id={body.get('id', 'unknown')}, name={body.get('name', 'unknown')})"
+        
         mass = body.get("mass", 1.0)
         radius = body.get("actual_radius", body.get("radius", 1.0))
         
         if radius > 0:
-            if body.get("type") == "star":
+            if body_type == "star":
+                # CRITICAL: Hard assertion - star logic must only run on stars
+                assert body_type == "star", f"Star logic executed on non-star body: type={body_type}, id={body.get('id')}, name={body.get('name')}"
                 # Star derived parameters
                 # Density: rho = rho_sun * (mass/r^3) where rho_sun ~ 1.41 g/cm³
                 body["density"] = 1.41 * (mass / (radius ** 3))
@@ -1955,11 +2040,64 @@ class SolarSystemVisualizer:
                 # T_sun is ~5800 K in this codebase
                 temp = body.get("temperature", 5800.0)
                 luminosity = (radius ** 2) * ((temp / 5800.0) ** 4)
+                
+                # CRITICAL: Write-access tracing for star properties
+                old_lum = body.get("luminosity")
+                old_radius = body.get("radius")
+                old_temp = body.get("temperature")
+                
+                # Log ALL writes to star properties, even if they seem expected
+                import traceback
+                print(f"TRACE_STAR_WRITE | _update_derived_parameters | body_id={body.get('id')[:8]} | name={body.get('name')} | radius={radius:.4f} | temp={temp:.4f} | lum={luminosity:.4f}")
+                if old_radius != radius or old_temp != temp or (old_lum is not None and abs(old_lum - luminosity) > 0.01):
+                    print(f"  OLD VALUES: radius={old_radius}, temp={old_temp}, lum={old_lum}")
+                    print(f"  NEW VALUES: radius={radius}, temp={temp}, lum={luminosity}")
+                    print(f"  Call stack: {''.join(traceback.format_stack()[-5:-1])}")
+                
                 body["luminosity"] = luminosity
                 
                 # CRITICAL: Update habitable zone when luminosity changes
                 body["hz_surface"] = self.create_habitable_zone(body)
+                
+                # Physical engulfment check: if star radius (in AU) >= planet orbit, planet is engulfed
+                stellar_radius_au = body.get("radius", 1.0) * RSUN_TO_AU
+                
+                # Check all planets orbiting this star for engulfment
+                star_id = body.get("id")
+                star_name = body.get("name")
+                for planet in self.placed_bodies:
+                    if planet.get("type") == "planet":
+                        # Check if planet orbits this star
+                        parent_id = planet.get("parent_id")
+                        parent_name = planet.get("parent")
+                        parent_obj = planet.get("parent_obj")
+                        
+                        if (parent_id == star_id or 
+                            parent_name == star_name or 
+                            (parent_obj and parent_obj.get("id") == star_id)):
+                            
+                            planet_semi_major_axis_au = planet.get("semiMajorAxis", 1.0)
+                            
+                            # Physical engulfment: star radius (AU) >= planet orbit (AU)
+                            # Use correct physical condition (not 0.5 * a)
+                            if stellar_radius_au >= planet_semi_major_axis_au:
+                                planet["engulfed_by_star"] = True
+                                planet["engulfed_star_id"] = star_id
+                                planet["engulfed_star_name"] = star_name
+                                # Set habitability to 0 for engulfed planets
+                                planet["habit_score"] = 0.0
+                                planet["H"] = 0.0
+                            else:
+                                # Clear engulfment status if planet is no longer engulfed
+                                if planet.get("engulfed_star_id") == star_id:
+                                    planet["engulfed_by_star"] = False
+                                    planet["engulfed_star_id"] = None
+                                    planet["engulfed_star_name"] = None
+                                    # Recalculate habitability (will be done in apply_parameter_change)
             else:
+                # CRITICAL: Hard assertion - planet/moon logic must only run on planets/moons
+                assert body_type in ("planet", "moon"), f"Planet/moon logic executed on non-planet/moon body: type={body_type}, id={body.get('id')}, name={body.get('name')}"
+                
                 # Planet/Moon derived parameters
                 # Update density: rho = rho_earth * (mass/r^3)
                 body["density"] = 5.51 * (mass / (radius ** 3))
@@ -2245,7 +2383,7 @@ class SolarSystemVisualizer:
     def _update_visual_size(self, body):
         """Update hitboxes and visual references when radius changes"""
         if body["type"] == "star":
-            visual_radius = self.calculate_star_visual_radius(body)
+            visual_radius = self.calculate_star_visual_radius(body, self.placed_bodies)
             for p in self.placed_bodies:
                 if p.get("type") == "planet" and (p.get("parent") == body.get("name") or p.get("parent_id") == body.get("id")):
                     p_visual_radius = self.calculate_planet_visual_radius(p, self.placed_bodies)
@@ -2289,24 +2427,34 @@ class SolarSystemVisualizer:
         body["gravity_visual_strength"] = min(2.0, gravity / 9.81)
 
         # --- NASA DENSITY-COLOR CORRELATION ---
+        # DISABLED: Keep base color constant regardless of parameter changes
         # Low density planets are likely gas giants, high density are rocky/metallic
-        if not body.get("base_color_custom"): # Only auto-update if user hasn't set a custom color
-            density = body.get("density", 5.51)
-            if density < 2.0:
-                # Gas giant colors: Tans, Pinks, Blues
-                body["base_color"] = "#D2B48C" if density > 1.0 else "#E8D8A8"
-            elif density < 4.0:
-                # Icy/Rocky mix: Whites, Grays
-                body["base_color"] = "#B0B0B0"
-            else:
-                # High density rock/iron: Dark Grays, Reds
-                body["base_color"] = "#9E9E9E" if density < 7.0 else "#7F7F7F"
+        # if not body.get("base_color_custom"): # Only auto-update if user hasn't set a custom color
+        #     density = body.get("density", 5.51)
+        #     if density < 2.0:
+        #         # Gas giant colors: Tans, Pinks, Blues
+        #         body["base_color"] = "#D2B48C" if density > 1.0 else "#E8D8A8"
+        #     elif density < 4.0:
+        #         # Icy/Rocky mix: Whites, Grays
+        #         body["base_color"] = "#B0B0B0"
+        #     else:
+        #         # High density rock/iron: Dark Grays, Reds
+        #         body["base_color"] = "#9E9E9E" if density < 7.0 else "#7F7F7F"
         # --------------------------------------
 
     def _sync_all_dropdown_labels(self, body):
         """
         Sync all dropdown selection labels with current body values.
         Ensures UI controls reflect derived changes across all physical and orbital parameters.
+        
+        CRITICAL INVARIANT: This function is READ-ONLY for all body properties.
+        It only updates dropdown label strings (e.g., body["radius_dropdown_selected"]).
+        It NEVER modifies physical properties like radius, temperature, luminosity, mass, etc.
+        
+        For stars specifically:
+        - Reads: body.get("radius"), body.get("temperature"), body.get("luminosity")
+        - Writes: body["radius_dropdown_selected"], body["spectral_class_dropdown_selected"], etc.
+        - NEVER writes: body["radius"], body["temperature"], body["luminosity"]
         """
         if body.get("type") == "planet":
             # 1. Mass label (planet_dropdown_selected)
@@ -2505,7 +2653,16 @@ class SolarSystemVisualizer:
                 self.moon_orbital_period_dropdown_selected = body.get("moon_orbital_period_dropdown_selected")
 
         elif body.get("type") == "star":
+            # CRITICAL: Assertion guard - ensure we're only syncing labels for stars
+            assert body.get("type") == "star", f"_sync_all_dropdown_labels called on non-star: type={body.get('type')}, id={body.get('id')}, name={body.get('name')}"
+            
+            # CRITICAL: Trace all calls to _sync_all_dropdown_labels on stars
+            import traceback
+            print(f"TRACE_SYNC_STAR | _sync_all_dropdown_labels called on star | body_id={body.get('id')[:8]} | name={body.get('name')} | radius={body.get('radius')} | temp={body.get('temperature')} | lum={body.get('luminosity')}")
+            print(f"  Call stack: {''.join(traceback.format_stack()[-4:-1])}")
+            
             # Star mass
+            # READ-ONLY: Only reading mass, never modifying it
             mass = body.get("mass", 1.0)
             # Ensure mass is a Python float
             if hasattr(mass, 'item'):
@@ -2523,6 +2680,7 @@ class SolarSystemVisualizer:
                 body["star_mass_dropdown_selected"] = f"Mass: {mass:.2f} M☉"
                 
             # Star radius
+            # READ-ONLY: Only reading radius, never modifying it
             radius = body.get("radius", 1.0)
             found = False
             for name, val in self.radius_dropdown_options:
@@ -2556,6 +2714,7 @@ class SolarSystemVisualizer:
                 body["activity_dropdown_selected"] = activity
                 
             # Star luminosity
+            # READ-ONLY: Only reading luminosity, never modifying it
             lum = body.get("luminosity", 1.0)
             found = False
             for name, val in self.luminosity_dropdown_options:
@@ -2566,12 +2725,20 @@ class SolarSystemVisualizer:
             if not found:
                 body["luminosity_dropdown_selected"] = f"Luminosity: {lum:.2f} L☉"
 
-            # Sync class-level globals
+            # Sync class-level globals ONLY if this is the currently selected body
+            # CRITICAL: This is for UI display only - never use these to update star properties
+            # Star properties should only be updated via update_selected_body_property()
             if body.get("id") == self.selected_body_id:
+                old_radius_label = self.radius_dropdown_selected
+                old_lum_label = self.luminosity_dropdown_selected
+                old_temp_label = self.spectral_class_dropdown_selected
+                
                 self.star_mass_dropdown_selected = body.get("star_mass_dropdown_selected")
                 self.radius_dropdown_selected = body.get("radius_dropdown_selected")
                 self.spectral_class_dropdown_selected = body.get("spectral_class_dropdown_selected")
                 self.luminosity_dropdown_selected = body.get("luminosity_dropdown_selected")
+                
+                # Debug print intentionally omitted here to avoid Windows console Unicode issues.
 
     def get_selected_body(self):
         """
@@ -2584,6 +2751,59 @@ class SolarSystemVisualizer:
             self.selected_body = body
             return body
         return None
+    
+    def preview_star_radius_change(self, star_id: str, new_radius_rsun: float) -> dict:
+        """
+        Preview the impact of changing a star's radius without mutating state.
+        Returns a dictionary with engulfment information.
+        
+        Args:
+            star_id: ID of the star
+            new_radius_rsun: New radius in Solar radii (R☉)
+            
+        Returns:
+            Dictionary with:
+            - "engulfed_planets": List of dicts with "name" and "orbit_au" for each engulfed planet
+            - "star_radius_au": Star radius in AU
+            - "has_engulfment": Boolean indicating if any planets would be engulfed
+        """
+        star = self.bodies_by_id.get(star_id)
+        if not star or star.get("type") != "star":
+            return {"engulfed_planets": [], "star_radius_au": 0.0, "has_engulfment": False}
+        
+        # Calculate star radius in AU
+        star_radius_au = new_radius_rsun * RSUN_TO_AU
+        
+        # Find all planets orbiting this star
+        engulfed_planets = []
+        star_name = star.get("name")
+        
+        for planet in self.placed_bodies:
+            if planet.get("type") == "planet":
+                # Check if planet orbits this star
+                parent_id = planet.get("parent_id")
+                parent_name = planet.get("parent")
+                parent_obj = planet.get("parent_obj")
+                
+                if (parent_id == star_id or 
+                    parent_name == star_name or 
+                    (parent_obj and parent_obj.get("id") == star_id)):
+                    
+                    planet_semi_major_axis_au = planet.get("semiMajorAxis", 1.0)
+                    
+                    # Check if planet would be engulfed
+                    if star_radius_au >= planet_semi_major_axis_au:
+                        engulfed_planets.append({
+                            "name": planet.get("name", "Unknown"),
+                            "orbit_au": planet_semi_major_axis_au,
+                            "id": planet.get("id")
+                        })
+        
+        return {
+            "engulfed_planets": engulfed_planets,
+            "star_radius_au": star_radius_au,
+            "has_engulfment": len(engulfed_planets) > 0
+        }
     
     def _perform_registry_update(self, body_id, key, value, debug_name=""):
         """
@@ -2728,7 +2948,7 @@ class SolarSystemVisualizer:
             # If radius or actual_radius changed, update hitbox_radius to match new visual size
             if key == "radius" or key == "actual_radius":
                 if body["type"] == "star":
-                    visual_radius = self.calculate_star_visual_radius(body)
+                    visual_radius = self.calculate_star_visual_radius(body, self.placed_bodies)
                     # ALSO update hitboxes of all planets orbiting this star, as their max clamp depends on star size
                     for p in self.placed_bodies:
                         if p.get("type") == "planet" and (p.get("parent") == body.get("name") or p.get("parent_id") == body.get("id")):
@@ -2877,8 +3097,12 @@ class SolarSystemVisualizer:
         if body_id is None:
             body_id = str(uuid4())
         
-        # Deep copy preset data
-        preset = SOLAR_SYSTEM_PLANET_PRESETS[preset_name]
+        # CRITICAL: Deep copy preset data to prevent shared state contamination
+        # This ensures that modifying the planet body never affects the preset template
+        preset = copy.deepcopy(SOLAR_SYSTEM_PLANET_PRESETS[preset_name])
+        
+        # Identity audit: Log preset and body IDs to detect shared references
+        print(f"DEBUG_PRESET_COPY | preset_name={preset_name} | preset_id={id(preset)} | template_id={id(SOLAR_SYSTEM_PLANET_PRESETS[preset_name])}")
         
         # Get parent star for orbit calculation
         stars = [b for b in self.placed_bodies if b["type"] == "star"]
@@ -2957,8 +3181,11 @@ class SolarSystemVisualizer:
             "position_history": [np.array(spawn_position, dtype=float).copy()]  # Track position history for trail
         }
         
-        # Log creation
-        print(f"SPAWN_PLANET | id={body_id[:8]} | preset={preset_name} | mass={preset['mass']} | AU={orbit_radius_au} | radius={preset['radius']} R⊕")
+        # Log creation (ASCII only for Windows console safety)
+        print(
+            f"SPAWN_PLANET | id={body_id[:8]} | preset={preset_name} | "
+            f"mass={preset['mass']} | AU={orbit_radius_au} | radius={preset['radius']} Re"
+        )
         
         return body
     
@@ -3278,7 +3505,7 @@ class SolarSystemVisualizer:
         
         # Calculate visual radius for hitbox based on type
         if obj_type == "star":
-            visual_radius = self.calculate_star_visual_radius(body)
+            visual_radius = self.calculate_star_visual_radius(body, self.placed_bodies)
         elif obj_type == "planet":
             visual_radius = self.calculate_planet_visual_radius(body, self.placed_bodies)
         else:  # moon
@@ -3357,7 +3584,8 @@ class SolarSystemVisualizer:
     
     def auto_spawn_default_system(self):
         """Spawn default Sun–Earth–Moon using user-placement logic after init."""
-        print("🌍 Auto-placing Sun–Earth–Moon system...")
+        # Use plain ASCII here to avoid Windows console encoding issues
+        print("Auto-placing Sun-Earth-Moon system...")
         # Use the *exact same* functions that user clicks trigger
         self.place_object("star", {"name": "Sun"})
         self.place_object("planet", {"name": "Earth", "semi_major_axis": 1.0})
@@ -3472,6 +3700,126 @@ class SolarSystemVisualizer:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return False
+            
+            # --- ENGULFMENT CONFIRMATION MODAL EVENT HANDLING (BLOCKS OTHER INPUT) ---
+            if self.show_engulfment_modal:
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    # Checkbox toggle
+                    if hasattr(self, 'engulfment_checkbox_rect') and self.engulfment_checkbox_rect.collidepoint(event.pos):
+                        self.engulfment_modal_delete_planets = not self.engulfment_modal_delete_planets
+                        continue
+                    # Cancel button
+                    elif hasattr(self, 'engulfment_cancel_btn_rect') and self.engulfment_cancel_btn_rect.collidepoint(event.pos):
+                        # Revert dropdown to previous selection
+                        star = self.bodies_by_id.get(self.engulfment_modal_star_id) if self.engulfment_modal_star_id else None
+                        if star and self.previous_dropdown_selection:
+                            star["radius_dropdown_selected"] = self.previous_dropdown_selection
+                            if star.get("id") == self.selected_body_id:
+                                self.radius_dropdown_selected = self.previous_dropdown_selection
+                        # Close modal
+                        self.show_engulfment_modal = False
+                        self.engulfment_modal_star_id = None
+                        self.engulfment_modal_new_radius = None
+                        self.engulfment_modal_engulfed_planets = []
+                        self.engulfment_modal_delete_planets = False
+                        self.engulfment_modal_star_radius_au = None
+                        self.previous_dropdown_selection = None
+                        continue
+                    # Apply button
+                    elif hasattr(self, 'engulfment_apply_btn_rect') and self.engulfment_apply_btn_rect.collidepoint(event.pos):
+                        # Apply the change with consequences
+                        self.apply_star_radius_change_with_consequences(
+                            self.engulfment_modal_star_id,
+                            self.engulfment_modal_new_radius,
+                            self.engulfment_modal_delete_planets
+                        )
+                        # Close modal
+                        self.show_engulfment_modal = False
+                        self.engulfment_modal_star_id = None
+                        self.engulfment_modal_new_radius = None
+                        self.engulfment_modal_engulfed_planets = []
+                        self.engulfment_modal_delete_planets = False
+                        self.engulfment_modal_star_radius_au = None
+                        self.previous_dropdown_selection = None
+                        continue
+                
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        # Cancel on Escape
+                        star = self.bodies_by_id.get(self.engulfment_modal_star_id) if self.engulfment_modal_star_id else None
+                        if star and self.previous_dropdown_selection:
+                            star["radius_dropdown_selected"] = self.previous_dropdown_selection
+                            if star.get("id") == self.selected_body_id:
+                                self.radius_dropdown_selected = self.previous_dropdown_selection
+                        self.show_engulfment_modal = False
+                        self.engulfment_modal_star_id = None
+                        self.engulfment_modal_new_radius = None
+                        self.engulfment_modal_engulfed_planets = []
+                        self.engulfment_modal_delete_planets = False
+                        self.engulfment_modal_star_radius_au = None
+                        self.previous_dropdown_selection = None
+                        continue
+
+            # --- PLACEMENT ENGULFMENT MODAL EVENT HANDLING (BLOCKS OTHER INPUT) ---
+            if self.show_placement_engulfment_modal:
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    # Cancel placement
+                    if hasattr(self, 'placement_engulfment_cancel_btn_rect') and self.placement_engulfment_cancel_btn_rect.collidepoint(event.pos):
+                        # Remove the pending planet entirely
+                        if self.placement_engulfment_planet_id:
+                            planet = self.bodies_by_id.pop(self.placement_engulfment_planet_id, None)
+                            if planet:
+                                self.placed_bodies = [b for b in self.placed_bodies if b.get("id") != self.placement_engulfment_planet_id]
+                        self.show_placement_engulfment_modal = False
+                        self.placement_engulfment_planet_id = None
+                        self.placement_engulfment_star_id = None
+                        self.placement_engulfment_star_radius_au = None
+                        self.placement_engulfment_planet_orbit_au = None
+                        self._placement_engulfment_prev_selected_body_id = None
+                        continue
+                    # Choose new AU (opens the same custom AU modal as normal edits)
+                    elif hasattr(self, 'placement_engulfment_choose_au_btn_rect') and self.placement_engulfment_choose_au_btn_rect.collidepoint(event.pos):
+                        planet = self.bodies_by_id.get(self.placement_engulfment_planet_id) if self.placement_engulfment_planet_id else None
+                        star = self.bodies_by_id.get(self.placement_engulfment_star_id) if self.placement_engulfment_star_id else None
+                        if planet and star:
+                            # Temporarily select this planet so the existing custom modal pipeline
+                            # (which routes through update_selected_body_property) edits the correct body.
+                            self._placement_engulfment_prev_selected_body_id = self.selected_body_id
+                            self.selected_body_id = planet.get("id")
+                            self.selected_body = planet
+                            self.show_customization_panel = True
+                            
+                            # Configure the custom modal for AU
+                            self.show_custom_modal = True
+                            self.pending_custom_body_id = planet.get("id")
+                            self.pending_custom_field = "semi_major_axis"
+                            self.custom_modal_unit = "AU"
+                            
+                            stellar_radius_au = float(self.placement_engulfment_star_radius_au or (star.get("radius", 1.0) * RSUN_TO_AU))
+                            # Suggest a safe AU just outside the star surface
+                            suggested = max(stellar_radius_au * 1.02, getattr(self, "orbital_distance_min", 0.01))
+                            self.custom_modal_min = max(stellar_radius_au * 1.001, getattr(self, "orbital_distance_min", 0.01))
+                            self.custom_modal_max = getattr(self, "orbital_distance_max", 1000.0)
+                            self.custom_modal_text = f"{suggested:.3f}"
+                            self.validate_custom_modal_input()
+                            
+                            # Hide the placement modal while the custom AU modal is active
+                            self.show_placement_engulfment_modal = False
+                        continue
+
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    # Treat ESC as cancel placement
+                    if self.placement_engulfment_planet_id:
+                        planet = self.bodies_by_id.pop(self.placement_engulfment_planet_id, None)
+                        if planet:
+                            self.placed_bodies = [b for b in self.placed_bodies if b.get("id") != self.placement_engulfment_planet_id]
+                    self.show_placement_engulfment_modal = False
+                    self.placement_engulfment_planet_id = None
+                    self.placement_engulfment_star_id = None
+                    self.placement_engulfment_star_radius_au = None
+                    self.placement_engulfment_planet_orbit_au = None
+                    self._placement_engulfment_prev_selected_body_id = None
+                    continue
             
             # --- CUSTOM MODAL EVENT HANDLING (BLOCKS OTHER INPUT) ---
             if self.show_custom_modal:
@@ -4344,13 +4692,24 @@ class SolarSystemVisualizer:
                                 )
                                 if option_rect.collidepoint(event.pos):
                                     if flux_name == "Custom":
-                                        self.show_custom_stellar_flux_input = True
-                                        self.stellar_flux_input_active = True
-                                        self.stellar_flux_input_text = f"{self.selected_body.get('stellarFlux', 1.0):.3f}"
+                                        # Trigger custom modal for stellar flux
+                                        body = self.get_selected_body()
+                                        self.previous_dropdown_selection = body.get("planet_stellar_flux_dropdown_selected") if body else None
+                                        self.show_custom_modal = True
+                                        self.custom_modal_title = "Set Custom Stellar Flux"
+                                        self.custom_modal_helper = "Enter stellar flux (Earth = 1.0). Allowed: 0.01 – 1000"
+                                        self.custom_modal_min = 0.01
+                                        self.custom_modal_max = 1000.0
+                                        self.custom_modal_unit = ""
+                                        self.pending_custom_field = "stellarFlux"
+                                        self.pending_custom_body_id = self.selected_body_id
+                                        self.custom_modal_text = ""
+                                        self.validate_custom_modal_input()
                                     else:
                                         self.update_selected_body_property("stellarFlux", flux, "stellarFlux")
                                         self.show_custom_stellar_flux_input = False
-                                    self.planet_stellar_flux_dropdown_selected = flux_name
+                                        # Only set dropdown selection if not "Custom" (custom will be set after modal confirmation)
+                                        self.planet_stellar_flux_dropdown_selected = flux_name
                                     self.planet_stellar_flux_dropdown_visible = False
                                     self.planet_stellar_flux_dropdown_active = False
                                     break
@@ -4396,7 +4755,8 @@ class SolarSystemVisualizer:
                                         self.validate_custom_modal_input()
                                     else:
                                         self.update_selected_body_property("density", density, "density")
-                                    self.planet_density_dropdown_selected = density_name
+                                        # Only set dropdown selection if not "Custom" (custom will be set after modal confirmation)
+                                        self.planet_density_dropdown_selected = density_name
                                     self.planet_density_dropdown_visible = False
                                     self.planet_density_dropdown_active = False
                                     break
@@ -5494,7 +5854,7 @@ class SolarSystemVisualizer:
                                 visual_radius = self.calculate_moon_visual_radius(body, self.placed_bodies)
                             else:
                                 # Stars: calculate visual radius using authoritative formula
-                                visual_radius = self.calculate_star_visual_radius(body)
+                                visual_radius = self.calculate_star_visual_radius(body, self.placed_bodies)
                             
                             # Calculate hitbox with scale factor for clickability
                             hitbox_radius_px = self.calculate_hitbox_radius(body["type"], visual_radius)
@@ -5948,6 +6308,11 @@ class SolarSystemVisualizer:
                                         break
                                 if not found:
                                     self.moon_gravity_dropdown_selected = "Custom"
+                            
+                            # CRITICAL: Sync dropdown labels from body dict to class-level variables AFTER all initialization
+                            # This ensures the UI displays the correct dropdown selections, overwriting any "Custom" values
+                            # that were set during initialization if the body dict has formatted labels (e.g., "Radius: 2000.00 R☉")
+                            self._sync_all_dropdown_labels(canonical_body)
                         elif self.active_tab and space_area.collidepoint(event.pos):
                             # Check if click was on a dropdown option - if so, don't place
                             clicked_on_dropdown_option = False
@@ -6106,13 +6471,62 @@ class SolarSystemVisualizer:
                                     self.planet_dropdown_selected = None
                                     self.clear_preview()
                                     
+                                    # CRITICAL: Identity & Reference Audit before adding planet
+                                    star_audit_data = {}
+                                    if body["type"] == "planet":
+                                        stars = [b for b in self.placed_bodies if b.get("type") == "star"]
+                                        for star in stars:
+                                            star_id = star.get("id")
+                                            star_audit_data[star_id] = {
+                                                "id": id(star),
+                                                "name": star.get("name"),
+                                                "radius": star.get("radius"),
+                                                "temperature": star.get("temperature"),
+                                                "luminosity": star.get("luminosity")
+                                            }
+                                            print(f"DEBUG_IDENTITY_AUDIT | BEFORE planet add | star_id={star_id} | star_name={star_audit_data[star_id]['name']} | radius={star_audit_data[star_id]['radius']} | temp={star_audit_data[star_id]['temperature']} | lum={star_audit_data[star_id]['luminosity']}")
+                                    
                                     self.placed_bodies.append(body)
                                     # Register body by ID for guaranteed unique lookups
                                     self.bodies_by_id[body_id] = body
                                     
+                                    # CRITICAL: Check for physical engulfment when a planet is added
+                                    # This ensures newly added planets are immediately checked against their parent star.
+                                    parent_star = None
+                                    if body["type"] == "planet":
+                                        parent_id = body.get("parent_id")
+                                        parent_name = body.get("parent")
+                                        parent_obj = body.get("parent_obj")
+                                        
+                                        # Find parent star
+                                        if parent_obj and parent_obj.get("type") == "star":
+                                            parent_star = parent_obj
+                                        elif parent_id:
+                                            parent_star = self.bodies_by_id.get(parent_id)
+                                            if parent_star and parent_star.get("type") != "star":
+                                                parent_star = None
+                                        elif parent_name:
+                                            parent_star = next((b for b in self.placed_bodies if b.get("name") == parent_name and b.get("type") == "star"), None)
+                                        
+                                    # Check if planet is physically engulfed by parent star (on placement)
+                                    if parent_star and body["type"] == "planet":
+                                        stellar_radius_au = parent_star.get("radius", 1.0) * RSUN_TO_AU
+                                        planet_semi_major_axis_au = body.get("semiMajorAxis", 1.0)
+                                        
+                                        if stellar_radius_au >= planet_semi_major_axis_au:
+                                            # Do NOT silently move the planet outward. Instead, trigger a placement
+                                            # engulfment modal so the user can cancel or place as destroyed.
+                                            # Also hide the planet immediately so engulfed/invalid placements are never visible.
+                                            body["is_destroyed"] = True
+                                            self.show_placement_engulfment_modal = True
+                                            self.placement_engulfment_planet_id = body_id
+                                            self.placement_engulfment_star_id = parent_star.get("id")
+                                            self.placement_engulfment_star_radius_au = stellar_radius_au
+                                            self.placement_engulfment_planet_orbit_au = planet_semi_major_axis_au
+                                    
                                     # Calculate visual radius for hitbox based on type
                                     if body["type"] == "star":
-                                        visual_radius = self.calculate_star_visual_radius(body)
+                                        visual_radius = self.calculate_star_visual_radius(body, self.placed_bodies)
                                     elif body["type"] == "planet":
                                         visual_radius = self.calculate_planet_visual_radius(body, self.placed_bodies)
                                     else:  # moon
@@ -6120,6 +6534,27 @@ class SolarSystemVisualizer:
                                         
                                     # Update hitbox_radius to match visual radius
                                     body["hitbox_radius"] = float(self.calculate_hitbox_radius(body["type"], visual_radius))
+                                    
+                                    # CRITICAL: Identity & Reference Audit after adding planet
+                                    if body["type"] == "planet":
+                                        stars = [b for b in self.placed_bodies if b.get("type") == "star"]
+                                        for star in stars:
+                                            star_id = star.get("id")
+                                            if star_id in star_audit_data:
+                                                before = star_audit_data[star_id]
+                                                star_id_after = id(star)
+                                                star_radius_after = star.get("radius")
+                                                star_temp_after = star.get("temperature")
+                                                star_lum_after = star.get("luminosity")
+                                                print(f"DEBUG_IDENTITY_AUDIT | AFTER planet add | star_id={star_id} | star_name={star.get('name')} | radius={star_radius_after} | temp={star_temp_after} | lum={star_lum_after}")
+                                                if before["id"] != star_id_after:
+                                                    print(f"ERROR: Star object ID changed! This indicates shared reference mutation!")
+                                                if before["radius"] != star_radius_after:
+                                                    print(f"ERROR: Star radius changed from {before['radius']} to {star_radius_after}!")
+                                                if before["temperature"] != star_temp_after:
+                                                    print(f"ERROR: Star temperature changed from {before['temperature']} to {star_temp_after}!")
+                                                if before["luminosity"] != star_lum_after:
+                                                    print(f"ERROR: Star luminosity changed from {before['luminosity']} to {star_lum_after}!")
                                     
                                     # CRITICAL: Hard assertion to detect shared state immediately
                                     self._assert_no_shared_state()
@@ -7193,7 +7628,9 @@ class SolarSystemVisualizer:
                 # Parameters already set, just ensure parent is set
                 body["parent"] = parent["name"]
             
-            # CRITICAL: For planets and moons, orbit_radius is derived from semiMajorAxis via visual scaling
+            # CRITICAL: For planets and moons, orbit_radius is derived from semiMajorAxis via visual scaling.
+            # PHYSICS CONTRACT: The visual orbit radius is always a direct function of a_AU; we never
+            # move the orbit outward for rendering. Engulfment is handled via explicit state/modals.
             if body["type"] == "planet":
                 orbit_radius = self.get_visual_orbit_radius(body.get("semiMajorAxis", 1.0))
             elif body["type"] == "moon" and body.get("semiMajorAxis"):
@@ -7380,8 +7817,8 @@ class SolarSystemVisualizer:
                     body["parent"] = nearest_star["name"]
                     self.generate_orbit_grid(body)
             elif body["type"] == "moon" and (not body.get("parent") or body["parent"] is None):
-                # Find nearest planet
-                planets = [b for b in self.placed_bodies if b["type"] == "planet"]
+                # Find nearest planet (exclude destroyed planets)
+                planets = [b for b in self.placed_bodies if b["type"] == "planet" and not b.get("is_destroyed", False)]
                 if planets:
                     nearest_planet = min(planets, key=lambda p: np.linalg.norm(p["position"] - body["position"]))
                     # Only set up orbit if parameters aren't already set
@@ -7411,6 +7848,9 @@ class SolarSystemVisualizer:
         
         # Process planets first (they orbit stars)
         for body in planets:
+            # Skip destroyed planets (marked as destroyed but not deleted)
+            if body.get("is_destroyed", False):
+                continue
             # Get parent using parent_obj reference (faster and more reliable)
             parent = body.get("parent_obj")
             if parent is None:
@@ -8462,13 +8902,24 @@ class SolarSystemVisualizer:
                     option_rect = pygame.Rect(self.planet_stellar_flux_dropdown_rect.left, dropdown_y + i * 30, self.planet_stellar_flux_dropdown_rect.width, 30)
                     if option_rect.collidepoint(pos):
                         if flux_name == "Custom":
-                            self.show_custom_stellar_flux_input = True
-                            self.stellar_flux_input_active = True
-                            self.stellar_flux_input_text = f"{self.selected_body.get('stellarFlux', 1.0):.3f}"
+                            # Trigger custom modal for stellar flux
+                            body = self.get_selected_body()
+                            self.previous_dropdown_selection = body.get("planet_stellar_flux_dropdown_selected") if body else None
+                            self.show_custom_modal = True
+                            self.custom_modal_title = "Set Custom Stellar Flux"
+                            self.custom_modal_helper = "Enter stellar flux (Earth = 1.0). Allowed: 0.01 – 1000"
+                            self.custom_modal_min = 0.01
+                            self.custom_modal_max = 1000.0
+                            self.custom_modal_unit = ""
+                            self.pending_custom_field = "stellarFlux"
+                            self.pending_custom_body_id = self.selected_body_id
+                            self.custom_modal_text = ""
+                            self.validate_custom_modal_input()
                         else:
                             self.update_selected_body_property("stellarFlux", flux, "stellarFlux")
                             self.show_custom_stellar_flux_input = False
-                        self.planet_stellar_flux_dropdown_selected = flux_name
+                            # Only set dropdown selection if not "Custom" (custom will be set after modal confirmation)
+                            self.planet_stellar_flux_dropdown_selected = flux_name
                         self.planet_stellar_flux_dropdown_visible = False
                         self.planet_stellar_flux_dropdown_active = False
                         return True
@@ -8494,7 +8945,8 @@ class SolarSystemVisualizer:
                             self.validate_custom_modal_input()
                         else:
                             self.update_selected_body_property("density", density, "density")
-                        self.planet_density_dropdown_selected = density_name
+                            # Only set dropdown selection if not "Custom" (custom will be set after modal confirmation)
+                            self.planet_density_dropdown_selected = density_name
                         self.planet_density_dropdown_visible = False
                         self.planet_density_dropdown_active = False
                         return True
@@ -8537,8 +8989,19 @@ class SolarSystemVisualizer:
                                             body = self.get_selected_body()
                                             if body: body["planet_dropdown_selected"] = name
                                     else:
-                                        self.show_custom_planet_mass_input = True
-                                        self.planet_mass_input_active = True
+                                        # Trigger custom modal for planet mass
+                                        body = self.get_selected_body()
+                                        self.previous_dropdown_selection = body.get("planet_dropdown_selected") if body else None
+                                        self.show_custom_modal = True
+                                        self.custom_modal_title = "Set Custom Planet Mass"
+                                        self.custom_modal_helper = "Enter mass in Earth masses (M⊕). Allowed: 0.01 – 500"
+                                        self.custom_modal_min = 0.01
+                                        self.custom_modal_max = 500.0
+                                        self.custom_modal_unit = "M⊕"
+                                        self.pending_custom_field = "mass"
+                                        self.pending_custom_body_id = self.selected_body_id
+                                        self.custom_modal_text = ""
+                                        self.validate_custom_modal_input()
                                     self.planet_age_dropdown_selected = "Solar System Planets (4.6 Gyr)"
                                     self.planet_gravity_dropdown_selected = "Earth"
                                     self.planet_dropdown_visible = False
@@ -8556,7 +9019,19 @@ class SolarSystemVisualizer:
                                         mass_float = float(mass_value.item()) if hasattr(mass_value, 'item') else float(mass_value)
                                         self.update_selected_body_property("mass", mass_float, "mass")
                                 else:
-                                    self.show_custom_moon_mass_input = True
+                                    # Trigger custom modal for moon mass
+                                    body = self.get_selected_body()
+                                    self.previous_dropdown_selection = body.get("moon_dropdown_selected") if body else None
+                                    self.show_custom_modal = True
+                                    self.custom_modal_title = "Set Custom Moon Mass"
+                                    self.custom_modal_helper = "Enter mass in Lunar masses (M☾). Allowed: 0.001 – 10"
+                                    self.custom_modal_min = 0.001
+                                    self.custom_modal_max = 10.0
+                                    self.custom_modal_unit = "M☾"
+                                    self.pending_custom_field = "mass"
+                                    self.pending_custom_body_id = self.selected_body_id
+                                    self.custom_modal_text = ""
+                                    self.validate_custom_modal_input()
                                 self.moon_dropdown_selected = name
                                 self.moon_dropdown_visible = False
                                 self.moon_dropdown_active = False
@@ -8568,10 +9043,22 @@ class SolarSystemVisualizer:
                                 if value is not None:
                                     if self.selected_body:
                                         self.update_selected_body_property("mass", value, "mass")
+                                    # Only set dropdown selection if not "Custom" (custom will be set after modal confirmation)
+                                    self.star_mass_dropdown_selected = name
                                 else:
-                                    self.show_custom_star_mass_input = True
-                                    self.star_mass_input_active = True
-                                self.star_mass_dropdown_selected = name
+                                    # Trigger custom modal for star mass
+                                    body = self.get_selected_body()
+                                    self.previous_dropdown_selection = body.get("star_mass_dropdown_selected") if body else None
+                                    self.show_custom_modal = True
+                                    self.custom_modal_title = "Set Custom Star Mass"
+                                    self.custom_modal_helper = "Enter mass in Solar masses (M☉). Allowed: 0.08 – 150"
+                                    self.custom_modal_min = 0.08
+                                    self.custom_modal_max = 150.0
+                                    self.custom_modal_unit = "M☉"
+                                    self.pending_custom_field = "mass"
+                                    self.pending_custom_body_id = self.selected_body_id
+                                    self.custom_modal_text = ""
+                                    self.validate_custom_modal_input()
                                 self.star_mass_dropdown_visible = False
                                 self.star_mass_dropdown_active = False
                             return True
@@ -8581,10 +9068,22 @@ class SolarSystemVisualizer:
                                 name, value = self.luminosity_dropdown_options[i]
                                 if value is not None:
                                     self.update_selected_body_property("luminosity", value, "luminosity")
+                                    # Only set dropdown selection if not "Custom" (custom will be set after modal confirmation)
+                                    self.luminosity_dropdown_selected = name
                                 else:
-                                    self.show_custom_luminosity_input = True
-                                    self.luminosity_input_active = True
-                                self.luminosity_dropdown_selected = name
+                                    # Trigger custom modal for luminosity
+                                    body = self.get_selected_body()
+                                    self.previous_dropdown_selection = body.get("luminosity_dropdown_selected") if body else None
+                                    self.show_custom_modal = True
+                                    self.custom_modal_title = "Set Custom Luminosity"
+                                    self.custom_modal_helper = "Enter luminosity in Solar luminosities (L☉). Allowed: 0.0001 – 1000000"
+                                    self.custom_modal_min = 0.0001
+                                    self.custom_modal_max = 1000000.0
+                                    self.custom_modal_unit = "L☉"
+                                    self.pending_custom_field = "luminosity"
+                                    self.pending_custom_body_id = self.selected_body_id
+                                    self.custom_modal_text = ""
+                                    self.validate_custom_modal_input()
                                 self.luminosity_dropdown_visible = False
                                 self.luminosity_dropdown_active = False
                             return True
@@ -8595,10 +9094,22 @@ class SolarSystemVisualizer:
                                 if value is not None:
                                     if self.selected_body:
                                         self.update_selected_body_property("age", value, "age")
+                                    # Only set dropdown selection if not "Custom" (custom will be set after modal confirmation)
+                                    self.planet_age_dropdown_selected = name
                                 else:
-                                    self.show_custom_planet_age_input = True
-                                    self.planet_age_input_active = True
-                                self.planet_age_dropdown_selected = name
+                                    # Trigger custom modal for planet age
+                                    body = self.get_selected_body()
+                                    self.previous_dropdown_selection = body.get("planet_age_dropdown_selected") if body else None
+                                    self.show_custom_modal = True
+                                    self.custom_modal_title = "Set Custom Planet Age"
+                                    self.custom_modal_helper = "Enter age in Gigayears (Gyr). Allowed: 0.1 – 13.8"
+                                    self.custom_modal_min = 0.1
+                                    self.custom_modal_max = 13.8
+                                    self.custom_modal_unit = "Gyr"
+                                    self.pending_custom_field = "age"
+                                    self.pending_custom_body_id = self.selected_body_id
+                                    self.custom_modal_text = ""
+                                    self.validate_custom_modal_input()
                                 self.planet_age_dropdown_visible = False
                                 self.planet_age_dropdown_active = False
                             return True
@@ -8621,7 +9132,8 @@ class SolarSystemVisualizer:
                                     self.validate_custom_modal_input()
                                 else:
                                     self.update_selected_body_property("radius", value, "radius")
-                                self.planet_radius_dropdown_selected = name
+                                    # Only set dropdown selection if not "Custom" (custom will be set after modal confirmation)
+                                    self.planet_radius_dropdown_selected = name
                                 self.planet_radius_dropdown_visible = False
                                 self.planet_radius_dropdown_active = False
                             return True
@@ -8644,7 +9156,8 @@ class SolarSystemVisualizer:
                                     self.validate_custom_modal_input()
                                 else:
                                     self.update_selected_body_property("temperature", value, "temperature")
-                                self.planet_temperature_dropdown_selected = name
+                                    # Only set dropdown selection if not "Custom" (custom will be set after modal confirmation)
+                                    self.planet_temperature_dropdown_selected = name
                                 self.planet_temperature_dropdown_visible = False
                                 self.planet_temperature_dropdown_active = False
                             return True
@@ -8676,7 +9189,8 @@ class SolarSystemVisualizer:
                                     self.validate_custom_modal_input()
                                 else:
                                     self.update_selected_body_property("gravity", value, "gravity")
-                                self.planet_gravity_dropdown_selected = name
+                                    # Only set dropdown selection if not "Custom" (custom will be set after modal confirmation)
+                                    self.planet_gravity_dropdown_selected = name
                                 self.planet_gravity_dropdown_visible = False
                                 self.planet_gravity_dropdown_active = False
                             return True
@@ -8686,10 +9200,22 @@ class SolarSystemVisualizer:
                                 name, value = self.star_age_dropdown_options[i]
                                 if value is not None:
                                     self.update_selected_body_property("age", value, "age")
+                                    # Only set dropdown selection if not "Custom" (custom will be set after modal confirmation)
+                                    self.star_age_dropdown_selected = name
                                 else:
-                                    self.show_custom_star_age_input = True
-                                    self.star_age_input_active = True
-                                self.star_age_dropdown_selected = name
+                                    # Trigger custom modal for star age
+                                    body = self.get_selected_body()
+                                    self.previous_dropdown_selection = body.get("star_age_dropdown_selected") if body else None
+                                    self.show_custom_modal = True
+                                    self.custom_modal_title = "Set Custom Star Age"
+                                    self.custom_modal_helper = "Enter age in Gigayears (Gyr). Allowed: 0.001 – 13.8"
+                                    self.custom_modal_min = 0.001
+                                    self.custom_modal_max = 13.8
+                                    self.custom_modal_unit = "Gyr"
+                                    self.pending_custom_field = "age"
+                                    self.pending_custom_body_id = self.selected_body_id
+                                    self.custom_modal_text = ""
+                                    self.validate_custom_modal_input()
                                 self.star_age_dropdown_visible = False
                                 self.star_age_dropdown_active = False
                             return True
@@ -8700,10 +9226,22 @@ class SolarSystemVisualizer:
                                 if value is not None:
                                     if self.selected_body:
                                         self.update_selected_body_property("age", value, "age")
+                                    # Only set dropdown selection if not "Custom" (custom will be set after modal confirmation)
+                                    self.moon_age_dropdown_selected = name
                                 else:
-                                    self.show_custom_moon_age_input = True
-                                    self.moon_age_input_active = True
-                                self.moon_age_dropdown_selected = name
+                                    # Trigger custom modal for moon age
+                                    body = self.get_selected_body()
+                                    self.previous_dropdown_selection = body.get("moon_age_dropdown_selected") if body else None
+                                    self.show_custom_modal = True
+                                    self.custom_modal_title = "Set Custom Moon Age"
+                                    self.custom_modal_helper = "Enter age in Gigayears (Gyr). Allowed: 0.1 – 13.8"
+                                    self.custom_modal_min = 0.1
+                                    self.custom_modal_max = 13.8
+                                    self.custom_modal_unit = "Gyr"
+                                    self.pending_custom_field = "age"
+                                    self.pending_custom_body_id = self.selected_body_id
+                                    self.custom_modal_text = ""
+                                    self.validate_custom_modal_input()
                                 self.moon_age_dropdown_visible = False
                                 self.moon_age_dropdown_active = False
                             return True
@@ -8714,9 +9252,22 @@ class SolarSystemVisualizer:
                                 if value is not None:
                                     if self.selected_body:
                                         self.update_selected_body_property("radius", value, "radius")
+                                    # Only set dropdown selection if not "Custom" (custom will be set after modal confirmation)
+                                    self.moon_radius_dropdown_selected = name
                                 else:
-                                    self.show_custom_moon_radius_input = True
-                                self.moon_radius_dropdown_selected = name
+                                    # Trigger custom modal for moon radius
+                                    body = self.get_selected_body()
+                                    self.previous_dropdown_selection = body.get("moon_radius_dropdown_selected") if body else None
+                                    self.show_custom_modal = True
+                                    self.custom_modal_title = "Set Custom Moon Radius"
+                                    self.custom_modal_helper = "Enter radius in Earth radii (R⊕). Allowed: 0.01 – 5"
+                                    self.custom_modal_min = 0.01
+                                    self.custom_modal_max = 5.0
+                                    self.custom_modal_unit = "R⊕"
+                                    self.pending_custom_field = "radius"
+                                    self.pending_custom_body_id = self.selected_body_id
+                                    self.custom_modal_text = ""
+                                    self.validate_custom_modal_input()
                                 self.moon_radius_dropdown_visible = False
                                 self.moon_radius_dropdown_active = False
                             return True
@@ -8732,9 +9283,22 @@ class SolarSystemVisualizer:
                                         self.update_selected_body_property("semiMajorAxis", distance_au, "semiMajorAxis")
                                         self.clear_orbit_points(body)
                                     self.generate_orbit_grid(self.selected_body)
+                                    # Only set dropdown selection if not "Custom" (custom will be set after modal confirmation)
+                                    self.moon_orbital_distance_dropdown_selected = name
                                 else:
-                                    self.show_custom_moon_orbital_distance_input = True
-                                self.moon_orbital_distance_dropdown_selected = name
+                                    # Trigger custom modal for moon orbital distance
+                                    body = self.get_selected_body()
+                                    self.previous_dropdown_selection = body.get("moon_orbital_distance_dropdown_selected") if body else None
+                                    self.show_custom_modal = True
+                                    self.custom_modal_title = "Set Custom Moon Orbital Distance"
+                                    self.custom_modal_helper = "Enter distance in kilometers (km). Allowed: 1000 – 10000000"
+                                    self.custom_modal_min = 1000.0
+                                    self.custom_modal_max = 10000000.0
+                                    self.custom_modal_unit = "km"
+                                    self.pending_custom_field = "semi_major_axis"
+                                    self.pending_custom_body_id = self.selected_body_id
+                                    self.custom_modal_text = ""
+                                    self.validate_custom_modal_input()
                                 self.moon_orbital_distance_dropdown_visible = False
                                 self.moon_orbital_distance_dropdown_active = False
                             return True
@@ -8744,9 +9308,22 @@ class SolarSystemVisualizer:
                                 name, value = self.moon_orbital_period_dropdown_options[i]
                                 if value is not None:
                                     self.update_selected_body_property("orbital_period", value, "orbital_period")
+                                    # Only set dropdown selection if not "Custom" (custom will be set after modal confirmation)
+                                    self.moon_orbital_period_dropdown_selected = name
                                 else:
-                                    self.show_custom_moon_orbital_period_input = True
-                                self.moon_orbital_period_dropdown_selected = name
+                                    # Trigger custom modal for moon orbital period
+                                    body = self.get_selected_body()
+                                    self.previous_dropdown_selection = body.get("moon_orbital_period_dropdown_selected") if body else None
+                                    self.show_custom_modal = True
+                                    self.custom_modal_title = "Set Custom Moon Orbital Period"
+                                    self.custom_modal_helper = "Enter period in days. Allowed: 0.1 – 10000"
+                                    self.custom_modal_min = 0.1
+                                    self.custom_modal_max = 10000.0
+                                    self.custom_modal_unit = "days"
+                                    self.pending_custom_field = "orbital_period"
+                                    self.pending_custom_body_id = self.selected_body_id
+                                    self.custom_modal_text = ""
+                                    self.validate_custom_modal_input()
                                 self.moon_orbital_period_dropdown_visible = False
                                 self.moon_orbital_period_dropdown_active = False
                             return True
@@ -8756,9 +9333,22 @@ class SolarSystemVisualizer:
                                 name, value = self.moon_temperature_dropdown_options[i]
                                 if value is not None:
                                     self.update_selected_body_property("temperature", value, "temperature")
+                                    # Only set dropdown selection if not "Custom" (custom will be set after modal confirmation)
+                                    self.moon_temperature_dropdown_selected = name
                                 else:
-                                    self.show_custom_moon_temperature_input = True
-                                self.moon_temperature_dropdown_selected = name
+                                    # Trigger custom modal for moon temperature
+                                    body = self.get_selected_body()
+                                    self.previous_dropdown_selection = body.get("moon_temperature_dropdown_selected") if body else None
+                                    self.show_custom_modal = True
+                                    self.custom_modal_title = "Set Custom Moon Temperature"
+                                    self.custom_modal_helper = "Enter temperature in Kelvin (K). Allowed: 1 – 5000"
+                                    self.custom_modal_min = 1.0
+                                    self.custom_modal_max = 5000.0
+                                    self.custom_modal_unit = "K"
+                                    self.pending_custom_field = "temperature"
+                                    self.pending_custom_body_id = self.selected_body_id
+                                    self.custom_modal_text = ""
+                                    self.validate_custom_modal_input()
                                 self.moon_temperature_dropdown_visible = False
                                 self.moon_temperature_dropdown_active = False
                             return True
@@ -8768,9 +9358,22 @@ class SolarSystemVisualizer:
                                 name, value = self.moon_gravity_dropdown_options[i]
                                 if value is not None:
                                     self.update_selected_body_property("gravity", value, "gravity")
+                                    # Only set dropdown selection if not "Custom" (custom will be set after modal confirmation)
+                                    self.moon_gravity_dropdown_selected = name
                                 else:
-                                    self.show_custom_moon_gravity_input = True
-                                self.moon_gravity_dropdown_selected = name
+                                    # Trigger custom modal for moon gravity
+                                    body = self.get_selected_body()
+                                    self.previous_dropdown_selection = body.get("moon_gravity_dropdown_selected") if body else None
+                                    self.show_custom_modal = True
+                                    self.custom_modal_title = "Set Custom Moon Gravity"
+                                    self.custom_modal_helper = "Enter surface gravity in g-units (Earth = 1.0). Allowed: 0.01 – 10"
+                                    self.custom_modal_min = 0.01
+                                    self.custom_modal_max = 10.0
+                                    self.custom_modal_unit = "g"
+                                    self.pending_custom_field = "gravity"
+                                    self.pending_custom_body_id = self.selected_body_id
+                                    self.custom_modal_text = ""
+                                    self.validate_custom_modal_input()
                                 self.moon_gravity_dropdown_visible = False
                                 self.moon_gravity_dropdown_active = False
                             return True
@@ -8784,12 +9387,20 @@ class SolarSystemVisualizer:
                                     self.update_selected_body_property("temperature", temp, "temperature")
                                     self.spectral_class_dropdown_selected = name
                                 else:
-                                    # Handle "Custom" selection
-                                    self.show_custom_temperature_input = True
-                                    self.temperature_input_active = True
+                                    # Trigger custom modal for star temperature
                                     body = self.get_selected_body()
-                                    if body:
-                                        self.temperature_input_text = f"{body.get('temperature', 5800):.0f}"
+                                    self.previous_dropdown_selection = body.get("spectral_class_dropdown_selected") if body else None
+                                    self.show_custom_modal = True
+                                    self.custom_modal_title = "Set Custom Star Temperature"
+                                    self.custom_modal_helper = "Enter temperature in Kelvin (K). Allowed: 2000 – 50000"
+                                    self.custom_modal_min = 2000.0
+                                    self.custom_modal_max = 50000.0
+                                    self.custom_modal_unit = "K"
+                                    self.pending_custom_field = "temperature"
+                                    self.pending_custom_body_id = self.selected_body_id
+                                    self.custom_modal_text = ""
+                                    self.validate_custom_modal_input()
+                                # Note: spectral_class_dropdown_selected is set above when temp is not None
                                 
                                 self.spectral_class_dropdown_visible = False
                                 self.spectral_class_dropdown_active = False
@@ -8801,10 +9412,22 @@ class SolarSystemVisualizer:
                                 if value is not None:
                                     body = self.get_selected_body()
                                     if body: self.update_selected_body_property("radius", value, "radius")
+                                    # Only set dropdown selection if not "Custom" (custom will be set after modal confirmation)
+                                    self.radius_dropdown_selected = name
                                 else:
-                                    self.show_custom_radius_input = True
-                                    self.radius_input_active = True
-                                self.radius_dropdown_selected = name
+                                    # Trigger custom modal for star radius
+                                    body = self.get_selected_body()
+                                    self.previous_dropdown_selection = body.get("radius_dropdown_selected") if body else None
+                                    self.show_custom_modal = True
+                                    self.custom_modal_title = "Set Custom Star Radius"
+                                    self.custom_modal_helper = "Enter radius in Solar radii (R☉). Allowed: 0.01 – 2000"
+                                    self.custom_modal_min = 0.01
+                                    self.custom_modal_max = 2000.0
+                                    self.custom_modal_unit = "R☉"
+                                    self.pending_custom_field = "radius"
+                                    self.pending_custom_body_id = self.selected_body_id
+                                    self.custom_modal_text = ""
+                                    self.validate_custom_modal_input()
                                 self.radius_dropdown_visible = False
                                 self.radius_dropdown_active = False
                             return True
@@ -8814,10 +9437,22 @@ class SolarSystemVisualizer:
                                 name, value = self.activity_dropdown_options[i]
                                 if value is not None:
                                     self.update_selected_body_property("activity", value, "activity")
+                                    # Only set dropdown selection if not "Custom" (custom will be set after modal confirmation)
+                                    self.activity_dropdown_selected = name
                                 else:
-                                    self.show_custom_activity_input = True
-                                    self.activity_input_active = True
-                                self.activity_dropdown_selected = name
+                                    # Trigger custom modal for star activity
+                                    body = self.get_selected_body()
+                                    self.previous_dropdown_selection = body.get("activity_dropdown_selected") if body else None
+                                    self.show_custom_modal = True
+                                    self.custom_modal_title = "Set Custom Star Activity"
+                                    self.custom_modal_helper = "Enter activity level. Allowed: 0.0 – 1.0"
+                                    self.custom_modal_min = 0.0
+                                    self.custom_modal_max = 1.0
+                                    self.custom_modal_unit = ""
+                                    self.pending_custom_field = "activity"
+                                    self.pending_custom_body_id = self.selected_body_id
+                                    self.custom_modal_text = ""
+                                    self.validate_custom_modal_input()
                                 self.activity_dropdown_visible = False
                                 self.activity_dropdown_active = False
                             return True
@@ -8827,10 +9462,22 @@ class SolarSystemVisualizer:
                                 name, value = self.metallicity_dropdown_options[i]
                                 if value is not None:
                                     self.update_selected_body_property("metallicity", value, "metallicity")
+                                    # Only set dropdown selection if not "Custom" (custom will be set after modal confirmation)
+                                    self.metallicity_dropdown_selected = name
                                 else:
-                                    self.show_custom_metallicity_input = True
-                                    self.metallicity_input_active = True
-                                self.metallicity_dropdown_selected = name
+                                    # Trigger custom modal for metallicity
+                                    body = self.get_selected_body()
+                                    self.previous_dropdown_selection = body.get("metallicity_dropdown_selected") if body else None
+                                    self.show_custom_modal = True
+                                    self.custom_modal_title = "Set Custom Metallicity"
+                                    self.custom_modal_helper = "Enter metallicity [Fe/H]. Allowed: -2.0 – 0.5"
+                                    self.custom_modal_min = -2.0
+                                    self.custom_modal_max = 0.5
+                                    self.custom_modal_unit = "[Fe/H]"
+                                    self.pending_custom_field = "metallicity"
+                                    self.pending_custom_body_id = self.selected_body_id
+                                    self.custom_modal_text = ""
+                                    self.validate_custom_modal_input()
                                 self.metallicity_dropdown_visible = False
                                 self.metallicity_dropdown_active = False
                             return True
@@ -8842,12 +9489,22 @@ class SolarSystemVisualizer:
                                     self.update_selected_body_property("semiMajorAxis", value, "semiMajorAxis")
                                     body = self.get_selected_body()
                                     if body: self.generate_orbit_grid(body)
-                                    self.show_custom_orbital_distance_input = False
+                                    # Only set dropdown selection if not "Custom" (custom will be set after modal confirmation)
+                                    self.planet_orbital_distance_dropdown_selected = name
                                 else:
-                                    self.show_custom_orbital_distance_input = True
-                                    self.orbital_distance_input_active = True
-                                    self.orbital_distance_input_text = f"{self.selected_body.get('semiMajorAxis', 1.0):.2f}"
-                                self.planet_orbital_distance_dropdown_selected = name
+                                    # Trigger custom modal for planet orbital distance
+                                    body = self.get_selected_body()
+                                    self.previous_dropdown_selection = body.get("planet_orbital_distance_dropdown_selected") if body else None
+                                    self.show_custom_modal = True
+                                    self.custom_modal_title = "Set Custom Orbital Distance"
+                                    self.custom_modal_helper = "Enter distance in AU. Allowed: 0.01 – 100"
+                                    self.custom_modal_min = 0.01
+                                    self.custom_modal_max = 100.0
+                                    self.custom_modal_unit = "AU"
+                                    self.pending_custom_field = "semi_major_axis"
+                                    self.pending_custom_body_id = self.selected_body_id
+                                    self.custom_modal_text = ""
+                                    self.validate_custom_modal_input()
                                 self.planet_orbital_distance_dropdown_visible = False
                                 self.planet_orbital_distance_dropdown_active = False
                             return True
@@ -8857,12 +9514,22 @@ class SolarSystemVisualizer:
                                 name, value = self.planet_orbital_eccentricity_dropdown_options[i]
                                 if value is not None:
                                     self.update_selected_body_property("eccentricity", value, "eccentricity")
-                                    self.show_custom_orbital_eccentricity_input = False
+                                    # Only set dropdown selection if not "Custom" (custom will be set after modal confirmation)
+                                    self.planet_orbital_eccentricity_dropdown_selected = name
                                 else:
-                                    self.show_custom_orbital_eccentricity_input = True
-                                    self.orbital_eccentricity_input_active = True
-                                    self.orbital_eccentricity_input_text = f"{self.selected_body.get('eccentricity', 0.0167):.3f}"
-                                self.planet_orbital_eccentricity_dropdown_selected = name
+                                    # Trigger custom modal for orbital eccentricity
+                                    body = self.get_selected_body()
+                                    self.previous_dropdown_selection = body.get("planet_orbital_eccentricity_dropdown_selected") if body else None
+                                    self.show_custom_modal = True
+                                    self.custom_modal_title = "Set Custom Orbital Eccentricity"
+                                    self.custom_modal_helper = "Enter eccentricity (0 = circular, 1 = parabolic). Allowed: 0.0 – 0.99"
+                                    self.custom_modal_min = 0.0
+                                    self.custom_modal_max = 0.99
+                                    self.custom_modal_unit = ""
+                                    self.pending_custom_field = "eccentricity"
+                                    self.pending_custom_body_id = self.selected_body_id
+                                    self.custom_modal_text = ""
+                                    self.validate_custom_modal_input()
                                 self.planet_orbital_eccentricity_dropdown_visible = False
                                 self.planet_orbital_eccentricity_dropdown_active = False
                             return True
@@ -8872,12 +9539,22 @@ class SolarSystemVisualizer:
                                 name, value = self.planet_orbital_period_dropdown_options[i]
                                 if value is not None:
                                     self.update_selected_body_property("orbital_period", value, "orbital_period")
-                                    self.show_custom_orbital_period_input = False
+                                    # Only set dropdown selection if not "Custom" (custom will be set after modal confirmation)
+                                    self.planet_orbital_period_dropdown_selected = name
                                 else:
-                                    self.show_custom_orbital_period_input = True
-                                    self.orbital_period_input_active = True
-                                    self.orbital_period_input_text = f"{self.selected_body.get('orbital_period', 365.25):.0f}"
-                                self.planet_orbital_period_dropdown_selected = name
+                                    # Trigger custom modal for orbital period
+                                    body = self.get_selected_body()
+                                    self.previous_dropdown_selection = body.get("planet_orbital_period_dropdown_selected") if body else None
+                                    self.show_custom_modal = True
+                                    self.custom_modal_title = "Set Custom Orbital Period"
+                                    self.custom_modal_helper = "Enter period in days. Allowed: 0.1 – 100000"
+                                    self.custom_modal_min = 0.1
+                                    self.custom_modal_max = 100000.0
+                                    self.custom_modal_unit = "days"
+                                    self.pending_custom_field = "orbital_period"
+                                    self.pending_custom_body_id = self.selected_body_id
+                                    self.custom_modal_text = ""
+                                    self.validate_custom_modal_input()
                                 self.planet_orbital_period_dropdown_visible = False
                                 self.planet_orbital_period_dropdown_active = False
                             return True
@@ -8971,6 +9648,220 @@ class SolarSystemVisualizer:
         """Render the solar system simulation"""
         # Fill background with dark blue
         self.screen.fill(self.DARK_BLUE)
+        
+        # ===== BACKGROUND & OBJECTS LAYER (Drawn first, behind UI) =====
+        
+        # Draw spacetime grid
+        self.draw_spacetime_grid()
+        
+        # Update physics
+        self.update_physics()
+        
+        # Update and Draw placement trajectory lines
+        current_time = time.time()
+        for body in self.placed_bodies:
+            # Skip destroyed planets (marked as destroyed but not deleted)
+            if body.get("is_destroyed", False):
+                continue
+            line = body.get("placement_line")
+            if line:
+                # Step 2: Fade the line over time
+                if line["fade_start_time"] is not None:
+                    t = current_time - line["fade_start_time"]
+                    fade_progress = min(t / line["fade_duration"], 1.0)
+                    line["alpha"] = int(255 * (1.0 - fade_progress))
+                    
+                    if line["alpha"] <= 0:
+                        body["placement_line"] = None
+                        continue
+                
+                # Step 3: Render with alpha
+                # Only draw if the line exists and alpha > 0
+                if body.get("placement_line"):
+                    alpha = line["alpha"]
+                    color = (255, 255, 255, alpha)
+                    
+                    # Shrink from the back: start follows the planet, end is fixed at target
+                    # This makes the trajectory ahead of the planet shrink as it moves
+                    current_body_pos = body.get("visual_position", body["position"])
+                    start_screen = self.world_to_screen(current_body_pos)
+                    end_screen = self.world_to_screen(line["end"])
+                    
+                    # Only draw if there's actual length
+                    if np.linalg.norm(np.array(start_screen) - np.array(end_screen)) > 1.0:
+                        pygame.draw.line(self.screen, color, start_screen, end_screen, 1)
+
+        # Draw orbit grid lines first (so they appear behind the bodies)
+        for body in self.placed_bodies:
+            # Skip destroyed planets
+            if body.get("is_destroyed", False):
+                continue
+            if body["type"] != "star" and body["name"] in self.orbit_grid_points:
+                grid_points = self.orbit_grid_points[body["name"]]
+                if len(grid_points) > 1:
+                    # For moons, don't cache since grid moves with planet every frame
+                    # For planets, use cache since grid is static relative to star
+                    if body["type"] == "moon":
+                        # Convert directly without caching (planet position changes every frame)
+                        screen_points = [np.array(self.world_to_screen(p)) for p in grid_points]
+                    else:
+                        # Planets can use cache (static relative to star)
+                        screen_points = self._cached_screen_points(body["name"], grid_points, self.orbit_grid_screen_cache)
+                    if body["type"] == "planet":
+                        color = self.LIGHT_GRAY
+                    else:  # moon
+                        color = (150, 150, 150)  # Slightly darker for moons
+                    
+                    # Optional: Fade orbits with high eccentricity (> 0.6) to flag instability
+                    e = float(body.get("eccentricity", 0.0))
+                    if e > 0.6:
+                        fade_factor = max(0.3, 1.0 - (e - 0.6) / 0.4)
+                        color = tuple(int(c * fade_factor) for c in color)
+                        
+                    pygame.draw.lines(self.screen, color, True, screen_points, max(1, int(2 * self.camera_zoom)))
+        
+        # Draw habitable zones for all stars (before drawing bodies, after orbit grids)
+        # DISABLED: Habitable zone visualization removed per user request
+        # for body in self.placed_bodies:
+        #     if body.get("type") == "star":
+        #         self.draw_habitable_zone(self.screen, body)
+        
+        # Draw motion trails FIRST (behind everything) for planets during orbital correction
+        for body in self.placed_bodies:
+            # Skip destroyed planets
+            if body.get("is_destroyed", False):
+                continue
+            if body.get("is_correcting_orbit", False) and body["type"] == "planet":
+                body_id = body.get("id")
+                if body_id and body_id in self.orbital_corrections:
+                    correction = self.orbital_corrections[body_id]
+                    current_time = time.time()
+                    elapsed = current_time - correction["start_time"]
+                    progress = min(elapsed / correction["duration"], 1.0)
+                    
+                    # Check if planet has reached target and is orbiting
+                    target_pos = correction.get("target_pos")
+                    current_pos = body.get("position", body.get("visual_position"))
+                    distance_to_target = np.linalg.norm(current_pos - target_pos) if target_pos is not None else float('inf')
+                    position_threshold = 5.0
+                    is_at_target = distance_to_target < position_threshold
+                    orbit_speed = body.get("orbit_speed", 0.0)
+                    is_orbiting = orbit_speed > 0.0
+                    is_still_moving = (not is_at_target) or (not is_orbiting)
+                    
+                    # Draw trail if animation is in progress and planet is moving
+                    if progress < 1.0 and is_still_moving and "position_history" in correction:
+                        position_history = correction["position_history"]
+                        if len(position_history) > 1:
+                            # Calculate total distance traveled
+                            total_distance = 0.0
+                            for i in range(1, len(position_history)):
+                                total_distance += np.linalg.norm(position_history[i] - position_history[i-1])
+                            
+                            if total_distance > 1.0:
+                                # Get planet color
+                                base_color_hex = body.get("base_color")
+                                if base_color_hex:
+                                    planet_color = hex_to_rgb(base_color_hex)
+                                else:
+                                    planet_color = hex_to_rgb(CELESTIAL_BODY_COLORS.get(body.get("name", "Earth"), "#2E7FFF"))
+                                
+                                # Trail length: 15% of distance traveled
+                                trail_length_ratio = 0.15
+                                target_trail_distance = total_distance * trail_length_ratio
+                                
+                                # Find positions that make up the trail
+                                trail_positions = []
+                                accumulated_distance = 0.0
+                                current_pos = body.get("position", body.get("visual_position", position_history[-1]))
+                                trail_positions.append(current_pos)
+                                
+                                # Work backwards through position history
+                                for i in range(len(position_history) - 1, 0, -1):
+                                    segment_distance = np.linalg.norm(position_history[i] - position_history[i-1])
+                                    if accumulated_distance + segment_distance <= target_trail_distance:
+                                        trail_positions.insert(0, position_history[i-1])
+                                        accumulated_distance += segment_distance
+                                    else:
+                                        remaining = target_trail_distance - accumulated_distance
+                                        if remaining > 0 and segment_distance > 0:
+                                            t = remaining / segment_distance
+                                            interpolated_pos = position_history[i-1] + (position_history[i] - position_history[i-1]) * t
+                                            trail_positions.insert(0, interpolated_pos)
+                                        break
+                                    if accumulated_distance >= target_trail_distance:
+                                        break
+                                
+                                # Draw trail if we have at least 2 points
+                                if len(trail_positions) >= 2:
+                                    # Calculate fade
+                                    fade_progress = progress
+                                    eased_fade = 1.0 - ((1.0 - fade_progress) ** 3)
+                                    trail_alpha = int(255 * (1.0 - eased_fade))
+                                    
+                                    if trail_alpha > 10:
+                                        # Desaturate planet color for trail
+                                        trail_color = desaturate_color(planet_color, saturation=0.6)
+                                        
+                                        # Convert positions to screen coordinates
+                                        screen_positions = [self.world_to_screen(pos) for pos in trail_positions]
+                                        
+                                        # Draw soft trail line with alpha blending
+                                        trail_surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+                                        for i in range(3):
+                                            line_width = max(1, 3 - i)
+                                            line_alpha = max(0, trail_alpha - (i * 60))
+                                            if line_alpha > 0:
+                                                trail_color_alpha = (*trail_color, line_alpha)
+                                                pygame.draw.lines(trail_surface, trail_color_alpha, False, screen_positions, line_width)
+                                        
+                                        self.screen.blit(trail_surface, (0, 0))
+        
+        # Draw orbit lines and bodies
+        for body in self.placed_bodies:
+            # Skip destroyed planets (marked as destroyed but not deleted)
+            if body.get("is_destroyed", False):
+                continue
+            # Draw orbit line using persistent orbit_points
+            if body["type"] != "star":
+                self.draw_orbit(body)
+            
+            # Draw body using base_color (per-object, stored as hex string)
+            base_color_hex = body.get("base_color")
+            if base_color_hex:
+                color = hex_to_rgb(base_color_hex)
+            else:
+                # Fallback to default colors if base_color not set
+                if body["type"] == "star":
+                    color = hex_to_rgb(CELESTIAL_BODY_COLORS.get("Sun", "#FDB813"))
+                elif body["type"] == "planet":
+                    color = hex_to_rgb(CELESTIAL_BODY_COLORS.get(body.get("name", "Earth"), "#2E7FFF"))
+                else:  # moon
+                    color = hex_to_rgb(CELESTIAL_BODY_COLORS.get("Moon", "#B0B0B0"))
+            
+            if body["type"] == "star":
+                pos = self.world_to_screen(body["position"])
+                # Calculate visual radius using perceptual scaling with orbit clamping
+                visual_radius = self.calculate_star_visual_radius(body, self.placed_bodies)
+                pygame.draw.circle(self.screen, color, (int(pos[0]), int(pos[1])), max(1, int(visual_radius * self.camera_zoom)))
+            else:
+                self.draw_rotating_body(body, color)
+            
+            # Highlight selected body (compare object identity, not name, to ensure only the clicked object is highlighted)
+            if self.selected_body is body:
+                pos = self.world_to_screen(body["position"])
+                # CRITICAL: For planets, use NASA-style normalized visual radius
+                # For moons, scale relative to parent planet
+                if body["type"] == "planet":
+                    visual_radius = self.calculate_planet_visual_radius(body, self.placed_bodies)
+                elif body["type"] == "moon":
+                    visual_radius = self.calculate_moon_visual_radius(body, self.placed_bodies)
+                else:
+                    # Stars: calculate visual radius using perceptual scaling with orbit clamping
+                    visual_radius = self.calculate_star_visual_radius(body, self.placed_bodies)
+                pygame.draw.circle(self.screen, self.RED, (int(pos[0]), int(pos[1])), max(1, int((visual_radius + 5) * self.camera_zoom)), 2)
+        
+        # ===== UI LAYER (Drawn last, on top of objects) =====
         
         # Draw white bar at the top
         top_bar_height = self.tab_height + 2*self.tab_margin
@@ -9087,6 +9978,53 @@ class SolarSystemVisualizer:
                         self.active_tooltip = tooltip_lines
                         self.active_tooltip_anchor = icon_anchor  # Store anchor position for climate tooltip
                     # Don't clear tooltip here - let it persist if pinned, or let render() handle clearing
+                
+                # Engulfment warning badge (Tier A - Critical)
+                body = self.get_selected_body()
+                if body and body.get("engulfed_by_star"):
+                    engulfed_star_name = body.get("engulfed_star_name", "Host Star")
+                    # Draw red warning badge
+                    warning_badge_size = 20
+                    warning_badge_x = badge_x
+                    warning_badge_y = badge_y + 25  # Below climate info icon
+                    warning_badge_rect = pygame.Rect(warning_badge_x, warning_badge_y, warning_badge_size, warning_badge_size)
+                    
+                    # Draw filled red circle
+                    pygame.draw.circle(self.screen, (255, 0, 0), warning_badge_rect.center, warning_badge_size // 2)
+                    pygame.draw.circle(self.screen, (200, 0, 0), warning_badge_rect.center, warning_badge_size // 2, 2)
+                    
+                    # Draw exclamation mark
+                    warning_text = self.tiny_font.render("!", True, self.WHITE)
+                    warning_text_rect = warning_text.get_rect(center=warning_badge_rect.center)
+                    self.screen.blit(warning_text, warning_text_rect)
+                    
+                    # Tooltip on hover
+                    mouse_pos = pygame.mouse.get_pos()
+                    expanded_warning_rect = warning_badge_rect.inflate(10, 10)
+                    hovering_warning = expanded_warning_rect.collidepoint(mouse_pos)
+                    if hovering_warning:
+                        # Get star radius for tooltip
+                        star_radius_au = None
+                        star_radius_solar = None
+                        if body.get("engulfed_star_id"):
+                            star = self.bodies_by_id.get(body.get("engulfed_star_id"))
+                            if star:
+                                star_radius_solar = star.get("radius", 1.0)
+                                star_radius_au = star_radius_solar * RSUN_TO_AU
+                        
+                        planet_orbit_au = body.get("semiMajorAxis", 1.0)
+                        
+                        warning_tooltip = [
+                            f"TIER A WARNING: Engulfed by {engulfed_star_name}",
+                            f"Star physical radius: {star_radius_au:.3f} AU" if star_radius_au else "Star radius exceeds planet orbit",
+                            f"Planet orbit: {planet_orbit_au:.3f} AU",
+                            "Note: Based on physical radius, not visual size.",
+                            "Habitability: 0%",
+                            "Planet will be destroyed."
+                        ]
+                        warning_anchor = (warning_badge_rect.right + 5, warning_badge_rect.bottom)
+                        self.active_tooltip = warning_tooltip
+                        self.active_tooltip_anchor = warning_anchor
                 
                 # (Magnetosphere and internal heating warnings removed from UI per design:
                 #  only dropdowns and sandbox visuals should respond to parameter changes.)
@@ -9967,207 +10905,8 @@ class SolarSystemVisualizer:
                 text_surface = self.subtitle_font.render(dropdown_text, True, self.BLACK)
                 text_rect = text_surface.get_rect(midleft=(self.metallicity_dropdown_rect.left + 5, self.metallicity_dropdown_rect.centery))
                 self.screen.blit(text_surface, text_rect)
-
-                # Draw spacetime grid
-                self.draw_spacetime_grid()
         
-        # Draw spacetime grid
-        self.draw_spacetime_grid()
-        
-        # Update physics
-        self.update_physics()
-        
-        # Update and Draw placement trajectory lines (Step 2 & 3)
-        current_time = time.time()
-        for body in self.placed_bodies:
-            line = body.get("placement_line")
-            if line:
-                # Step 2: Fade the line over time
-                if line["fade_start_time"] is not None:
-                    t = current_time - line["fade_start_time"]
-                    fade_progress = min(t / line["fade_duration"], 1.0)
-                    line["alpha"] = int(255 * (1.0 - fade_progress))
-                    
-                    if line["alpha"] <= 0:
-                        body["placement_line"] = None
-                        continue
-                
-                # Step 3: Render with alpha
-                # Only draw if the line exists and alpha > 0
-                if body.get("placement_line"):
-                    alpha = line["alpha"]
-                    color = (255, 255, 255, alpha)
-                    
-                    # Shrink from the back: start follows the planet, end is fixed at target
-                    # This makes the trajectory ahead of the planet shrink as it moves
-                    current_body_pos = body.get("visual_position", body["position"])
-                    start_screen = self.world_to_screen(current_body_pos)
-                    end_screen = self.world_to_screen(line["end"])
-                    
-                    # Only draw if there's actual length
-                    if np.linalg.norm(np.array(start_screen) - np.array(end_screen)) > 1.0:
-                        pygame.draw.line(self.screen, color, start_screen, end_screen, 1)
-
-        # Draw orbit grid lines first (so they appear behind the bodies)
-        for body in self.placed_bodies:
-            if body["type"] != "star" and body["name"] in self.orbit_grid_points:
-                grid_points = self.orbit_grid_points[body["name"]]
-                if len(grid_points) > 1:
-                    # For moons, don't cache since grid moves with planet every frame
-                    # For planets, use cache since grid is static relative to star
-                    if body["type"] == "moon":
-                        # Convert directly without caching (planet position changes every frame)
-                        screen_points = [np.array(self.world_to_screen(p)) for p in grid_points]
-                    else:
-                        # Planets can use cache (static relative to star)
-                        screen_points = self._cached_screen_points(body["name"], grid_points, self.orbit_grid_screen_cache)
-                    if body["type"] == "planet":
-                        color = self.LIGHT_GRAY
-                    else:  # moon
-                        color = (150, 150, 150)  # Slightly darker for moons
-                    
-                    # Optional: Fade orbits with high eccentricity (> 0.6) to flag instability
-                    e = float(body.get("eccentricity", 0.0))
-                    if e > 0.6:
-                        fade_factor = max(0.3, 1.0 - (e - 0.6) / 0.4)
-                        color = tuple(int(c * fade_factor) for c in color)
-                        
-                    pygame.draw.lines(self.screen, color, True, screen_points, max(1, int(2 * self.camera_zoom)))
-        
-        # Draw habitable zones for all stars (before drawing bodies, after orbit grids)
-        # DISABLED: Habitable zone visualization removed per user request
-        # for body in self.placed_bodies:
-        #     if body.get("type") == "star":
-        #         self.draw_habitable_zone(self.screen, body)
-        
-        # Draw motion trails FIRST (behind everything) for planets during orbital correction
-        for body in self.placed_bodies:
-            if body.get("is_correcting_orbit", False) and body["type"] == "planet":
-                body_id = body.get("id")
-                if body_id and body_id in self.orbital_corrections:
-                    correction = self.orbital_corrections[body_id]
-                    current_time = time.time()
-                    elapsed = current_time - correction["start_time"]
-                    progress = min(elapsed / correction["duration"], 1.0)
-                    
-                    # Check if planet has reached target and is orbiting
-                    target_pos = correction.get("target_pos")
-                    current_pos = body.get("position", body.get("visual_position"))
-                    distance_to_target = np.linalg.norm(current_pos - target_pos) if target_pos is not None else float('inf')
-                    position_threshold = 5.0
-                    is_at_target = distance_to_target < position_threshold
-                    orbit_speed = body.get("orbit_speed", 0.0)
-                    is_orbiting = orbit_speed > 0.0
-                    is_still_moving = (not is_at_target) or (not is_orbiting)
-                    
-                    # Draw trail if animation is in progress and planet is moving
-                    if progress < 1.0 and is_still_moving and "position_history" in correction:
-                        position_history = correction["position_history"]
-                        if len(position_history) > 1:
-                            # Calculate total distance traveled
-                            total_distance = 0.0
-                            for i in range(1, len(position_history)):
-                                total_distance += np.linalg.norm(position_history[i] - position_history[i-1])
-                            
-                            if total_distance > 1.0:
-                                # Get planet color
-                                base_color_hex = body.get("base_color")
-                                if base_color_hex:
-                                    planet_color = hex_to_rgb(base_color_hex)
-                                else:
-                                    planet_color = hex_to_rgb(CELESTIAL_BODY_COLORS.get(body.get("name", "Earth"), "#2E7FFF"))
-                                
-                                # Trail length: 15% of distance traveled
-                                trail_length_ratio = 0.15
-                                target_trail_distance = total_distance * trail_length_ratio
-                                
-                                # Find positions that make up the trail
-                                trail_positions = []
-                                accumulated_distance = 0.0
-                                current_pos = body.get("position", body.get("visual_position", position_history[-1]))
-                                trail_positions.append(current_pos)
-                                
-                                # Work backwards through position history
-                                for i in range(len(position_history) - 1, 0, -1):
-                                    segment_distance = np.linalg.norm(position_history[i] - position_history[i-1])
-                                    if accumulated_distance + segment_distance <= target_trail_distance:
-                                        trail_positions.insert(0, position_history[i-1])
-                                        accumulated_distance += segment_distance
-                                    else:
-                                        remaining = target_trail_distance - accumulated_distance
-                                        if remaining > 0 and segment_distance > 0:
-                                            t = remaining / segment_distance
-                                            interpolated_pos = position_history[i-1] + (position_history[i] - position_history[i-1]) * t
-                                            trail_positions.insert(0, interpolated_pos)
-                                        break
-                                    if accumulated_distance >= target_trail_distance:
-                                        break
-                                
-                                # Draw trail if we have at least 2 points
-                                if len(trail_positions) >= 2:
-                                    # Calculate fade
-                                    fade_progress = progress
-                                    eased_fade = 1.0 - ((1.0 - fade_progress) ** 3)
-                                    trail_alpha = int(255 * (1.0 - eased_fade))
-                                    
-                                    if trail_alpha > 10:
-                                        # Desaturate planet color for trail
-                                        trail_color = desaturate_color(planet_color, saturation=0.6)
-                                        
-                                        # Convert positions to screen coordinates
-                                        screen_positions = [self.world_to_screen(pos) for pos in trail_positions]
-                                        
-                                        # Draw soft trail line with alpha blending
-                                        trail_surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
-                                        for i in range(3):
-                                            line_width = max(1, 3 - i)
-                                            line_alpha = max(0, trail_alpha - (i * 60))
-                                            if line_alpha > 0:
-                                                trail_color_alpha = (*trail_color, line_alpha)
-                                                pygame.draw.lines(trail_surface, trail_color_alpha, False, screen_positions, line_width)
-                                        
-                                        self.screen.blit(trail_surface, (0, 0))
-        
-        # Draw orbit lines and bodies
-        for body in self.placed_bodies:
-            # Draw orbit line using persistent orbit_points
-            if body["type"] != "star":
-                self.draw_orbit(body)
-            
-            # Draw body using base_color (per-object, stored as hex string)
-            base_color_hex = body.get("base_color")
-            if base_color_hex:
-                color = hex_to_rgb(base_color_hex)
-            else:
-                # Fallback to default colors if base_color not set
-                if body["type"] == "star":
-                    color = hex_to_rgb(CELESTIAL_BODY_COLORS.get("Sun", "#FDB813"))
-                elif body["type"] == "planet":
-                    color = hex_to_rgb(CELESTIAL_BODY_COLORS.get(body.get("name", "Earth"), "#2E7FFF"))
-                else:  # moon
-                    color = hex_to_rgb(CELESTIAL_BODY_COLORS.get("Moon", "#B0B0B0"))
-            
-            if body["type"] == "star":
-                pos = self.world_to_screen(body["position"])
-                # Calculate visual radius using authoritative formula
-                visual_radius = self.calculate_star_visual_radius(body)
-                pygame.draw.circle(self.screen, color, (int(pos[0]), int(pos[1])), max(1, int(visual_radius * self.camera_zoom)))
-            else:
-                self.draw_rotating_body(body, color)
-            
-            # Highlight selected body (compare object identity, not name, to ensure only the clicked object is highlighted)
-            if self.selected_body is body:
-                pos = self.world_to_screen(body["position"])
-                # CRITICAL: For planets, use NASA-style normalized visual radius
-                # For moons, scale relative to parent planet
-                if body["type"] == "planet":
-                    visual_radius = self.calculate_planet_visual_radius(body, self.placed_bodies)
-                elif body["type"] == "moon":
-                    visual_radius = self.calculate_moon_visual_radius(body, self.placed_bodies)
-                else:
-                    # Stars: calculate visual radius using authoritative formula
-                    visual_radius = self.calculate_star_visual_radius(body)
-                pygame.draw.circle(self.screen, self.RED, (int(pos[0]), int(pos[1])), max(1, int((visual_radius + 5) * self.camera_zoom)), 2)
+        # ===== TOP-LEVEL UI ELEMENTS (Drawn last, on top of everything) =====
         
         # Update placement preview position EVERY FRAME (frame-driven, not event-driven)
         # This ensures smooth cursor following regardless of event timing
@@ -10422,15 +11161,16 @@ class SolarSystemVisualizer:
     
     def draw_rotating_body(self, body, color):
         """Draw a celestial body with rotation"""
+        # DISABLED: Keep planet colors constant regardless of parameter changes
         # Apply density-based color tinting for planets
-        if body["type"] == "planet" and "density_tint" in body:
-            tint = body["density_tint"]
-            # Blend 40% tint, 60% original color for a subtle but noticeable effect
-            color = (
-                int(color[0] * 0.6 + tint[0] * 0.4),
-                int(color[1] * 0.6 + tint[1] * 0.4),
-                int(color[2] * 0.6 + tint[2] * 0.4)
-            )
+        # if body["type"] == "planet" and "density_tint" in body:
+        #     tint = body["density_tint"]
+        #     # Blend 40% tint, 60% original color for a subtle but noticeable effect
+        #     color = (
+        #         int(color[0] * 0.6 + tint[0] * 0.4),
+        #         int(color[1] * 0.6 + tint[1] * 0.4),
+        #         int(color[2] * 0.6 + tint[2] * 0.4)
+        #     )
 
         # CRITICAL: For planets, radius is in Earth radii (R⊕), compute visual radius
         # For stars, radius is in pixels (legacy)
@@ -10525,6 +11265,9 @@ class SolarSystemVisualizer:
         
         # Draw orbit lines and bodies
         for body in self.placed_bodies:
+            # Skip destroyed planets (marked as destroyed but not deleted)
+            if body.get("is_destroyed", False):
+                continue
             if body["type"] != "star":
                 self.draw_orbit(body)
             base_color_hex = body.get("base_color")
@@ -10535,7 +11278,7 @@ class SolarSystemVisualizer:
             
             if body["type"] == "star":
                 pos = self.world_to_screen(body["position"])
-                visual_radius = self.calculate_star_visual_radius(body)
+                visual_radius = self.calculate_star_visual_radius(body, self.placed_bodies)
                 pygame.draw.circle(self.screen, color, (int(pos[0]), int(pos[1])), max(1, int(visual_radius * self.camera_zoom)))
             else:
                 self.draw_rotating_body(body, color)
@@ -10544,7 +11287,7 @@ class SolarSystemVisualizer:
                 pos = self.world_to_screen(body["position"])
                 visual_radius = self.calculate_planet_visual_radius(body, self.placed_bodies) if body["type"] == "planet" else \
                                 self.calculate_moon_visual_radius(body, self.placed_bodies) if body["type"] == "moon" else \
-                                self.calculate_star_visual_radius(body)
+                                self.calculate_star_visual_radius(body, self.placed_bodies)
                 pygame.draw.circle(self.screen, self.RED, (int(pos[0]), int(pos[1])), max(1, int((visual_radius + 5) * self.camera_zoom)), 2)
 
         # 3. UI Layer (Always on top of space area elements)
@@ -10730,6 +11473,14 @@ class SolarSystemVisualizer:
             anchor = getattr(self, "active_tooltip_anchor", None)
             self._render_generic_tooltip(self.active_tooltip, self.screen, anchor_pos=anchor)
         
+        # Draw engulfment confirmation modal if active
+        if self.show_engulfment_modal:
+            self.draw_engulfment_confirmation_modal()
+        
+        # Draw placement engulfment modal if active
+        if self.show_placement_engulfment_modal:
+            self.draw_placement_engulfment_modal()
+        
         pygame.display.flip() 
 
     def validate_custom_modal_input(self):
@@ -10778,6 +11529,31 @@ class SolarSystemVisualizer:
         elif field == "radius":
             if body["type"] == "moon":
                 internal_field = "actual_radius"
+            elif body["type"] == "star":
+                # CRITICAL: Check for engulfment before applying star radius change
+                # This is a destructive change that requires user confirmation
+                preview = self.preview_star_radius_change(body.get("id"), value)
+                
+                if preview["has_engulfment"]:
+                    # Store current dropdown selection for potential revert
+                    if not self.previous_dropdown_selection:
+                        self.previous_dropdown_selection = body.get("radius_dropdown_selected")
+                    
+                    # Show engulfment confirmation modal instead of applying immediately
+                    self.show_engulfment_modal = True
+                    self.engulfment_modal_star_id = body.get("id")
+                    self.engulfment_modal_new_radius = value
+                    self.engulfment_modal_engulfed_planets = preview["engulfed_planets"]
+                    self.engulfment_modal_star_radius_au = preview["star_radius_au"]
+                    self.engulfment_modal_delete_planets = False  # Default: mark as destroyed, don't delete
+                    
+                    # Close the custom input modal
+                    self.show_custom_modal = False
+                    self.pending_custom_value = None
+                    self.pending_custom_field = None
+                    
+                    # Don't apply the change yet - wait for user confirmation
+                    return
         elif field == "atmosphere":
             internal_field = "greenhouse_offset"
         elif field == "temperature" and body["type"] == "planet":
@@ -10786,6 +11562,18 @@ class SolarSystemVisualizer:
             internal_field = "density"
         elif field == "gravity":
             internal_field = "gravity"
+        elif field == "stellarFlux":
+            internal_field = "stellarFlux"
+        elif field == "orbital_period":
+            internal_field = "orbital_period"
+        elif field == "eccentricity":
+            internal_field = "eccentricity"
+        elif field == "luminosity":
+            internal_field = "luminosity"
+        elif field == "activity":
+            internal_field = "activity"
+        elif field == "metallicity":
+            internal_field = "metallicity"
         
         # Update the property using the safe registry update
         if self.update_selected_body_property(internal_field, value, internal_field):
@@ -10804,6 +11592,12 @@ class SolarSystemVisualizer:
                 field_display = "AU" if body["type"] == "planet" else "Dist"
             elif field == "atmosphere":
                 field_display = "ΔT"
+            elif field == "stellarFlux":
+                field_display = "Flux"
+            elif field == "orbital_period":
+                field_display = "Period"
+            elif field == "eccentricity":
+                field_display = "Eccentricity"
             
             # Use appropriate unit label for the display
             display_unit = unit
@@ -10839,11 +11633,30 @@ class SolarSystemVisualizer:
                     body["planet_orbital_distance_dropdown_selected"] = label
                 elif body["type"] == "moon":
                     body["moon_orbital_distance_dropdown_selected"] = label
+                
+                # If we were in the "placement engulfment" flow, a successful AU change resolves it:
+                # - keep physics (a_AU) as entered
+                # - unhide the planet so it can be placed normally
+                # - restore prior selection state
+                if body.get("type") == "planet" and self.placement_engulfment_planet_id == body.get("id"):
+                    body["is_destroyed"] = False
+                    self.placement_engulfment_planet_id = None
+                    self.placement_engulfment_star_id = None
+                    self.placement_engulfment_star_radius_au = None
+                    self.placement_engulfment_planet_orbit_au = None
+                    self.show_placement_engulfment_modal = False
+                    # Restore previous selection if we saved it
+                    if self._placement_engulfment_prev_selected_body_id is not None:
+                        self.selected_body_id = self._placement_engulfment_prev_selected_body_id
+                        self.selected_body = self.bodies_by_id.get(self.selected_body_id)
+                    self._placement_engulfment_prev_selected_body_id = None
             elif field == "radius":
                 if body["type"] == "planet":
                     body["planet_radius_dropdown_selected"] = label
                 elif body["type"] == "moon":
                     body["moon_radius_dropdown_selected"] = label
+                elif body["type"] == "star":
+                    body["radius_dropdown_selected"] = label
             elif field == "age":
                 if body["type"] == "planet":
                     body["planet_age_dropdown_selected"] = label
@@ -10871,6 +11684,24 @@ class SolarSystemVisualizer:
                     body["planet_gravity_dropdown_selected"] = label
                 elif body["type"] == "moon":
                     body["moon_gravity_dropdown_selected"] = label
+            elif field == "stellarFlux":
+                if body["type"] == "planet":
+                    body["planet_stellar_flux_dropdown_selected"] = label
+            elif field == "orbital_period":
+                if body["type"] == "planet":
+                    body["planet_orbital_period_dropdown_selected"] = label
+            elif field == "eccentricity":
+                if body["type"] == "planet":
+                    body["planet_orbital_eccentricity_dropdown_selected"] = label
+            elif field == "luminosity":
+                if body["type"] == "star":
+                    body["luminosity_dropdown_selected"] = label
+            elif field == "activity":
+                if body["type"] == "star":
+                    body["activity_dropdown_selected"] = label
+            elif field == "metallicity":
+                if body["type"] == "star":
+                    body["metallicity_dropdown_selected"] = label
             
             # For semi-major axis, also update position and orbit grid
             if internal_field == "semiMajorAxis":
@@ -10899,8 +11730,11 @@ class SolarSystemVisualizer:
         """Revert dropdown selection and close modal."""
         self.show_custom_modal = False
         
-        # Revert dropdown to previous selection
-        if self.previous_dropdown_selection and self.pending_custom_field:
+        # Revert dropdown to previous selection (only if we have a valid previous selection)
+        # Note: previous_dropdown_selection could be "Custom" if a custom value was previously set
+        if (self.previous_dropdown_selection is not None and 
+            self.previous_dropdown_selection != "" and 
+            self.pending_custom_field):
             body = self.bodies_by_id.get(self.pending_custom_body_id) if self.pending_custom_body_id else self.get_selected_body()
             if body:
                 field = self.pending_custom_field
@@ -10914,10 +11748,33 @@ class SolarSystemVisualizer:
                 elif field == "radius":
                     if body["type"] == "planet": body["planet_radius_dropdown_selected"] = self.previous_dropdown_selection
                     elif body["type"] == "moon": body["moon_radius_dropdown_selected"] = self.previous_dropdown_selection
+                    elif body["type"] == "star": body["radius_dropdown_selected"] = self.previous_dropdown_selection
                 elif field == "age":
                     if body["type"] == "planet": body["planet_age_dropdown_selected"] = self.previous_dropdown_selection
                     elif body["type"] == "star": body["star_age_dropdown_selected"] = self.previous_dropdown_selection
                     elif body["type"] == "moon": body["moon_age_dropdown_selected"] = self.previous_dropdown_selection
+                elif field == "temperature":
+                    if body["type"] == "planet": body["planet_temperature_dropdown_selected"] = self.previous_dropdown_selection
+                    elif body["type"] == "moon": body["moon_temperature_dropdown_selected"] = self.previous_dropdown_selection
+                    elif body["type"] == "star": body["spectral_class_dropdown_selected"] = self.previous_dropdown_selection
+                elif field == "gravity":
+                    if body["type"] == "planet": body["planet_gravity_dropdown_selected"] = self.previous_dropdown_selection
+                    elif body["type"] == "moon": body["moon_gravity_dropdown_selected"] = self.previous_dropdown_selection
+                elif field == "stellarFlux":
+                    if body["type"] == "planet": body["planet_stellar_flux_dropdown_selected"] = self.previous_dropdown_selection
+                elif field == "orbital_period":
+                    if body["type"] == "planet": body["planet_orbital_period_dropdown_selected"] = self.previous_dropdown_selection
+                    elif body["type"] == "moon": body["moon_orbital_period_dropdown_selected"] = self.previous_dropdown_selection
+                elif field == "eccentricity":
+                    if body["type"] == "planet": body["planet_orbital_eccentricity_dropdown_selected"] = self.previous_dropdown_selection
+                elif field == "luminosity":
+                    if body["type"] == "star": body["luminosity_dropdown_selected"] = self.previous_dropdown_selection
+                elif field == "activity":
+                    if body["type"] == "star": body["activity_dropdown_selected"] = self.previous_dropdown_selection
+                elif field == "metallicity":
+                    if body["type"] == "star": body["metallicity_dropdown_selected"] = self.previous_dropdown_selection
+                elif field == "density":
+                    if body["type"] == "planet": body["planet_density_dropdown_selected"] = self.previous_dropdown_selection
 
         self.pending_custom_field = None
         self.pending_custom_body_id = None
@@ -10990,6 +11847,323 @@ class SolarSystemVisualizer:
         cancel_text = self.subtitle_font.render("Cancel", True, self.WHITE)
         self.screen.blit(cancel_text, cancel_text.get_rect(center=cancel_btn_rect.center))
         self.cancel_btn_rect = cancel_btn_rect # Store for click detection
+
+    def draw_engulfment_confirmation_modal(self):
+        """Draw the engulfment confirmation modal warning about destructive star radius changes."""
+        if not self.show_engulfment_modal:
+            return
+        
+        # Modal dimensions (larger to accommodate planet list)
+        modal_width = 500
+        modal_height = 450
+        modal_rect = pygame.Rect((self.width - modal_width) // 2, (self.height - modal_height) // 2, modal_width, modal_height)
+        
+        # Draw semi-transparent overlay
+        overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 150))
+        self.screen.blit(overlay, (0, 0))
+        
+        # Draw modal background
+        pygame.draw.rect(self.screen, self.WHITE, modal_rect, border_radius=10)
+        pygame.draw.rect(self.screen, (255, 100, 0), modal_rect, 3, border_radius=10)  # Orange border for warning
+        
+        # Title (warning)
+        title_text = "⚠ DESTRUCTIVE CHANGE WARNING"
+        title_surf = self.font.render(title_text, True, (255, 100, 0))
+        title_rect = title_surf.get_rect(midtop=(modal_rect.centerx, modal_rect.top + 20))
+        self.screen.blit(title_surf, title_rect)
+        
+        # Star radius info
+        star = self.bodies_by_id.get(self.engulfment_modal_star_id)
+        star_name = star.get("name", "Star") if star else "Star"
+        radius_text = f"New star radius: {self.engulfment_modal_new_radius:.2f} R☉ ({self.engulfment_modal_star_radius_au:.3f} AU)"
+        radius_surf = self.subtitle_font.render(radius_text, True, self.BLACK)
+        radius_rect = radius_surf.get_rect(midtop=(modal_rect.centerx, title_rect.bottom + 15))
+        self.screen.blit(radius_surf, radius_rect)
+        
+        # Engulfed planets list
+        y_pos = radius_rect.bottom + 20
+        warning_text = "The following planets and their moons will be engulfed and destroyed:"
+        warning_surf = self.subtitle_font.render(warning_text, True, self.BLACK)
+        warning_rect = warning_surf.get_rect(midtop=(modal_rect.centerx, y_pos))
+        self.screen.blit(warning_surf, warning_rect)
+        y_pos = warning_rect.bottom + 10
+        
+        # Build list of engulfed moons (based on engulfed planets)
+        engulfed_moons = []
+        engulfed_planet_ids = {p["id"] for p in self.engulfment_modal_engulfed_planets}
+        engulfed_planet_names = {p["id"]: p["name"] for p in self.engulfment_modal_engulfed_planets}
+        for body in self.placed_bodies:
+            if body.get("type") != "moon":
+                continue
+            parent_id = body.get("parent_id")
+            parent_name = body.get("parent")
+            parent_obj = body.get("parent_obj")
+            for planet_id in engulfed_planet_ids:
+                planet = self.bodies_by_id.get(planet_id)
+                if not planet:
+                    continue
+                if (
+                    parent_id == planet_id
+                    or parent_name == planet.get("name")
+                    or (parent_obj and parent_obj.get("id") == planet_id)
+                ):
+                    engulfed_moons.append({
+                        "name": body.get("name", "Moon"),
+                        "parent_name": engulfed_planet_names.get(planet_id, planet.get("name", "Planet")),
+                    })
+                    break
+        
+        # List engulfed planets
+        for planet_info in self.engulfment_modal_engulfed_planets:
+            planet_text = f"  • {planet_info['name']} (orbit: {planet_info['orbit_au']:.3f} AU)"
+            planet_surf = self.subtitle_font.render(planet_text, True, self.RED)
+            planet_rect = planet_surf.get_rect(midleft=(modal_rect.left + 30, y_pos))
+            self.screen.blit(planet_surf, planet_rect)
+            y_pos = planet_rect.bottom + 5
+        
+        # List engulfed moons (if any)
+        if engulfed_moons:
+            y_pos += 8
+            for moon_info in engulfed_moons:
+                moon_text = f"    - {moon_info['name']} (moon of {moon_info['parent_name']})"
+                moon_surf = self.subtitle_font.render(moon_text, True, self.RED)
+                moon_rect = moon_surf.get_rect(midleft=(modal_rect.left + 40, y_pos))
+                self.screen.blit(moon_surf, moon_rect)
+                y_pos = moon_rect.bottom + 4
+        
+        # Explanation
+        y_pos += 10
+        explanation_text = "Engulfed bodies will be marked as destroyed (habitability = 0%)"
+        explanation_surf = self.subtitle_font.render(explanation_text, True, self.GRAY)
+        explanation_rect = explanation_surf.get_rect(midtop=(modal_rect.centerx, y_pos))
+        self.screen.blit(explanation_surf, explanation_rect)
+        
+        # Checkbox for permanent deletion
+        y_pos = explanation_rect.bottom + 20
+        checkbox_size = 20
+        checkbox_rect = pygame.Rect(modal_rect.left + 50, y_pos, checkbox_size, checkbox_size)
+        pygame.draw.rect(self.screen, self.BLACK, checkbox_rect, 2)
+        if self.engulfment_modal_delete_planets:
+            # Draw checkmark
+            pygame.draw.line(self.screen, self.BLACK, 
+                           (checkbox_rect.left + 4, checkbox_rect.centery),
+                           (checkbox_rect.left + 8, checkbox_rect.bottom - 4), 2)
+            pygame.draw.line(self.screen, self.BLACK,
+                           (checkbox_rect.left + 8, checkbox_rect.bottom - 4),
+                           (checkbox_rect.right - 4, checkbox_rect.top + 4), 2)
+        checkbox_label = self.subtitle_font.render("Also permanently delete engulfed bodies", True, self.BLACK)
+        checkbox_label_rect = checkbox_label.get_rect(midleft=(checkbox_rect.right + 10, checkbox_rect.centery))
+        self.screen.blit(checkbox_label, checkbox_label_rect)
+        self.engulfment_checkbox_rect = checkbox_rect  # Store for click detection
+        
+        # Buttons
+        button_width = 120
+        button_height = 40
+        button_y = modal_rect.bottom - 60
+        
+        # Cancel button (left)
+        cancel_btn_rect = pygame.Rect(modal_rect.centerx - 130, button_y, button_width, button_height)
+        pygame.draw.rect(self.screen, self.RED, cancel_btn_rect, border_radius=5)
+        cancel_text = self.subtitle_font.render("Cancel", True, self.WHITE)
+        self.screen.blit(cancel_text, cancel_text.get_rect(center=cancel_btn_rect.center))
+        self.engulfment_cancel_btn_rect = cancel_btn_rect
+        
+        # Apply button (right)
+        apply_btn_rect = pygame.Rect(modal_rect.centerx + 10, button_y, button_width, button_height)
+        pygame.draw.rect(self.screen, (255, 100, 0), apply_btn_rect, border_radius=5)  # Orange for destructive action
+        apply_text = self.subtitle_font.render("Apply Change", True, self.WHITE)
+        self.screen.blit(apply_text, apply_text.get_rect(center=apply_btn_rect.center))
+        self.engulfment_apply_btn_rect = apply_btn_rect
+
+    def draw_placement_engulfment_modal(self):
+        """Draw a modal warning when a newly placed planet lies inside the star's physical radius.
+        This modal does NOT allow placing engulfed planets on screen; it prompts the user to pick a new AU.
+        """
+        if not self.show_placement_engulfment_modal:
+            return
+        
+        if not self.placement_engulfment_planet_id or not self.placement_engulfment_star_id:
+            return
+        
+        planet = self.bodies_by_id.get(self.placement_engulfment_planet_id)
+        star = self.bodies_by_id.get(self.placement_engulfment_star_id)
+        if not planet or not star:
+            return
+        
+        # Modal background
+        modal_width = 640
+        modal_height = 260
+        modal_rect = pygame.Rect(
+            (self.width - modal_width) // 2,
+            (self.height - modal_height) // 2,
+            modal_width,
+            modal_height,
+        )
+        
+        shadow_rect = modal_rect.copy()
+        shadow_rect.move_ip(4, 4)
+        pygame.draw.rect(self.screen, (0, 0, 0, 180), shadow_rect, border_radius=10)
+        pygame.draw.rect(self.screen, (250, 240, 230), modal_rect, border_radius=10)
+        pygame.draw.rect(self.screen, self.RED, modal_rect, 2, border_radius=10)
+        
+        # Title
+        title_text = "Engulfment Warning: Planet Placement"
+        title_surf = self.font.render(title_text, True, self.BLACK)
+        title_rect = title_surf.get_rect(midtop=(modal_rect.centerx, modal_rect.top + 15))
+        self.screen.blit(title_surf, title_rect)
+        
+        # Body text
+        a_au = float(self.placement_engulfment_planet_orbit_au or planet.get("semiMajorAxis", 1.0))
+        r_au = float(self.placement_engulfment_star_radius_au or (star.get("radius", 1.0) * RSUN_TO_AU))
+        planet_name = planet.get("name", "Planet")
+        star_name = star.get("name", "Star")
+        
+        y_pos = title_rect.bottom + 20
+        # Clearly distinguish planet AU from star radius AU
+        msg = (
+            f"{planet_name}'s orbit (a = {a_au:.3f} AU from {star_name}'s center) lies inside "
+            f"{star_name}'s physical radius (R* = {r_au:.3f} AU). Physically, this planet would be engulfed."
+        )
+        y_pos = self._render_wrapped_text(
+            msg, self.subtitle_font, self.BLACK, modal_width - 40, modal_rect.centerx, y_pos
+        )
+        
+        y_pos += 10
+        expl = (
+            "Choose a new semi-major axis (planet AU) greater than the star's radius if you want this "
+            "planet to exist as a real orbit, or cancel the placement."
+        )
+        y_pos = self._render_wrapped_text(
+            expl, self.tiny_font, self.GRAY, modal_width - 40, modal_rect.centerx, y_pos
+        )
+        
+        # Buttons
+        button_width = 160
+        button_height = 40
+        button_y = modal_rect.bottom - 60
+        
+        # Cancel placement
+        cancel_btn_rect = pygame.Rect(modal_rect.centerx - 190, button_y, button_width, button_height)
+        pygame.draw.rect(self.screen, self.RED, cancel_btn_rect, border_radius=5)
+        cancel_text = self.subtitle_font.render("Cancel Placement", True, self.WHITE)
+        self.screen.blit(cancel_text, cancel_text.get_rect(center=cancel_btn_rect.center))
+        self.placement_engulfment_cancel_btn_rect = cancel_btn_rect
+        
+        # Choose new AU
+        choose_btn_rect = pygame.Rect(modal_rect.centerx + 30, button_y, button_width, button_height)
+        pygame.draw.rect(self.screen, (0, 140, 255), choose_btn_rect, border_radius=5)
+        choose_text = self.subtitle_font.render("Choose New AU", True, self.WHITE)
+        self.screen.blit(choose_text, choose_text.get_rect(center=choose_btn_rect.center))
+        self.placement_engulfment_choose_au_btn_rect = choose_btn_rect
+
+    def apply_star_radius_change_with_consequences(self, star_id: str, new_radius_rsun: float, delete_planets: bool = False):
+        """
+        Apply star radius change and handle consequences for engulfed planets.
+        This is called after user confirmation.
+        
+        Args:
+            star_id: ID of the star
+            new_radius_rsun: New radius in Solar radii (R☉)
+            delete_planets: If True, permanently delete engulfed planets. If False, mark as destroyed.
+        """
+        star = self.bodies_by_id.get(star_id)
+        if not star or star.get("type") != "star":
+            return
+        
+        # Get list of planets that will be engulfed
+        preview = self.preview_star_radius_change(star_id, new_radius_rsun)
+        engulfed_planet_ids = [p["id"] for p in preview["engulfed_planets"]]
+        
+        # Apply star radius change
+        self.update_selected_body_property("radius", new_radius_rsun, "radius")
+        
+        # Handle engulfed planets (and their moons)
+        if delete_planets:
+            # Collect IDs of planets and moons to permanently delete
+            ids_to_delete = set(engulfed_planet_ids)
+            
+            # Find moons orbiting any engulfed planet
+            for body in self.placed_bodies:
+                if body.get("type") != "moon":
+                    continue
+                parent_id = body.get("parent_id")
+                parent_name = body.get("parent")
+                parent_obj = body.get("parent_obj")
+                
+                # Check if this moon's parent is one of the engulfed planets
+                for planet_id in engulfed_planet_ids:
+                    planet = self.bodies_by_id.get(planet_id)
+                    if not planet:
+                        continue
+                    if (
+                        parent_id == planet_id
+                        or parent_name == planet.get("name")
+                        or (parent_obj and parent_obj.get("id") == planet_id)
+                    ):
+                        ids_to_delete.add(body.get("id"))
+                        break
+            
+            # Permanently remove all collected IDs from placed_bodies and registry
+            if ids_to_delete:
+                surviving_bodies = []
+                for body in self.placed_bodies:
+                    body_id = body.get("id")
+                    if body_id in ids_to_delete:
+                        print(f"DEBUG_ENGULFMENT | Permanently deleted body {body.get('name')} (id={body_id[:8]})")
+                        if body_id in self.bodies_by_id:
+                            del self.bodies_by_id[body_id]
+                    else:
+                        surviving_bodies.append(body)
+                self.placed_bodies = surviving_bodies
+        else:
+            # Soft-destroy planets and their moons (keep in state but hide and zero habitability)
+            engulfed_planet_ids_set = set(engulfed_planet_ids)
+            
+            # First, mark planets
+            for planet_id in engulfed_planet_ids:
+                planet = self.bodies_by_id.get(planet_id)
+                if not planet:
+                    continue
+                planet["engulfed_by_star"] = True
+                planet["engulfed_star_id"] = star_id
+                planet["engulfed_star_name"] = star.get("name", "Star")
+                planet["habit_score"] = 0.0
+                planet["H"] = 0.0
+                planet["is_destroyed"] = True  # Flag to hide from rendering/updates
+                print(f"DEBUG_ENGULFMENT | Marked planet {planet.get('name')} as destroyed (id={planet_id[:8]})")
+            
+            # Then, mark moons whose parent is any engulfed planet
+            for body in self.placed_bodies:
+                if body.get("type") != "moon":
+                    continue
+                parent_id = body.get("parent_id")
+                parent_name = body.get("parent")
+                parent_obj = body.get("parent_obj")
+                
+                for planet_id in engulfed_planet_ids_set:
+                    planet = self.bodies_by_id.get(planet_id)
+                    if not planet:
+                        continue
+                    if (
+                        parent_id == planet_id
+                        or parent_name == planet.get("name")
+                        or (parent_obj and parent_obj.get("id") == planet_id)
+                    ):
+                        body["engulfed_by_star"] = True
+                        body["engulfed_star_id"] = star_id
+                        body["engulfed_star_name"] = star.get("name", "Star")
+                        body["habit_score"] = 0.0
+                        body["H"] = 0.0
+                        body["is_destroyed"] = True
+                        print(f"DEBUG_ENGULFMENT | Marked moon {body.get('name')} as destroyed (id={body.get('id')[:8]})")
+                        break
+        
+        # Update dropdown label for star radius
+        label = f"Radius: {new_radius_rsun:.2f} R☉"
+        star["radius_dropdown_selected"] = label
+        if star.get("id") == self.selected_body_id:
+            self.radius_dropdown_selected = label
 
     def _parse_input_value(self, input_text):
         """Parse input text that can be in decimal or scientific notation, with optional units."""
@@ -11124,6 +12298,12 @@ class SolarSystemVisualizer:
         AU → flux → temperature). The ML model receives the complete, current state of all parameters.
         """
         if not self.selected_body or self.selected_body.get('type') != 'planet':
+            return
+        
+        # CRITICAL: Engulfed planets always have 0 habitability (physical destruction)
+        if self.selected_body.get('engulfed_by_star'):
+            self.selected_body['habit_score'] = 0.0
+            self.selected_body['H'] = 0.0
             return
         
         # Use ML calculator if available
