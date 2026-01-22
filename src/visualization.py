@@ -450,6 +450,8 @@ class SolarSystemVisualizer:
         
         # Reset-view button (optional UX helper)
         self.reset_view_button = pygame.Rect(self.width - 140, self.tab_margin, 110, 30)
+        self.reset_system_button = pygame.Rect(self.width - 140 - 110 - 10, self.tab_margin, 110, 30)
+        self.reset_system_confirm_modal = False  # Confirmation modal state
         self.orbit_points = {}  # Store orbit points for visualization
         self.orbit_history = {}  # Store orbit history for trail effect
         self.orbit_grid_points = {}  # Store grid points for orbit visualization
@@ -1347,6 +1349,86 @@ class SolarSystemVisualizer:
         label = self.subtitle_font.render("Reset View", True, (255, 255, 255))
         text_rect = label.get_rect(center=self.reset_view_button.center)
         self.screen.blit(label, text_rect)
+    
+    def draw_reset_system_button(self):
+        """Draw the Reset Current System button in screen space (not affected by camera)."""
+        mouse_pos = pygame.mouse.get_pos()
+        is_hovering = self.reset_system_button.collidepoint(mouse_pos)
+        
+        # Button background color (brighter on hover, red tint for destructive action)
+        if is_hovering:
+            bg_color = (240, 200, 200, 220)
+        else:
+            bg_color = (220, 180, 180, 200)
+        
+        # Draw button background
+        button_surface = pygame.Surface((self.reset_system_button.width, self.reset_system_button.height), pygame.SRCALPHA)
+        button_surface.fill(bg_color)
+        self.screen.blit(button_surface, self.reset_system_button.topleft)
+        
+        # Draw white border
+        pygame.draw.rect(self.screen, (255, 255, 255), self.reset_system_button, 2, border_radius=6)
+        
+        # Draw button text
+        label = self.subtitle_font.render("Reset System", True, (255, 255, 255))
+        text_rect = label.get_rect(center=self.reset_system_button.center)
+        self.screen.blit(label, text_rect)
+    
+    def draw_reset_system_confirm_modal(self):
+        """Draw the confirmation modal for resetting the system."""
+        if not self.reset_system_confirm_modal:
+            return
+        
+        # Modal dimensions
+        modal_width = 450
+        modal_height = 200
+        modal_rect = pygame.Rect((self.width - modal_width) // 2, (self.height - modal_height) // 2, modal_width, modal_height)
+        self.reset_confirm_modal_rect = modal_rect  # Store for click detection
+        
+        # Draw semi-transparent overlay
+        overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 150))
+        self.screen.blit(overlay, (0, 0))
+        
+        # Draw modal background
+        pygame.draw.rect(self.screen, (50, 50, 70), modal_rect, border_radius=10)
+        pygame.draw.rect(self.screen, (255, 150, 150), modal_rect, 3, border_radius=10)  # Red border for warning
+        
+        # Title
+        title_text = "Reset Current System?"
+        title_surf = self.font.render(title_text, True, self.WHITE)
+        title_rect = title_surf.get_rect(midtop=(modal_rect.centerx, modal_rect.top + 20))
+        self.screen.blit(title_surf, title_rect)
+        
+        # Message
+        message_text = "This will discard all current changes and restore"
+        message_surf = self.subtitle_font.render(message_text, True, self.LIGHT_GRAY)
+        message_rect = message_surf.get_rect(midtop=(modal_rect.centerx, title_rect.bottom + 10))
+        self.screen.blit(message_surf, message_rect)
+        
+        message2_text = "the default Sun-Earth-Moon system."
+        message2_surf = self.subtitle_font.render(message2_text, True, self.LIGHT_GRAY)
+        message2_rect = message2_surf.get_rect(midtop=(modal_rect.centerx, message_rect.bottom + 5))
+        self.screen.blit(message2_surf, message2_rect)
+        
+        # Buttons
+        button_width = 120
+        button_height = 40
+        button_spacing = 20
+        
+        # Yes button (green/confirm)
+        yes_btn_rect = pygame.Rect(modal_rect.centerx - button_width - button_spacing // 2, modal_rect.bottom - 60, button_width, button_height)
+        pygame.draw.rect(self.screen, (100, 200, 100), yes_btn_rect, border_radius=5)
+        yes_text = self.subtitle_font.render("Yes (R)", True, self.WHITE)
+        self.screen.blit(yes_text, yes_text.get_rect(center=yes_btn_rect.center))
+        self.reset_confirm_yes_rect = yes_btn_rect  # Store for click detection
+        
+        # Cancel button (red)
+        cancel_btn_rect = pygame.Rect(modal_rect.centerx + button_spacing // 2, modal_rect.bottom - 60, button_width, button_height)
+        pygame.draw.rect(self.screen, (200, 100, 100), cancel_btn_rect, border_radius=5)
+        cancel_text = self.subtitle_font.render("Cancel (Esc)", True, self.WHITE)
+        self.screen.blit(cancel_text, cancel_text.get_rect(center=cancel_btn_rect.center))
+        self.reset_confirm_cancel_rect = cancel_btn_rect  # Store for click detection
     
     def draw_scale_indicator(self):
         """Draw a zoom-aware distance scale indicator in the bottom-left corner."""
@@ -3597,6 +3679,99 @@ class SolarSystemVisualizer:
         # Delay spawn until everything ready
         threading.Timer(1.0, self.auto_spawn_default_system).start()
     
+    def reset_current_system(self):
+        """
+        Reset the simulation to default Sun-Earth-Moon system.
+        Atomic operation: pause, clear state, reload defaults, recompute, resume paused.
+        """
+        # 1. Pause simulation during reset
+        was_paused = self.paused
+        self.paused = True
+        
+        # 2. Clear all simulation state
+        self.placed_bodies.clear()
+        self.bodies_by_id.clear()
+        self.selected_body = None
+        self.selected_body_id = None
+        self.body_counter = {"moon": 0, "planet": 0, "star": 0}
+        
+        # Clear caches
+        self.orbit_screen_cache.clear()
+        self.orbit_grid_screen_cache.clear()
+        self.orbit_points.clear()
+        self.orbit_history.clear()
+        self.orbit_grid_points.clear()
+        
+        # Clear UI state
+        self.show_customization_panel = False
+        self.active_tab = None
+        self.show_info_panel = False
+        self.reset_system_confirm_modal = False
+        
+        # Store current simulation state to restore after reset
+        was_in_simulation = self.show_simulation
+        was_in_builder = self.show_simulation_builder
+        
+        # 3. Load default Sun-Earth-Moon system
+        # Use the same function that initializes on startup
+        # This will automatically transition to simulation state when star + planet are placed
+        self.place_object("star", {"name": "Sun"})
+        self.place_object("planet", {"name": "Earth", "semi_major_axis": 1.0})
+        self.place_object("moon", {"name": "Moon", "semi_major_axis": 0.00257})
+        
+        # Ensure we're in simulation state after reset (place_object should have done this)
+        if len(self.placed_bodies) > 0:
+            stars = [b for b in self.placed_bodies if b["type"] == "star"]
+            planets = [b for b in self.placed_bodies if b["type"] == "planet"]
+            if len(stars) > 0 and len(planets) > 0:
+                self.show_simulation_builder = False
+                self.show_simulation = True
+        
+        # 4. Recompute all derived parameters for all bodies
+        for body in self.placed_bodies:
+            self._update_derived_parameters(body)
+            # Update stellar flux for planets
+            if body["type"] == "planet":
+                self._update_stellar_flux(body)
+                # Update planet scores (habitability)
+                old_selected = self.selected_body
+                self.selected_body = body
+                self._update_planet_scores()
+                self.selected_body = old_selected
+        
+        # 5. Initialize all orbits
+        self.initialize_all_orbits()
+        
+        # 6. Reset camera to defaults
+        self.camera_zoom = 0.6
+        self.camera_offset = [40.0, 160.0]
+        self.last_zoom_for_orbits = self.camera_zoom
+        self.camera_focus["active"] = False
+        self.camera_focus["target_body_id"] = None
+        self.camera_focus["target_world_pos"] = None
+        self.camera_focus["target_zoom"] = None
+        
+        # 7. Set selected body to Earth (deterministic)
+        earth = next((b for b in self.placed_bodies if b["name"] == "Earth" and b["type"] == "planet"), None)
+        if earth:
+            self.selected_body_id = earth.get("id")
+            self.selected_body = earth
+        else:
+            # Fallback to Sun if Earth not found
+            sun = next((b for b in self.placed_bodies if b["name"] == "Sun" and b["type"] == "star"), None)
+            if sun:
+                self.selected_body_id = sun.get("id")
+                self.selected_body = sun
+        
+        # 8. Sync dropdown labels to match reloaded system
+        if self.selected_body:
+            self._sync_all_dropdown_labels(self.selected_body)
+        
+        # 9. Resume in paused state (default for demos)
+        self.paused = True
+        
+        print("System reset to default Sun-Earth-Moon configuration.")
+    
     def render_info_panel(self):
         """Render the derived physics info panel."""
         if not self.show_info_panel or not self.selected_body:
@@ -3880,10 +4055,42 @@ class SolarSystemVisualizer:
                 if event.type in [pygame.MOUSEBUTTONUP, pygame.MOUSEMOTION, pygame.MOUSEWHEEL]:
                     continue
 
+            # Handle Reset System confirmation modal (check before other handlers)
+            if self.reset_system_confirm_modal:
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    # Check if clicking Yes or Cancel buttons
+                    if hasattr(self, 'reset_confirm_yes_rect') and self.reset_confirm_yes_rect.collidepoint(event.pos):
+                        self.reset_current_system()
+                        self.reset_system_confirm_modal = False
+                        continue
+                    if hasattr(self, 'reset_confirm_cancel_rect') and self.reset_confirm_cancel_rect.collidepoint(event.pos):
+                        self.reset_system_confirm_modal = False
+                        continue
+                    # Click outside modal - close it
+                    if hasattr(self, 'reset_confirm_modal_rect') and not self.reset_confirm_modal_rect.collidepoint(event.pos):
+                        self.reset_system_confirm_modal = False
+                        continue
+                
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        self.reset_system_confirm_modal = False
+                        continue
+                    elif event.key == pygame.K_RETURN or event.key == pygame.K_y:
+                        self.reset_current_system()
+                        self.reset_system_confirm_modal = False
+                        continue
+                continue  # Block other events while modal is open
+            
             # Handle Reset View button click (UI only, screen space) - check before other handlers
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if self.reset_view_button.collidepoint(event.pos):
                     self.reset_camera()
+                    continue  # Consume event to prevent other handlers
+                
+                # Handle Reset System button click
+                if self.reset_system_button.collidepoint(event.pos):
+                    # Show confirmation modal
+                    self.reset_system_confirm_modal = True
                     continue  # Consume event to prevent other handlers
                 
                 # Climate/axial info icon click handling (pin/unpin tooltip)
@@ -3902,6 +4109,15 @@ class SolarSystemVisualizer:
                 # If clicking anywhere else (and not on the icon), unpin the tooltip (if it was pinned)
                 if not icon_clicked and getattr(self, "climate_info_pinned", False):
                     self.climate_info_pinned = False
+            
+            # Keyboard shortcuts (global, check before other handlers)
+            if event.type == pygame.KEYDOWN:
+                # R key: Reset system (opens confirmation modal)
+                if event.key == pygame.K_r:
+                    # Only trigger if not in a modal or text input
+                    if not self.reset_system_confirm_modal and not self.show_custom_modal and not self.show_engulfment_modal:
+                        self.reset_system_confirm_modal = True
+                        continue
             
             # Time control interactions (⏪ ⏸/▶ ⏩) – handle before other UI (simulation only)
             handled_tc = False
@@ -10935,6 +11151,7 @@ class SolarSystemVisualizer:
         
         # Draw Reset View button (UI layer, screen space)
         self.draw_reset_button()
+        self.draw_reset_system_button()
         
         # Draw Zoom-Aware Distance Scale Indicator
         self.draw_scale_indicator()
@@ -10952,6 +11169,7 @@ class SolarSystemVisualizer:
 
         # Draw the custom modal last if active
         self.draw_custom_modal()
+        self.draw_reset_system_confirm_modal()
 
         pygame.display.flip()
     
@@ -11367,6 +11585,7 @@ class SolarSystemVisualizer:
             self.screen.blit(instruction_text, instruction_rect)
         
         self.draw_reset_button()
+        self.draw_reset_system_button()
         self.draw_scale_indicator()
         self.render_dropdown()
         self.render_planet_preset_dropdown()
@@ -11376,6 +11595,7 @@ class SolarSystemVisualizer:
             self.draw_placement_preview()
 
         self.draw_custom_modal()
+        self.draw_reset_system_confirm_modal()
         pygame.display.flip()
 
     def _render_star_ui_content(self):
