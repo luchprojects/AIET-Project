@@ -1,0 +1,62 @@
+{
+  "model_version": "v4",
+  "training_date": "2026-01-26T20:17:21.233217",
+  "n_training_samples": 60736,
+  "n_test_samples": 15185,
+  "xgb_params": {
+    "n_estimators": 200,
+    "max_depth": 6,
+    "learning_rate": 0.05,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "objective": "reg:squarederror",
+    "random_state": 42,
+    "n_jobs": -1
+  },
+  "best_iteration": 199,
+  "metrics": {
+    "train": {
+      "mse": 2.092846898449352e-06,
+      "mae": 0.0003010696673300117,
+      "r2": 0.9995202422142029
+    },
+    "test": {
+      "mse": 8.668956979818176e-06,
+      "mae": 0.00043884519254788756,
+      "r2": 0.9980906248092651
+    }
+  },
+  "feature_importances": {
+    "pl_insol": 0.4825748801231384,
+    "pl_eqt": 0.17405752837657928,
+    "pl_rade": 0.11341876536607742,
+    "st_lum": 0.052458930760622025,
+    "pl_orbper": 0.04750502109527588,
+    "pl_masse": 0.03927099332213402,
+    "st_rad": 0.028235629200935364,
+    "st_teff": 0.019774405285716057,
+    "pl_orbsmax": 0.01909053511917591,
+    "pl_dens": 0.016038551926612854,
+    "pl_orbeccen": 0.004842978436499834,
+    "st_mass": 0.0027316617779433727
+  },
+  "imputation_stats": {
+    "total": 468810,
+    "fields": {
+      "pl_rade": 12416,
+      "pl_masse (gas giant median)": 41842,
+      "pl_insol (L/a^2)": 68166,
+      "pl_eqt (from flux)": 63000,
+      "pl_dens (from M,R)": 64726,
+      "st_mass (for orbit calc)": 28663,
+      "st_lum (Stefan-Boltzmann)": 63276,
+      "st_teff": 13495,
+      "st_rad": 13898,
+      "pl_orbper": 1074,
+      "pl_orbeccen": 51408,
+      "pl_orbsmax (Kepler 3rd law)": 31022,
+      "pl_masse (rocky M-R)": 15824
+    }
+  },
+  "solar_system_validation": "PASSED"
+}
