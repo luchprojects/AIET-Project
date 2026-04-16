@@ -44,6 +44,14 @@ class SimulationEngine:
         
     def add_body(self, body: CelestialBody):
         self.bodies.append(body)
+
+    @staticmethod
+    def physics_mode(placed_bodies) -> str:
+        """
+        Compatibility shim for newer UI code paths.
+        This engine snapshot supports the legacy keplerian flow only.
+        """
+        return "keplerian"
         
     def find_host_star(self, body: CelestialBody) -> Optional[CelestialBody]:
         """Find the most massive star that this body might be orbiting"""
